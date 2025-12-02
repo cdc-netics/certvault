@@ -1,0 +1,300 @@
+<div class="container-fluid">
+  <!-- Header -->
+  <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">
+      <i class="fas fa-user-plus me-2"></i>
+      {{ isEditMode ? 'Editar Usuario' : 'Nuevo Usuario' }}
+    </h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+      <app-back-button [customRoute]="'/users'"></app-back-button>
+    </div>
+  </div>
+  
+  <!-- Formulario -->
+  <div class="row justify-content-center">
+    <div class="col-lg-8">
+      <div class="card">
+        <div class="card-header">
+          <h6 class="mb-0">
+            <i class="fas fa-edit me-2"></i>
+            {{ isEditMode ? 'Modificar Información' : 'Información del Usuario' }}
+          </h6>
+        </div>
+        <div class="card-body">
+          <form [formGroup]="userForm" (ngSubmit)="onSubmit()" novalidate>
+            <!-- Información Personal -->
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                <label for="firstName" class="form-label">
+                  Nombre <span class="text-danger">*</span>
+                </label>
+                <input 
+                  type="text" 
+                  class="form-control"
+                  id="firstName"
+                  formControlName="firstName"
+                  [class.is-invalid]="firstName?.invalid && firstName?.touched"
+                  placeholder="Ingresa el nombre">
+                <div class="invalid-feedback" *ngIf="firstName?.invalid && firstName?.touched">
+                  <small *ngIf="firstName?.errors?.['required']">El nombre es requerido</small>
+                  <small *ngIf="firstName?.errors?.['maxlength']">Máximo 50 caracteres</small>
+                </div>
+              </div>
+
+              <div class="col-md-6 mb-3">
+                <label for="lastName" class="form-label">
+                  Apellido <span class="text-danger">*</span>
+                </label>
+                <input 
+                  type="text" 
+                  class="form-control"
+                  id="lastName"
+                  formControlName="lastName"
+                  [class.is-invalid]="lastName?.invalid && lastName?.touched"
+                  placeholder="Ingresa el apellido">
+                <div class="invalid-feedback" *ngIf="lastName?.invalid && lastName?.touched">
+                  <small *ngIf="lastName?.errors?.['required']">El apellido es requerido</small>
+                  <small *ngIf="lastName?.errors?.['maxlength']">Máximo 50 caracteres</small>
+                </div>
+              </div>
+            </div>
+
+            <!-- Información de Acceso -->
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                <label for="username" class="form-label">
+                  Nombre de Usuario <span class="text-danger">*</span>
+                </label>
+                <input 
+                  type="text" 
+                  class="form-control"
+                  id="username"
+                  formControlName="username"
+                  [class.is-invalid]="username?.invalid && username?.touched"
+                  placeholder="usuario123">
+                <div class="invalid-feedback" *ngIf="username?.invalid && username?.touched">
+                  <small *ngIf="username?.errors?.['required']">El nombre de usuario es requerido</small>
+                  <small *ngIf="username?.errors?.['minlength']">Mínimo 3 caracteres</small>
+                  <small *ngIf="username?.errors?.['maxlength']">Máximo 20 caracteres</small>
+                </div>
+              </div>
+
+              <div class="col-md-6 mb-3">
+                <label for="email" class="form-label">
+                  Email <span class="text-danger">*</span>
+                </label>
+                <input 
+                  type="email" 
+                  class="form-control"
+                  id="email"
+                  formControlName="email"
+                  [class.is-invalid]="email?.invalid && email?.touched"
+                  placeholder="usuario@empresa.com">
+                <div class="invalid-feedback" *ngIf="email?.invalid && email?.touched">
+                  <small *ngIf="email?.errors?.['required']">El email es requerido</small>
+                  <small *ngIf="email?.errors?.['email']">Email inválido</small>
+                </div>
+              </div>
+            </div>
+
+            <!-- Contraseñas -->
+            <div class="row" *ngIf="!isEditMode || password?.value">
+              <div class="col-md-6 mb-3">
+                <label for="password" class="form-label">
+                  {{ isEditMode ? 'Nueva Contraseña' : 'Contraseña' }}
+                  <span class="text-danger" *ngIf="!isEditMode">*</span>
+                </label>
+                <input 
+                  type="password" 
+                  class="form-control"
+                  id="password"
+                  formControlName="password"
+                  [class.is-invalid]="password?.invalid && password?.touched"
+                  placeholder="Mínimo 6 caracteres">
+                <div class="invalid-feedback" *ngIf="password?.invalid && password?.touched">
+                  <small *ngIf="password?.errors?.['required']">La contraseña es requerida</small>
+                  <small *ngIf="password?.errors?.['minlength']">Mínimo 6 caracteres</small>
+                </div>
+                <small class="form-text text-muted" *ngIf="isEditMode">
+                  Dejar en blanco para mantener la contraseña actual
+                </small>
+              </div>
+
+              <div class="col-md-6 mb-3" *ngIf="password?.value">
+                <label for="confirmPassword" class="form-label">
+                  Confirmar Contraseña <span class="text-danger">*</span>
+                </label>
+                <input 
+                  type="password" 
+                  class="form-control"
+                  id="confirmPassword"
+                  formControlName="confirmPassword"
+                  [class.is-invalid]="confirmPassword?.invalid && confirmPassword?.touched"
+                  placeholder="Repetir contraseña">
+                <div class="invalid-feedback" *ngIf="confirmPassword?.invalid && confirmPassword?.touched">
+                  <small *ngIf="confirmPassword?.errors?.['passwordMismatch']">Las contraseñas no coinciden</small>
+                </div>
+              </div>
+            </div>
+
+            <!-- Información Laboral -->
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                <label for="department" class="form-label">
+                  Departamento <span class="text-danger">*</span>
+                </label>
+                <select 
+                  class="form-select"
+                  id="department"
+                  formControlName="department"
+                  [class.is-invalid]="department?.invalid && department?.touched">
+                  <option value="">Selecciona un departamento</option>
+                  <option *ngFor="let dept of availableDepartments" [value]="dept.value">
+                    {{ getDepartmentLabel(dept.value) }}
+                  </option>
+                </select>
+                <div class="invalid-feedback" *ngIf="department?.invalid && department?.touched">
+                  <small *ngIf="department?.errors?.['required']">El departamento es requerido</small>
+                </div>
+              </div>
+
+              <div class="col-md-6 mb-3">
+                <label for="position" class="form-label">
+                  Cargo/Posición <span class="text-danger">*</span>
+                </label>
+                <input 
+                  type="text" 
+                  class="form-control"
+                  id="position"
+                  formControlName="position"
+                  [class.is-invalid]="position?.invalid && position?.touched"
+                  placeholder="Ej: Analista, Gerente, Técnico">
+                <div class="invalid-feedback" *ngIf="position?.invalid && position?.touched">
+                  <small *ngIf="position?.errors?.['required']">El cargo es requerido</small>
+                  <small *ngIf="position?.errors?.['maxlength']">Máximo 100 caracteres</small>
+                </div>
+              </div>
+            </div>
+
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                <label for="phone" class="form-label">Teléfono</label>
+                <input 
+                  type="tel" 
+                  class="form-control"
+                  id="phone"
+                  formControlName="phone"
+                  [class.is-invalid]="phone?.invalid && phone?.touched"
+                  placeholder="+1234567890">
+                <div class="invalid-feedback" *ngIf="phone?.invalid && phone?.touched">
+                  <small>Formato de teléfono inválido</small>
+                </div>
+              </div>
+
+              <div class="col-md-6 mb-3">
+                <label for="role" class="form-label">
+                  Rol <span class="text-danger">*</span>
+                </label>
+                <select 
+                  class="form-select"
+                  id="role"
+                  formControlName="role"
+                  (change)="onRoleChange()"
+                  [class.is-invalid]="role?.invalid && role?.touched">
+                  <option *ngFor="let roleOption of availableRoles" 
+                          [value]="roleOption.value"
+                          [disabled]="!canSelectRole(roleOption.value)">
+                    {{ getRoleLabel(roleOption.value) }}
+                  </option>
+                </select>
+                <div class="invalid-feedback" *ngIf="role?.invalid && role?.touched">
+                  <small *ngIf="role?.errors?.['required']">El rol es requerido</small>
+                </div>
+              </div>
+            </div>
+
+            <!-- Opciones de Liderazgo -->
+            <div class="row" *ngIf="shouldShowLeaderOptions()">
+              <div class="col-12 mb-3">
+                <div class="card bg-light">
+                  <div class="card-header">
+                    <h6 class="mb-0">
+                      <i class="fas fa-star me-2"></i>
+                      Configuración de Liderazgo
+                    </h6>
+                  </div>
+                  <div class="card-body">
+                    <div class="form-check mb-3">
+                      <input 
+                        class="form-check-input" 
+                        type="checkbox" 
+                        id="departmentLeader"
+                        formControlName="departmentLeader">
+                      <label class="form-check-label" for="departmentLeader">
+                        Es líder de su departamento
+                      </label>
+                      <small class="form-text text-muted d-block">
+                        Permite gestionar usuarios y certificaciones del departamento
+                      </small>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Estado -->
+            <div class="row" *ngIf="isEditMode">
+              <div class="col-12 mb-3">
+                <div class="form-check">
+                  <input 
+                    class="form-check-input" 
+                    type="checkbox" 
+                    id="isActive"
+                    formControlName="isActive">
+                  <label class="form-check-label" for="isActive">
+                    Usuario activo
+                  </label>
+                  <small class="form-text text-muted d-block">
+                    Los usuarios inactivos no pueden iniciar sesión
+                  </small>
+                </div>
+              </div>
+            </div>
+
+            <!-- Botones -->
+            <div class="d-flex justify-content-end gap-2 pt-3 border-top">
+              <button 
+                type="button" 
+                class="btn btn-outline-secondary"
+                (click)="cancel()"
+                [disabled]="loading">
+                <i class="fas fa-times me-1"></i>
+                Cancelar
+              </button>
+              <button 
+                type="submit" 
+                class="btn btn-primary"
+                [disabled]="userForm.invalid || loading">
+                <output *ngIf="loading" class="spinner-border spinner-border-sm me-2"></output>
+                <i *ngIf="!loading" [class]="isEditMode ? 'fas fa-save' : 'fas fa-plus'" class="me-1"></i>
+                {{ isEditMode ? 'Actualizar Usuario' : 'Crear Usuario' }}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading overlay -->
+  <div class="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center bg-dark bg-opacity-50" 
+       style="z-index: 1050;" 
+       *ngIf="loading">
+    <div class="text-center text-white">
+      <output class="spinner-border text-primary mb-3">
+        <span class="visually-hidden">Cargando...</span>
+      </output>
+      <p>{{ isEditMode ? 'Actualizando usuario...' : 'Creando usuario...' }}</p>
+    </div>
+  </div>
+</div>

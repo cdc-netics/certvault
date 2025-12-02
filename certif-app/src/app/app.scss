@@ -1,0 +1,60 @@
+@import '../styles.scss';
+
+:host {
+  display: block;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  min-height: 100vh;
+  background: #f8f9fb;
+  transition: grid-template-columns 0.2s ease;
+}
+
+.layout.collapsed {
+  grid-template-columns: 80px 1fr;
+}
+
+.sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  padding: 1rem;
+  background: linear-gradient(180deg, #1e3c72 0%, #2a5298 100%);
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.sidebar .nav-link {
+  color: rgba(255, 255, 255, 0.85);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+}
+
+.collapsed-brand .brand-title {
+  display: none;
+}
+
+.sidebar .nav-link.active,
+.sidebar .nav-link:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+}
+
+.sidebar-footer {
+  margin-top: auto;
+}
+
+.layout.collapsed .link-text {
+  display: none;
+}
+
+.content {
+  padding: 1rem 1.5rem;
+}

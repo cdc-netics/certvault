@@ -1,0 +1,449 @@
+<div class="container-fluid">
+  <!-- Header -->
+  <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">
+      <i class="fas fa-user-circle me-2"></i>
+      Mi Perfil
+    </h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+      <app-back-button [customRoute]="'/dashboard'" [label]="'Volver al Dashboard'"></app-back-button>
+    </div>
+  </div>
+
+  <div class="row">
+    <!-- Sidebar con información del usuario -->
+    <div class="col-md-4 col-lg-3">
+      <div class="card mb-4">
+        <div class="card-body text-center">
+          <!-- Avatar -->
+          <div class="avatar-container mb-3">
+            <div class="avatar-circle">
+              <i class="fas fa-user fa-4x text-primary"></i>
+            </div>
+          </div>
+
+          <!-- Información básica -->
+          <h5 class="mb-1">{{ currentUser?.firstName }} {{ currentUser?.lastName }}</h5>
+          <p class="text-muted mb-2">{{ currentUser?.position }}</p>
+          
+          <!-- Badges -->
+          <div class="mb-3">
+            <span class="badge bg-primary me-1">
+              <i class="fas fa-shield-alt me-1"></i>
+              {{ getRoleLabel(currentUser?.role!) }}
+            </span>
+            <span class="badge bg-secondary">
+              <i class="fas fa-building me-1"></i>
+              {{ getDepartmentLabel(currentUser?.department!) }}
+            </span>
+          </div>
+
+          <!-- Estadísticas -->
+          <div class="stats-grid">
+            <div class="stat-item">
+              <div class="stat-value">{{ currentUser?.createdAt | date: 'MMM yyyy' }}</div>
+              <div class="stat-label">Miembro desde</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value">
+                <i class="fas fa-circle text-success"></i> Activo
+              </div>
+              <div class="stat-label">Estado</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Acciones rápidas -->
+      <div class="card">
+        <div class="card-header">
+          <h6 class="mb-0">
+            <i class="fas fa-bolt me-2"></i>
+            Acciones Rápidas
+          </h6>
+        </div>
+        <div class="list-group list-group-flush">
+          <button 
+            type="button"
+            class="list-group-item list-group-item-action"
+            (click)="setActiveTab('profile')">
+            <i class="fas fa-edit me-2"></i>
+            Editar Perfil
+          </button>
+          <button 
+            type="button"
+            class="list-group-item list-group-item-action"
+            (click)="setActiveTab('password')">
+            <i class="fas fa-key me-2"></i>
+            Cambiar Contraseña
+          </button>
+          <button 
+            type="button"
+            class="list-group-item list-group-item-action"
+            (click)="setActiveTab('activity')">
+            <i class="fas fa-history me-2"></i>
+            Ver Actividad
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Contenido principal -->
+    <div class="col-md-8 col-lg-9">
+      <!-- Tabs de navegación -->
+      <ul class="nav nav-tabs mb-4">
+        <li class="nav-item">
+          <button 
+            class="nav-link" 
+            [class.active]="activeTab === 'profile'"
+            (click)="setActiveTab('profile')">
+            <i class="fas fa-user me-2"></i>
+            Información Personal
+          </button>
+        </li>
+        <li class="nav-item">
+          <button 
+            class="nav-link" 
+            [class.active]="activeTab === 'password'"
+            (click)="setActiveTab('password')">
+            <i class="fas fa-lock me-2"></i>
+            Seguridad
+          </button>
+        </li>
+        <li class="nav-item">
+          <button 
+            class="nav-link" 
+            [class.active]="activeTab === 'activity'"
+            (click)="setActiveTab('activity')">
+            <i class="fas fa-chart-line me-2"></i>
+            Actividad
+          </button>
+        </li>
+      </ul>
+
+      <!-- Tab: Información Personal -->
+      <div class="tab-content" *ngIf="activeTab === 'profile'">
+        <div class="card">
+          <div class="card-header">
+            <h6 class="mb-0">
+              <i class="fas fa-edit me-2"></i>
+              Editar Información Personal
+            </h6>
+          </div>
+          <div class="card-body">
+            <form [formGroup]="profileForm" (ngSubmit)="onSubmitProfile()">
+              <div class="row">
+                <!-- Nombre -->
+                <div class="col-md-6 mb-3">
+                  <label for="firstName" class="form-label">
+                    Nombre <span class="text-danger">*</span>
+                  </label>
+                  <input 
+                    type="text" 
+                    class="form-control"
+                    id="firstName"
+                    formControlName="firstName"
+                    [class.is-invalid]="firstName?.invalid && firstName?.touched">
+                  <div class="invalid-feedback" *ngIf="firstName?.invalid && firstName?.touched">
+                    <small *ngIf="firstName?.errors?.['required']">El nombre es requerido</small>
+                    <small *ngIf="firstName?.errors?.['maxlength']">Máximo 50 caracteres</small>
+                  </div>
+                </div>
+
+                <!-- Apellido -->
+                <div class="col-md-6 mb-3">
+                  <label for="lastName" class="form-label">
+                    Apellido <span class="text-danger">*</span>
+                  </label>
+                  <input 
+                    type="text" 
+                    class="form-control"
+                    id="lastName"
+                    formControlName="lastName"
+                    [class.is-invalid]="lastName?.invalid && lastName?.touched">
+                  <div class="invalid-feedback" *ngIf="lastName?.invalid && lastName?.touched">
+                    <small *ngIf="lastName?.errors?.['required']">El apellido es requerido</small>
+                    <small *ngIf="lastName?.errors?.['maxlength']">Máximo 50 caracteres</small>
+                  </div>
+                </div>
+              </div>
+
+              <div class="row">
+                <!-- Email -->
+                <div class="col-md-6 mb-3">
+                  <label for="email" class="form-label">
+                    Email <span class="text-danger">*</span>
+                  </label>
+                  <input 
+                    type="email" 
+                    class="form-control"
+                    id="email"
+                    formControlName="email"
+                    [class.is-invalid]="email?.invalid && email?.touched">
+                  <div class="invalid-feedback" *ngIf="email?.invalid && email?.touched">
+                    <small *ngIf="email?.errors?.['required']">El email es requerido</small>
+                    <small *ngIf="email?.errors?.['email']">Email inválido</small>
+                  </div>
+                  <small class="form-text text-muted">
+                    <i class="fas fa-info-circle me-1"></i>
+                    El email es usado para iniciar sesión
+                  </small>
+                </div>
+
+                <!-- Teléfono -->
+                <div class="col-md-6 mb-3">
+                  <label for="phone" class="form-label">Teléfono</label>
+                  <input 
+                    type="tel" 
+                    class="form-control"
+                    id="phone"
+                    formControlName="phone"
+                    [class.is-invalid]="phone?.invalid && phone?.touched"
+                    placeholder="+1234567890">
+                  <div class="invalid-feedback" *ngIf="phone?.invalid && phone?.touched">
+                    <small>Formato de teléfono inválido</small>
+                  </div>
+                </div>
+              </div>
+
+              <div class="row">
+                <!-- Cargo/Posición -->
+                <div class="col-12 mb-3">
+                  <label for="position" class="form-label">Cargo/Posición</label>
+                  <input 
+                    type="text" 
+                    class="form-control"
+                    id="position"
+                    formControlName="position"
+                    [class.is-invalid]="position?.invalid && position?.touched"
+                    placeholder="Tu cargo o posición">
+                  <div class="invalid-feedback" *ngIf="position?.invalid && position?.touched">
+                    <small>Máximo 100 caracteres</small>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Información de solo lectura -->
+              <div class="row">
+                <div class="col-md-6 mb-3">
+                  <label class="form-label">Departamento</label>
+                  <input 
+                    type="text" 
+                    class="form-control" 
+                    [value]="getDepartmentLabel(currentUser?.department!)"
+                    readonly>
+                  <small class="form-text text-muted">
+                    Contacta al administrador para cambiar tu departamento
+                  </small>
+                </div>
+
+                <div class="col-md-6 mb-3">
+                  <label class="form-label">Rol</label>
+                  <input 
+                    type="text" 
+                    class="form-control" 
+                    [value]="getRoleLabel(currentUser?.role!)"
+                    readonly>
+                  <small class="form-text text-muted">
+                    Contacta al administrador para cambiar tu rol
+                  </small>
+                </div>
+              </div>
+
+              <!-- Mensajes de éxito/error -->
+              <div class="alert alert-success" *ngIf="profileSuccess">
+                <i class="fas fa-check-circle me-2"></i>
+                {{ profileSuccess }}
+              </div>
+              <div class="alert alert-danger" *ngIf="profileError">
+                <i class="fas fa-exclamation-circle me-2"></i>
+                {{ profileError }}
+              </div>
+
+              <!-- Botones -->
+              <div class="d-flex justify-content-end gap-2">
+                <button 
+                  type="button" 
+                  class="btn btn-outline-secondary"
+                  (click)="loadUserData()"
+                  [disabled]="loading">
+                  <i class="fas fa-undo me-1"></i>
+                  Restablecer
+                </button>
+                <button 
+                  type="submit" 
+                  class="btn btn-primary"
+                  [disabled]="profileForm.invalid || loading">
+                  <span *ngIf="loading" class="spinner-border spinner-border-sm me-2"></span>
+                  <i *ngIf="!loading" class="fas fa-save me-1"></i>
+                  {{ loading ? 'Guardando...' : 'Guardar Cambios' }}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab: Seguridad (Cambiar contraseña) -->
+      <div class="tab-content" *ngIf="activeTab === 'password'">
+        <div class="card">
+          <div class="card-header">
+            <h6 class="mb-0">
+              <i class="fas fa-shield-alt me-2"></i>
+              Cambiar Contraseña
+            </h6>
+          </div>
+          <div class="card-body">
+            <!-- Recomendaciones de seguridad -->
+            <div class="alert alert-info mb-4">
+              <h6 class="alert-heading">
+                <i class="fas fa-info-circle me-2"></i>
+                Recomendaciones de seguridad
+              </h6>
+              <ul class="mb-0 ps-3">
+                <li>Usa al menos 6 caracteres</li>
+                <li>Incluye mayúsculas, minúsculas y números</li>
+                <li>No uses contraseñas comunes o fáciles de adivinar</li>
+                <li>Cambia tu contraseña periódicamente</li>
+              </ul>
+            </div>
+
+            <form [formGroup]="passwordForm" (ngSubmit)="onSubmitPassword()">
+              <!-- Contraseña actual -->
+              <div class="mb-3">
+                <label for="currentPassword" class="form-label">
+                  Contraseña Actual <span class="text-danger">*</span>
+                </label>
+                <input 
+                  type="password" 
+                  class="form-control"
+                  id="currentPassword"
+                  formControlName="currentPassword"
+                  [class.is-invalid]="currentPassword?.invalid && currentPassword?.touched"
+                  placeholder="Ingresa tu contraseña actual">
+                <div class="invalid-feedback" *ngIf="currentPassword?.invalid && currentPassword?.touched">
+                  <small>La contraseña actual es requerida</small>
+                </div>
+              </div>
+
+              <!-- Nueva contraseña -->
+              <div class="mb-3">
+                <label for="newPassword" class="form-label">
+                  Nueva Contraseña <span class="text-danger">*</span>
+                </label>
+                <input 
+                  type="password" 
+                  class="form-control"
+                  id="newPassword"
+                  formControlName="newPassword"
+                  [class.is-invalid]="newPassword?.invalid && newPassword?.touched"
+                  placeholder="Ingresa tu nueva contraseña">
+                <div class="invalid-feedback" *ngIf="newPassword?.invalid && newPassword?.touched">
+                  <small *ngIf="newPassword?.errors?.['required']">La nueva contraseña es requerida</small>
+                  <small *ngIf="newPassword?.errors?.['minlength']">Debe tener al menos 6 caracteres</small>
+                </div>
+              </div>
+
+              <!-- Confirmar contraseña -->
+              <div class="mb-3">
+                <label for="confirmPassword" class="form-label">
+                  Confirmar Nueva Contraseña <span class="text-danger">*</span>
+                </label>
+                <input 
+                  type="password" 
+                  class="form-control"
+                  id="confirmPassword"
+                  formControlName="confirmPassword"
+                  [class.is-invalid]="(confirmPassword?.invalid && confirmPassword?.touched) || (passwordForm.errors?.['mismatch'] && confirmPassword?.touched)"
+                  placeholder="Confirma tu nueva contraseña">
+                <div class="invalid-feedback" *ngIf="confirmPassword?.invalid && confirmPassword?.touched">
+                  <small>Debes confirmar la contraseña</small>
+                </div>
+                <div class="invalid-feedback" *ngIf="passwordForm.errors?.['mismatch'] && confirmPassword?.touched">
+                  <small>Las contraseñas no coinciden</small>
+                </div>
+              </div>
+
+              <!-- Mensajes de éxito/error -->
+              <div class="alert alert-success" *ngIf="passwordSuccess">
+                <i class="fas fa-check-circle me-2"></i>
+                {{ passwordSuccess }}
+              </div>
+              <div class="alert alert-danger" *ngIf="passwordError">
+                <i class="fas fa-exclamation-circle me-2"></i>
+                {{ passwordError }}
+              </div>
+
+              <!-- Botones -->
+              <div class="d-flex justify-content-end gap-2">
+                <button 
+                  type="button" 
+                  class="btn btn-outline-secondary"
+                  (click)="passwordForm.reset()"
+                  [disabled]="loadingPassword">
+                  <i class="fas fa-times me-1"></i>
+                  Cancelar
+                </button>
+                <button 
+                  type="submit" 
+                  class="btn btn-primary"
+                  [disabled]="passwordForm.invalid || loadingPassword">
+                  <span *ngIf="loadingPassword" class="spinner-border spinner-border-sm me-2"></span>
+                  <i *ngIf="!loadingPassword" class="fas fa-key me-1"></i>
+                  {{ loadingPassword ? 'Actualizando...' : 'Cambiar Contraseña' }}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab: Actividad -->
+      <div class="tab-content" *ngIf="activeTab === 'activity'">
+        <div class="card">
+          <div class="card-header">
+            <h6 class="mb-0">
+              <i class="fas fa-history me-2"></i>
+              Actividad Reciente
+            </h6>
+          </div>
+          <div class="card-body">
+            <div class="table-responsive">
+              <table class="table table-hover">
+                <thead>
+                  <tr>
+                    <th>Acción</th>
+                    <th>Fecha y Hora</th>
+                    <th>Dirección IP</th>
+                    <th>Dispositivo</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let activity of recentActivity">
+                    <td>
+                      <i class="fas fa-circle text-primary me-2" style="font-size: 0.5rem;"></i>
+                      {{ activity.action }}
+                    </td>
+                    <td>{{ formatDate(activity.timestamp) }}</td>
+                    <td>
+                      <code>{{ activity.ip }}</code>
+                    </td>
+                    <td>
+                      <small class="text-muted">{{ activity.device }}</small>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="alert alert-info mt-3">
+              <i class="fas fa-shield-alt me-2"></i>
+              <strong>Consejo de seguridad:</strong> Revisa regularmente tu actividad reciente. 
+              Si ves algo sospechoso, cambia tu contraseña inmediatamente y contacta al administrador.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,149 @@
+.avatar-container {
+  position: relative;
+  display: inline-block;
+}
+
+.avatar-circle {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #00C3B4 0%, #008f86 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.avatar-circle i {
+  color: white;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #dee2e6;
+}
+
+.stat-item {
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #495057;
+  margin-bottom: 0.25rem;
+}
+
+.stat-label {
+  font-size: 0.75rem;
+  color: #6c757d;
+  text-transform: uppercase;
+}
+
+.nav-tabs .nav-link {
+  border: none;
+  color: #6c757d;
+  background: transparent;
+  transition: all 0.3s ease;
+}
+
+.nav-tabs .nav-link:hover {
+  color: #2563eb;
+  border-bottom: 2px solid #2563eb;
+}
+
+.nav-tabs .nav-link.active {
+  color: #2563eb;
+  font-weight: 600;
+  border-bottom: 2px solid #2563eb;
+  background: transparent;
+}
+
+.tab-content {
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.list-group-item-action {
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.list-group-item-action:hover {
+  background-color: #f8f9fa;
+  padding-left: 1.5rem;
+}
+
+.form-control:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 0.2rem rgba(37, 99, 235, 0.25);
+}
+
+.btn-primary {
+  background-color: #2563eb;
+  border-color: #2563eb;
+}
+
+.btn-primary:hover {
+  background-color: #1d4ed8;
+  border-color: #1d4ed8;
+}
+
+.card {
+  border: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  margin-bottom: 1.5rem;
+}
+
+.card-header {
+  background-color: #f8f9fa;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.table {
+  margin-bottom: 0;
+}
+
+.table thead th {
+  border-top: none;
+  font-weight: 600;
+  color: #495057;
+  font-size: 0.875rem;
+  text-transform: uppercase;
+}
+
+.badge {
+  padding: 0.5rem 0.75rem;
+  font-weight: 500;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .avatar-circle {
+    width: 100px;
+    height: 100px;
+  }
+  
+  .avatar-circle i {
+    font-size: 3rem !important;
+  }
+}

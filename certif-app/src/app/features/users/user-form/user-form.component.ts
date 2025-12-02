@@ -1,0 +1,297 @@
+import { Component, OnInit, OnDestroy } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { RouterModule, ActivatedRoute, Router } from '@angular/router';
+import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
+import { Subject } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
+import { BackButtonComponent } from '../../../shared/components/back-button/back-button.component';
+
+import { UserService, DepartmentOption, RoleOption } from '../../../core/services/user.service';
+import { AuthService } from '../../../core/services/auth.service';
+import { User, UserRole, Department, RegisterRequest } from '../../../core/models/user.model';
+
+
+@Component({
+  selector: 'app-user-form',
+  standalone: true,
+  imports: [CommonModule, RouterModule, FormsModule, ReactiveFormsModule, BackButtonComponent],
+  templateUrl: './user-form.component.html',
+  styleUrls: ['./user-form.component.css']
+})
+export class UserFormComponent implements OnInit, OnDestroy {
+  userForm!: FormGroup;
+  loading = false;
+  isEditMode = false;
+  userId: string | null = null;
+  
+  // Opciones
+  availableRoles: RoleOption[] = [];
+  availableDepartments: DepartmentOption[] = [];
+  
+  // Control
+  private readonly destroy$ = new Subject<void>();
+  
+  // Permisos
+  currentUser: User | null = null;
+  canEditRoles = false;
+  canSetLeader = false;
+
+  constructor(
+    private readonly fb: FormBuilder,
+    private readonly userService: UserService,
+    private readonly authService: AuthService,
+    private readonly route: ActivatedRoute,
+    private readonly router: Router
+  ) {}
+
+  ngOnInit(): void {
+    // Obtener usuario actual
+    this.currentUser = this.authService.getCurrentUser();
+    this.updatePermissions();
+
+    // Inicializar formulario
+    this.initializeForm();
+
+    // Cargar datos iniciales
+    this.loadRoles();
+    this.loadDepartments();
+
+    // Verificar si es modo edición
+    this.route.params.pipe(takeUntil(this.destroy$)).subscribe(params => {
+      if (params['id']) {
+        this.isEditMode = true;
+        this.userId = params['id'];
+        if (this.userId) {
+          this.loadUser(this.userId);
+        }
+      }
+    });
+  }
+
+  ngOnDestroy(): void {
+    this.destroy$.next();
+    this.destroy$.complete();
+  }
+
+  private updatePermissions(): void {
+    if (this.currentUser) {
+      this.canEditRoles = this.authService.isAdmin();
+      this.canSetLeader = this.authService.isAdmin();
+    }
+  }
+
+  private initializeForm(): void {
+    this.userForm = this.fb.group({
+      username: ['', [Validators.required, Validators.minLength(3), Validators.maxLength(20)]],
+      email: ['', [Validators.required, Validators.email]],
+      password: ['', this.isEditMode ? [] : [Validators.required, Validators.minLength(6)]],
+      confirmPassword: [''],
+      firstName: ['', [Validators.required, Validators.maxLength(50)]],
+      lastName: ['', [Validators.required, Validators.maxLength(50)]],
+      role: [UserRole.USER, Validators.required],
+      department: ['', Validators.required],
+      position: ['', [Validators.required, Validators.maxLength(100)]],
+      phone: [''],
+      isActive: [true],
+      departmentLeader: [false],
+      managedDepartments: [[]],
+      permissions: [[]]
+    });
+
+    // Validador para confirmar contraseña
+    this.userForm.get('confirmPassword')?.setValidators([
+      this.confirmPasswordValidator.bind(this)
+    ]);
+  }
+
+  private confirmPasswordValidator(control: any) {
+    const password = this.userForm?.get('password')?.value;
+    const confirmPassword = control.value;
+    return password === confirmPassword ? null : { passwordMismatch: true };
+  }
+
+  private loadUser(id: string): void {
+    this.loading = true;
+    
+    this.userService.getUserById(id)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (response) => {
+          if (response.success && response.data) {
+            this.userForm.patchValue({
+              username: response.data.username,
+              email: response.data.email,
+              firstName: response.data.firstName,
+              lastName: response.data.lastName,
+              role: response.data.role,
+              department: response.data.department,
+              position: response.data.position,
+              phone: response.data.phone || '',
+              isActive: response.data.isActive,
+              departmentLeader: response.data.departmentLeader || false,
+              managedDepartments: response.data.managedDepartments || [],
+              permissions: response.data.permissions || []
+            });
+
+            // En modo edición, la contraseña no es requerida
+            this.userForm.get('password')?.clearValidators();
+            this.userForm.get('password')?.updateValueAndValidity();
+          }
+          this.loading = false;
+        },
+        error: (error) => {
+          console.error('Error cargando usuario:', error);
+          this.loading = false;
+          alert('Error al cargar el usuario: ' + error.message);
+        }
+      });
+  }
+
+  private loadRoles(): void {
+    this.userService.getRoles()
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (response) => {
+          if (response.success && response.data) {
+            const allRoles = response.data;
+            if (this.currentUser?.role === UserRole.LIDER) {
+              const allowed = [UserRole.READER, UserRole.TECNICO, UserRole.USER];
+              this.availableRoles = allRoles.filter(r => allowed.includes(r.value));
+            } else {
+              this.availableRoles = allRoles;
+            }
+          }
+        },
+        error: (error) => {
+          console.error('Error cargando roles:', error);
+        }
+      });
+  }
+
+  private loadDepartments(): void {
+    this.userService.getDepartments()
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (response) => {
+          if (response.success && response.data) {
+            this.availableDepartments = response.data;
+          }
+        },
+        error: (error) => {
+          console.error('Error cargando departamentos:', error);
+        }
+      });
+  }
+
+  onSubmit(): void {
+    if (this.userForm.invalid) {
+      this.markFormGroupTouched();
+      return;
+    }
+
+    this.loading = true;
+    const formData = this.userForm.value;
+
+    // Remover confirmPassword del payload
+    delete formData.confirmPassword;
+
+    if (this.isEditMode && this.userId) {
+      // Si no se cambió la contraseña, removerla del payload
+      if (!formData.password) {
+        delete formData.password;
+      }
+
+      this.userService.updateUser(this.userId, formData)
+        .pipe(takeUntil(this.destroy$))
+        .subscribe({
+          next: (response) => {
+            if (response.success) {
+              this.router.navigate(['/users']);
+            }
+            this.loading = false;
+          },
+          error: (error) => {
+            console.error('Error actualizando usuario:', error);
+            alert('Error al actualizar el usuario: ' + error.message);
+            this.loading = false;
+          }
+        });
+    } else {
+      const createRequest: RegisterRequest = formData;
+      
+      this.userService.createUser(createRequest)
+        .pipe(takeUntil(this.destroy$))
+        .subscribe({
+          next: (response) => {
+            if (response.success) {
+              this.router.navigate(['/users']);
+            }
+            this.loading = false;
+          },
+          error: (error) => {
+            console.error('Error creando usuario:', error);
+            alert('Error al crear el usuario: ' + error.message);
+            this.loading = false;
+          }
+        });
+    }
+  }
+
+  private markFormGroupTouched(): void {
+    for (const key of Object.keys(this.userForm.controls)) {
+      const control = this.userForm.get(key);
+      control?.markAsTouched();
+    }
+  }
+
+  // Getters para validación
+  get username() { return this.userForm.get('username'); }
+  get email() { return this.userForm.get('email'); }
+  get password() { return this.userForm.get('password'); }
+  get confirmPassword() { return this.userForm.get('confirmPassword'); }
+  get firstName() { return this.userForm.get('firstName'); }
+  get lastName() { return this.userForm.get('lastName'); }
+  get role() { return this.userForm.get('role'); }
+  get department() { return this.userForm.get('department'); }
+  get position() { return this.userForm.get('position'); }
+  get phone() { return this.userForm.get('phone'); }
+
+  // Helpers para UI
+  getRoleLabel(role: UserRole): string {
+    return this.userService.getRoleLabel(role);
+  }
+
+  getDepartmentLabel(department: Department): string {
+    return this.userService.getDepartmentLabel(department);
+  }
+
+  onRoleChange(): void {
+    const selectedRole = this.userForm.get('role')?.value;
+    
+    // Si no es admin o líder, no puede ser department leader
+    if (![UserRole.ADMIN, UserRole.LIDER].includes(selectedRole)) {
+      this.userForm.get('departmentLeader')?.setValue(false);
+      this.userForm.get('managedDepartments')?.setValue([]);
+    }
+  }
+
+  canSelectRole(role: UserRole): boolean {
+    if (!this.canEditRoles) return false;
+    
+    // Los líderes no pueden crear otros líderes o administradores
+    if (this.currentUser?.role === UserRole.LIDER) {
+      return ![UserRole.ADMIN, UserRole.LIDER].includes(role);
+    }
+    
+    return true;
+  }
+
+  shouldShowLeaderOptions(): boolean {
+    const selectedRole = this.userForm.get('role')?.value;
+    return this.canSetLeader && selectedRole === UserRole.LIDER;
+  }
+
+  cancel(): void {
+    this.router.navigate(['/users']);
+  }
+}
