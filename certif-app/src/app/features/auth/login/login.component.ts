@@ -18,7 +18,13 @@ import { AuthService } from '../../../core/services/auth.service';
 
                 <!-- Logo/Header -->
                 <div class="text-center mb-4">
-                  <h2 class="text-primary fw-bold">Netics-CertiVault</h2>
+                  <img
+                    src="/resources/NETICS-Isotipo.png"
+                    
+                    alt="Netics isotipo"
+                    class="login-logo mb-3"
+                  />
+                  <h2 class="text-primary fw-bold">CertiVault</h2>
                   <p class="text-muted">Gestión de Certificaciones Empresariales</p>
                 </div>
 
@@ -92,6 +98,12 @@ import { AuthService } from '../../../core/services/auth.service';
       backdrop-filter: blur(10px);
       background: rgba(255, 255, 255, 0.95);
     }
+
+    .login-logo {
+      width: 96px;
+      max-width: 40%;
+      height: auto;
+    }
     
     .form-control:focus {
       border-color: var(--primary-color);
@@ -142,3 +154,4 @@ export class LoginComponent {
     }
   }
 }
+

@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" role="img" aria-label="Netics isotipo">
+  <defs>
+    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00c3b4"/>
+      <stop offset="100%" stop-color="#007a73"/>
+    </linearGradient>
+    <clipPath id="c">
+      <rect x="20" y="20" width="160" height="160" rx="28" ry="28"/>
+    </clipPath>
+  </defs>
+  <rect x="20" y="20" width="160" height="160" rx="28" ry="28" fill="#e9f8f7"/>
+  <g clip-path="url(#c)" stroke="url(#g)" stroke-width="20" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M55 150V60l45 80V60l45 90"/>
+  </g>
+</svg>

@@ -17,8 +17,7 @@ export class AuthService {
   public token$ = this.tokenSubject.asObservable();
 
   constructor(private readonly http: HttpClient) {
-    // Limpiar cualquier sesion previa para requerir login al iniciar la app
-    this.logout();
+    this.restoreSessionFromStorage();
   }
 
   login(credentials: LoginRequest): Observable<ApiResponse<LoginResponse>> {
@@ -93,7 +92,8 @@ export class AuthService {
 
   isLoggedIn(): boolean {
     const expiry = localStorage.getItem('tokenExpiry');
-    if (!expiry) return false;
+    const token = localStorage.getItem('token');
+    if (!expiry || !token) return false;
     
     return Date.now() < Number.parseInt(expiry);
   }
@@ -107,7 +107,7 @@ export class AuthService {
   }
 
   getToken(): string | null {
-    return this.tokenSubject.value;
+    return this.tokenSubject.value ?? localStorage.getItem('token');
   }
 
   hasRole(role: UserRole): boolean {
@@ -202,5 +202,26 @@ export class AuthService {
   changePassword(passwordData: { currentPassword: string; newPassword: string }): Observable<ApiResponse<any>> {
     return this.http.put<ApiResponse<any>>(`${this.API_URL}/change-password`, passwordData)
       .pipe(catchError(this.handleError));
+  }
+
+  private restoreSessionFromStorage(): void {
+    const token = localStorage.getItem('token');
+    const user = localStorage.getItem('user');
+    const expiry = localStorage.getItem('tokenExpiry');
+
+    const expiryTime = expiry ? Number.parseInt(expiry) : NaN;
+    const isSessionValid = token && expiry && !Number.isNaN(expiryTime) && Date.now() < expiryTime;
+
+    if (isSessionValid && user) {
+      try {
+        this.tokenSubject.next(token);
+        this.currentUserSubject.next(JSON.parse(user));
+        return;
+      } catch {
+        // Si falla el parseo, limpiar la sesión corrupta
+      }
+    }
+
+    this.logout();
   }
 }
