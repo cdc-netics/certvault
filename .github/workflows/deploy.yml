@@ -1,0 +1,21 @@
+name: Deploy automático a producción
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Build aplicación
+        run: npm run build
+
+      - name: Reiniciar servicio (Ej: PM2 / Docker / Node)
+        run: |
+          pm2 restart certiapp

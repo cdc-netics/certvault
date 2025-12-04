@@ -278,7 +278,7 @@
                   <select 
                     class="form-select" 
                     formControlName="role"
-                    [disabled]="!isAdmin"
+                    [disabled]="roleLockedForSelf || !isAdmin"
                     [class.is-invalid]="role?.invalid && role?.touched">
                     <option value="" disabled>Selecciona un rol</option>
                     <option *ngFor="let roleOption of roleOptions" [ngValue]="roleOption.value">
@@ -288,7 +288,10 @@
                   <div class="invalid-feedback" *ngIf="role?.invalid && role?.touched">
                     <small>El rol es obligatorio</small>
                   </div>
-                  <small class="form-text text-muted" *ngIf="!isAdmin">
+                  <small class="form-text text-muted" *ngIf="roleLockedForSelf">
+                    No puedes cambiar tu propio rol
+                  </small>
+                  <small class="form-text text-muted" *ngIf="!roleLockedForSelf && !isAdmin">
                     Solo un administrador puede cambiar tu rol
                   </small>
                 </div>

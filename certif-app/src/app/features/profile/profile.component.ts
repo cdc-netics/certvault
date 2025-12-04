@@ -28,6 +28,7 @@ export class ProfileComponent implements OnInit, OnDestroy {
   avatarFileName = '';
   private avatarChanged = false;
   private readonly maxAvatarSizeBytes = 2 * 1024 * 1024; // 2MB
+  roleLockedForSelf = false;
   
   // Estados
   loading = false;
@@ -103,6 +104,13 @@ export class ProfileComponent implements OnInit, OnDestroy {
         role: this.currentUser.role,
         avatar: this.currentUser.avatar || this.currentUser.avatarUrl || ''
       });
+      // Evitar que un admin se cambie su propio rol; mantener habilitado el cambio de departamento
+      this.roleLockedForSelf = this.currentUser.role === UserRole.ADMIN;
+      if (this.roleLockedForSelf) {
+        this.profileForm.get('role')?.disable();
+      } else {
+        this.profileForm.get('role')?.enable();
+      }
       this.avatarPreview = this.currentUser.avatar || this.currentUser.avatarUrl || null;
       this.avatarChanged = false;
       this.avatarError = '';
@@ -144,7 +152,11 @@ export class ProfileComponent implements OnInit, OnDestroy {
     this.profileError = '';
     this.profileSuccess = '';
 
-    const { avatar, ...formData } = this.profileForm.value;
+    const rawForm = this.profileForm.getRawValue();
+    if (this.roleLockedForSelf) {
+      delete (rawForm as Partial<User>).role;
+    }
+    const { avatar, ...formData } = rawForm;
     const payload: Partial<User> = {
       ...formData,
       avatar: this.avatarChanged ? avatar || undefined : undefined,
