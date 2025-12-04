@@ -10,19 +10,17 @@ jobs:
     runs-on: self-hosted
 
     steps:
-      - name: Ir al proyecto
-        run: cd /home/cdc/certvault/backend/
-
-      - name: Build aplicación
-        run: npm run build
-
-      - name: Reiniciar servicio (Ej: PM2 / Docker / Node)
+      - name: Build backend
+        working-directory: /home/cdc/certvault/backend
         run: |
-          pm2 restart certiapp
+          npm install
+          npm run build
 
-      - name: Ir al proyecto
-        run: cd /home/cdc/certvault/certi-app/
+      - name: Restart backend service
+        run: pm2 restart certiapp
 
-      - name: Build aplicación
-        run: npm run build
-
+      - name: Build frontend
+        working-directory: /home/cdc/certvault/certif-app
+        run: |
+          npm install
+          npm run build
