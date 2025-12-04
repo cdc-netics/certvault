@@ -10,6 +10,8 @@
   position: string;
   phone?: string;
   isActive: boolean;
+  avatarUrl?: string;
+  avatar?: string;
   // Nuevos campos RBAC
   departmentLeader?: boolean;
   managedDepartments?: Department[];

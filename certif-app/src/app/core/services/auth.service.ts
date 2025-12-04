@@ -9,7 +9,8 @@ import { ApiResponse } from '../models/common.model';
   providedIn: 'root'
 })
 export class AuthService {
-  private readonly API_URL = 'http://localhost:3000/api/auth';
+  // Relative path so it works in dev/prod behind proxy
+  private readonly API_URL = '/api/auth';
   private readonly currentUserSubject = new BehaviorSubject<User | null>(null);
   private readonly tokenSubject = new BehaviorSubject<string | null>(null);
 
@@ -171,8 +172,7 @@ export class AuthService {
       .pipe(
         tap(response => {
           if (response.success && response.data) {
-            // Actualizar usuario en el estado
-            this.currentUserSubject.next(response.data);
+            this.setCurrentUser(response.data);
           }
         }),
         catchError(this.handleError)
@@ -202,6 +202,15 @@ export class AuthService {
   changePassword(passwordData: { currentPassword: string; newPassword: string }): Observable<ApiResponse<any>> {
     return this.http.put<ApiResponse<any>>(`${this.API_URL}/change-password`, passwordData)
       .pipe(catchError(this.handleError));
+  }
+
+  setCurrentUser(user: User | null): void {
+    if (user) {
+      localStorage.setItem('user', JSON.stringify(user));
+    } else {
+      localStorage.removeItem('user');
+    }
+    this.currentUserSubject.next(user);
   }
 
   private restoreSessionFromStorage(): void {

@@ -21,6 +21,13 @@ export class ProfileComponent implements OnInit, OnDestroy {
   currentUser: User | null = null;
   profileForm!: FormGroup;
   passwordForm!: FormGroup;
+  departmentOptions: { label: string; value: Department }[] = [];
+  roleOptions: { label: string; value: UserRole }[] = [];
+  avatarPreview: string | null = null;
+  avatarError = '';
+  avatarFileName = '';
+  private avatarChanged = false;
+  private readonly maxAvatarSizeBytes = 2 * 1024 * 1024; // 2MB
   
   // Estados
   loading = false;
@@ -30,7 +37,7 @@ export class ProfileComponent implements OnInit, OnDestroy {
   passwordSuccess = '';
   passwordError = '';
   
-  // Control de pestañas
+  // Control de pestanas
   activeTab: 'profile' | 'password' | 'activity' = 'profile';
   
   // Actividad reciente
@@ -46,6 +53,7 @@ export class ProfileComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.currentUser = this.authService.getCurrentUser();
+    this.buildOptions();
     this.initializeForms();
     this.loadUserData();
     this.loadRecentActivity();
@@ -63,10 +71,13 @@ export class ProfileComponent implements OnInit, OnDestroy {
       lastName: ['', [Validators.required, Validators.maxLength(50)]],
       email: ['', [Validators.required, Validators.email]],
       phone: ['', [Validators.pattern(/^[\+]?[1-9][\d]{0,15}$/)]],
-      position: ['', [Validators.maxLength(100)]]
+      position: ['', [Validators.maxLength(100)]],
+      department: ['', Validators.required],
+      role: ['', Validators.required],
+      avatar: ['']
     });
 
-    // Formulario de contraseña
+    // Formulario de contrasena
     this.passwordForm = this.fb.group({
       currentPassword: ['', Validators.required],
       newPassword: ['', [Validators.required, Validators.minLength(6)]],
@@ -87,28 +98,35 @@ export class ProfileComponent implements OnInit, OnDestroy {
         lastName: this.currentUser.lastName,
         email: this.currentUser.email,
         phone: this.currentUser.phone || '',
-        position: this.currentUser.position || ''
+        position: this.currentUser.position || '',
+        department: this.currentUser.department,
+        role: this.currentUser.role,
+        avatar: this.currentUser.avatar || this.currentUser.avatarUrl || ''
       });
+      this.avatarPreview = this.currentUser.avatar || this.currentUser.avatarUrl || null;
+      this.avatarChanged = false;
+      this.avatarError = '';
+      this.avatarFileName = '';
     }
   }
 
   private loadRecentActivity(): void {
-    // Datos de ejemplo - en producción vendría del backend
+    // Datos de ejemplo - en produccion vendria del backend
     this.recentActivity = [
       {
-        action: 'Inicio de sesión',
+        action: 'Inicio de sesion',
         timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000),
         ip: '192.168.1.100',
         device: 'Chrome - Windows'
       },
       {
-        action: 'Actualización de perfil',
+        action: 'Actualizacion de perfil',
         timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000),
         ip: '192.168.1.100',
         device: 'Chrome - Windows'
       },
       {
-        action: 'Inicio de sesión',
+        action: 'Inicio de sesion',
         timestamp: new Date(Date.now() - 48 * 60 * 60 * 1000),
         ip: '192.168.1.105',
         device: 'Firefox - Windows'
@@ -126,20 +144,29 @@ export class ProfileComponent implements OnInit, OnDestroy {
     this.profileError = '';
     this.profileSuccess = '';
 
-    const updateData = this.profileForm.value;
+    const { avatar, ...formData } = this.profileForm.value;
+    const payload: Partial<User> = {
+      ...formData,
+      avatar: this.avatarChanged ? avatar || undefined : undefined,
+      avatarUrl: this.avatarPreview || undefined
+    };
 
-    this.authService.updateProfile(updateData)
+    const request$ = this.currentUser?._id && this.isAdmin
+      ? this.userService.updateUser(this.currentUser._id, payload)
+      : this.authService.updateProfile(payload);
+
+    request$
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (response) => {
-          if (response.success) {
+          if (response.success && response.data) {
             this.profileSuccess = 'Perfil actualizado exitosamente';
-            // Actualizar usuario en el servicio de autenticación
-            if (response.data) {
-              localStorage.setItem('user', JSON.stringify(response.data));
-              this.currentUser = response.data;
-            }
+            this.authService.setCurrentUser(response.data);
+            this.currentUser = response.data;
+            this.avatarPreview = response.data.avatarUrl || this.avatarPreview;
             setTimeout(() => this.profileSuccess = '', 5000);
+          } else {
+            this.profileError = 'No se pudo actualizar el perfil';
           }
           this.loading = false;
         },
@@ -170,14 +197,14 @@ export class ProfileComponent implements OnInit, OnDestroy {
       .subscribe({
         next: (response) => {
           if (response.success) {
-            this.passwordSuccess = 'Contraseña actualizada exitosamente';
+            this.passwordSuccess = 'Contrasena actualizada exitosamente';
             this.passwordForm.reset();
             setTimeout(() => this.passwordSuccess = '', 5000);
           }
           this.loadingPassword = false;
         },
         error: (error) => {
-          this.passwordError = error.message || 'Error al cambiar la contraseña';
+          this.passwordError = error.message || 'Error al cambiar la contrasena';
           this.loadingPassword = false;
         }
       });
@@ -185,7 +212,7 @@ export class ProfileComponent implements OnInit, OnDestroy {
 
   setActiveTab(tab: 'profile' | 'password' | 'activity'): void {
     this.activeTab = tab;
-    // Limpiar mensajes al cambiar de pestaña
+    // Limpiar mensajes al cambiar de pestana
     this.profileError = '';
     this.profileSuccess = '';
     this.passwordError = '';
@@ -199,14 +226,16 @@ export class ProfileComponent implements OnInit, OnDestroy {
     });
   }
 
-  // Getters para validación de formulario de perfil
+  // Getters para validacion de formulario de perfil
   get firstName() { return this.profileForm.get('firstName'); }
   get lastName() { return this.profileForm.get('lastName'); }
   get email() { return this.profileForm.get('email'); }
   get phone() { return this.profileForm.get('phone'); }
   get position() { return this.profileForm.get('position'); }
+  get department() { return this.profileForm.get('department'); }
+  get role() { return this.profileForm.get('role'); }
 
-  // Getters para validación de formulario de contraseña
+  // Getters para validacion de formulario de contrasena
   get currentPassword() { return this.passwordForm.get('currentPassword'); }
   get newPassword() { return this.passwordForm.get('newPassword'); }
   get confirmPassword() { return this.passwordForm.get('confirmPassword'); }
@@ -229,6 +258,58 @@ export class ProfileComponent implements OnInit, OnDestroy {
     if (hours < 1) return 'Hace menos de 1 hora';
     if (hours < 24) return `Hace ${hours} hora${hours > 1 ? 's' : ''}`;
     const days = Math.floor(hours / 24);
-    return `Hace ${days} día${days > 1 ? 's' : ''}`;
+    return `Hace ${days} dia${days > 1 ? 's' : ''}`;
+  }
+
+  onAvatarSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    if (!input.files || input.files.length === 0) {
+      return;
+    }
+    const file = input.files[0];
+    this.avatarError = '';
+
+    if (!file.type.startsWith('image/')) {
+      this.avatarError = 'Selecciona un archivo de imagen válido.';
+      return;
+    }
+
+    if (file.size > this.maxAvatarSizeBytes) {
+      this.avatarError = 'La imagen supera los 2MB. Elige una imagen más ligera.';
+      return;
+    }
+
+    this.avatarFileName = file.name;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const base64 = reader.result as string;
+      this.avatarPreview = base64;
+      this.profileForm.patchValue({ avatar: base64 });
+      this.avatarChanged = true;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  clearAvatar(): void {
+    this.avatarPreview = null;
+    this.avatarFileName = '';
+    this.avatarError = '';
+    this.avatarChanged = true;
+    this.profileForm.patchValue({ avatar: '' });
+  }
+
+  get isAdmin(): boolean {
+    return this.currentUser?.role === UserRole.ADMIN;
+  }
+
+  private buildOptions(): void {
+    this.departmentOptions = Object.values(Department).map(value => ({
+      value,
+      label: this.userService.getDepartmentLabel(value)
+    }));
+    this.roleOptions = Object.values(UserRole).map(value => ({
+      value,
+      label: this.userService.getRoleLabel(value)
+    }));
   }
 }

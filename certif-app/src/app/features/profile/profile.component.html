@@ -11,18 +11,46 @@
   </div>
 
   <div class="row">
-    <!-- Sidebar con información del usuario -->
+    <!-- Sidebar -->
     <div class="col-md-4 col-lg-3">
       <div class="card mb-4">
         <div class="card-body text-center">
           <!-- Avatar -->
-          <div class="avatar-container mb-3">
-            <div class="avatar-circle">
-              <i class="fas fa-user fa-4x text-primary"></i>
+          <div class="avatar-container mb-3 position-relative">
+            <div class="avatar-circle overflow-hidden mb-2">
+              <img
+                *ngIf="avatarPreview; else defaultAvatar"
+                [src]="avatarPreview"
+                alt="Avatar de usuario"
+                class="w-100 h-100 object-fit-cover">
+              <ng-template #defaultAvatar>
+                <i class="fas fa-user fa-4x text-primary"></i>
+              </ng-template>
+            </div>
+            <div class="d-flex justify-content-center gap-2 flex-wrap">
+              <label class="btn btn-outline-primary btn-sm mb-0">
+                <i class="fas fa-camera me-1"></i>
+                Cambiar foto
+                <input
+                  type="file"
+                  accept="image/*"
+                  class="d-none"
+                  (change)="onAvatarSelected($event)">
+              </label>
+              <!-- <button type="button" class="btn btn-outline-secondary btn-sm" (click)="clearAvatar()">
+                <i class="fas fa-times me-1"></i> Quitar
+              </button> -->
+            </div>
+            <div class="text-muted small mt-2">
+              <div *ngIf="avatarFileName">Archivo: {{ avatarFileName }}</div>
+              <div>Formatos: JPG/PNG · Máx 2MB</div>
+            </div>
+            <div class="text-danger small mt-1" *ngIf="avatarError">
+              <i class="fas fa-exclamation-circle me-1"></i>{{ avatarError }}
             </div>
           </div>
 
-          <!-- Información básica -->
+          <!-- Info basica -->
           <h5 class="mb-1">{{ currentUser?.firstName }} {{ currentUser?.lastName }}</h5>
           <p class="text-muted mb-2">{{ currentUser?.position }}</p>
           
@@ -38,7 +66,7 @@
             </span>
           </div>
 
-          <!-- Estadísticas -->
+          <!-- Estadisticas -->
           <div class="stats-grid">
             <div class="stat-item">
               <div class="stat-value">{{ currentUser?.createdAt | date: 'MMM yyyy' }}</div>
@@ -54,12 +82,12 @@
         </div>
       </div>
 
-      <!-- Acciones rápidas -->
+      <!-- Acciones rapidas -->
       <div class="card">
         <div class="card-header">
           <h6 class="mb-0">
             <i class="fas fa-bolt me-2"></i>
-            Acciones Rápidas
+            Acciones Rapidas
           </h6>
         </div>
         <div class="list-group list-group-flush">
@@ -75,7 +103,7 @@
             class="list-group-item list-group-item-action"
             (click)="setActiveTab('password')">
             <i class="fas fa-key me-2"></i>
-            Cambiar Contraseña
+            Cambiar Contrasena
           </button>
           <button 
             type="button"
@@ -90,7 +118,7 @@
 
     <!-- Contenido principal -->
     <div class="col-md-8 col-lg-9">
-      <!-- Tabs de navegación -->
+      <!-- Tabs -->
       <ul class="nav nav-tabs mb-4">
         <li class="nav-item">
           <button 
@@ -98,7 +126,7 @@
             [class.active]="activeTab === 'profile'"
             (click)="setActiveTab('profile')">
             <i class="fas fa-user me-2"></i>
-            Información Personal
+            Informacion Personal
           </button>
         </li>
         <li class="nav-item">
@@ -121,13 +149,13 @@
         </li>
       </ul>
 
-      <!-- Tab: Información Personal -->
+      <!-- Tab: Informacion Personal -->
       <div class="tab-content" *ngIf="activeTab === 'profile'">
         <div class="card">
           <div class="card-header">
             <h6 class="mb-0">
               <i class="fas fa-edit me-2"></i>
-              Editar Información Personal
+              Editar Informacion Personal
             </h6>
           </div>
           <div class="card-body">
@@ -146,7 +174,7 @@
                     [class.is-invalid]="firstName?.invalid && firstName?.touched">
                   <div class="invalid-feedback" *ngIf="firstName?.invalid && firstName?.touched">
                     <small *ngIf="firstName?.errors?.['required']">El nombre es requerido</small>
-                    <small *ngIf="firstName?.errors?.['maxlength']">Máximo 50 caracteres</small>
+                    <small *ngIf="firstName?.errors?.['maxlength']">Maximo 50 caracteres</small>
                   </div>
                 </div>
 
@@ -163,7 +191,7 @@
                     [class.is-invalid]="lastName?.invalid && lastName?.touched">
                   <div class="invalid-feedback" *ngIf="lastName?.invalid && lastName?.touched">
                     <small *ngIf="lastName?.errors?.['required']">El apellido es requerido</small>
-                    <small *ngIf="lastName?.errors?.['maxlength']">Máximo 50 caracteres</small>
+                    <small *ngIf="lastName?.errors?.['maxlength']">Maximo 50 caracteres</small>
                   </div>
                 </div>
               </div>
@@ -182,17 +210,17 @@
                     [class.is-invalid]="email?.invalid && email?.touched">
                   <div class="invalid-feedback" *ngIf="email?.invalid && email?.touched">
                     <small *ngIf="email?.errors?.['required']">El email es requerido</small>
-                    <small *ngIf="email?.errors?.['email']">Email inválido</small>
+                    <small *ngIf="email?.errors?.['email']">Email invalido</small>
                   </div>
                   <small class="form-text text-muted">
                     <i class="fas fa-info-circle me-1"></i>
-                    El email es usado para iniciar sesión
+                    El email es usado para iniciar sesion
                   </small>
                 </div>
 
-                <!-- Teléfono -->
+                <!-- Telefono -->
                 <div class="col-md-6 mb-3">
-                  <label for="phone" class="form-label">Teléfono</label>
+                  <label for="phone" class="form-label">Telefono</label>
                   <input 
                     type="tel" 
                     class="form-control"
@@ -201,56 +229,72 @@
                     [class.is-invalid]="phone?.invalid && phone?.touched"
                     placeholder="+1234567890">
                   <div class="invalid-feedback" *ngIf="phone?.invalid && phone?.touched">
-                    <small>Formato de teléfono inválido</small>
+                    <small>Formato de telefono invalido</small>
                   </div>
                 </div>
               </div>
 
               <div class="row">
-                <!-- Cargo/Posición -->
+                <!-- Cargo/Posicion -->
                 <div class="col-12 mb-3">
-                  <label for="position" class="form-label">Cargo/Posición</label>
+                  <label for="position" class="form-label">Cargo/Posicion</label>
                   <input 
                     type="text" 
                     class="form-control"
                     id="position"
                     formControlName="position"
                     [class.is-invalid]="position?.invalid && position?.touched"
-                    placeholder="Tu cargo o posición">
+                    placeholder="Tu cargo o posicion">
                   <div class="invalid-feedback" *ngIf="position?.invalid && position?.touched">
-                    <small>Máximo 100 caracteres</small>
+                    <small>Maximo 100 caracteres</small>
                   </div>
                 </div>
               </div>
 
-              <!-- Información de solo lectura -->
+              <!-- Departamento y rol -->
               <div class="row">
                 <div class="col-md-6 mb-3">
                   <label class="form-label">Departamento</label>
-                  <input 
-                    type="text" 
-                    class="form-control" 
-                    [value]="getDepartmentLabel(currentUser?.department!)"
-                    readonly>
-                  <small class="form-text text-muted">
-                    Contacta al administrador para cambiar tu departamento
+                  <select 
+                    class="form-select" 
+                    formControlName="department"
+                    [disabled]="!isAdmin"
+                    [class.is-invalid]="department?.invalid && department?.touched">
+                    <option value="" disabled>Selecciona un departamento</option>
+                    <option *ngFor="let dept of departmentOptions" [ngValue]="dept.value">
+                      {{ dept.label }}
+                    </option>
+                  </select>
+                  <div class="invalid-feedback" *ngIf="department?.invalid && department?.touched">
+                    <small>El departamento es obligatorio</small>
+                  </div>
+                  <small class="form-text text-muted" *ngIf="!isAdmin">
+                    Solo un administrador puede cambiar tu departamento
                   </small>
                 </div>
 
                 <div class="col-md-6 mb-3">
                   <label class="form-label">Rol</label>
-                  <input 
-                    type="text" 
-                    class="form-control" 
-                    [value]="getRoleLabel(currentUser?.role!)"
-                    readonly>
-                  <small class="form-text text-muted">
-                    Contacta al administrador para cambiar tu rol
+                  <select 
+                    class="form-select" 
+                    formControlName="role"
+                    [disabled]="!isAdmin"
+                    [class.is-invalid]="role?.invalid && role?.touched">
+                    <option value="" disabled>Selecciona un rol</option>
+                    <option *ngFor="let roleOption of roleOptions" [ngValue]="roleOption.value">
+                      {{ roleOption.label }}
+                    </option>
+                  </select>
+                  <div class="invalid-feedback" *ngIf="role?.invalid && role?.touched">
+                    <small>El rol es obligatorio</small>
+                  </div>
+                  <small class="form-text text-muted" *ngIf="!isAdmin">
+                    Solo un administrador puede cambiar tu rol
                   </small>
                 </div>
               </div>
 
-              <!-- Mensajes de éxito/error -->
+              <!-- Mensajes -->
               <div class="alert alert-success" *ngIf="profileSuccess">
                 <i class="fas fa-check-circle me-2"></i>
                 {{ profileSuccess }}
@@ -284,13 +328,13 @@
         </div>
       </div>
 
-      <!-- Tab: Seguridad (Cambiar contraseña) -->
+      <!-- Tab: Seguridad -->
       <div class="tab-content" *ngIf="activeTab === 'password'">
         <div class="card">
           <div class="card-header">
             <h6 class="mb-0">
               <i class="fas fa-shield-alt me-2"></i>
-              Cambiar Contraseña
+              Cambiar Contrasena
             </h6>
           </div>
           <div class="card-body">
@@ -302,17 +346,17 @@
               </h6>
               <ul class="mb-0 ps-3">
                 <li>Usa al menos 6 caracteres</li>
-                <li>Incluye mayúsculas, minúsculas y números</li>
-                <li>No uses contraseñas comunes o fáciles de adivinar</li>
-                <li>Cambia tu contraseña periódicamente</li>
+                <li>Incluye mayusculas, minusculas y numeros</li>
+                <li>No uses contrasenas comunes o faciles de adivinar</li>
+                <li>Cambia tu contrasena periodicamente</li>
               </ul>
             </div>
 
             <form [formGroup]="passwordForm" (ngSubmit)="onSubmitPassword()">
-              <!-- Contraseña actual -->
+              <!-- Contrasena actual -->
               <div class="mb-3">
                 <label for="currentPassword" class="form-label">
-                  Contraseña Actual <span class="text-danger">*</span>
+                  Contrasena Actual <span class="text-danger">*</span>
                 </label>
                 <input 
                   type="password" 
@@ -320,16 +364,16 @@
                   id="currentPassword"
                   formControlName="currentPassword"
                   [class.is-invalid]="currentPassword?.invalid && currentPassword?.touched"
-                  placeholder="Ingresa tu contraseña actual">
+                  placeholder="Ingresa tu contrasena actual">
                 <div class="invalid-feedback" *ngIf="currentPassword?.invalid && currentPassword?.touched">
-                  <small>La contraseña actual es requerida</small>
+                  <small>La contrasena actual es requerida</small>
                 </div>
               </div>
 
-              <!-- Nueva contraseña -->
+              <!-- Nueva contrasena -->
               <div class="mb-3">
                 <label for="newPassword" class="form-label">
-                  Nueva Contraseña <span class="text-danger">*</span>
+                  Nueva Contrasena <span class="text-danger">*</span>
                 </label>
                 <input 
                   type="password" 
@@ -337,17 +381,17 @@
                   id="newPassword"
                   formControlName="newPassword"
                   [class.is-invalid]="newPassword?.invalid && newPassword?.touched"
-                  placeholder="Ingresa tu nueva contraseña">
+                  placeholder="Ingresa tu nueva contrasena">
                 <div class="invalid-feedback" *ngIf="newPassword?.invalid && newPassword?.touched">
-                  <small *ngIf="newPassword?.errors?.['required']">La nueva contraseña es requerida</small>
+                  <small *ngIf="newPassword?.errors?.['required']">La nueva contrasena es requerida</small>
                   <small *ngIf="newPassword?.errors?.['minlength']">Debe tener al menos 6 caracteres</small>
                 </div>
               </div>
 
-              <!-- Confirmar contraseña -->
+              <!-- Confirmar contrasena -->
               <div class="mb-3">
                 <label for="confirmPassword" class="form-label">
-                  Confirmar Nueva Contraseña <span class="text-danger">*</span>
+                  Confirmar Nueva Contrasena <span class="text-danger">*</span>
                 </label>
                 <input 
                   type="password" 
@@ -355,16 +399,16 @@
                   id="confirmPassword"
                   formControlName="confirmPassword"
                   [class.is-invalid]="(confirmPassword?.invalid && confirmPassword?.touched) || (passwordForm.errors?.['mismatch'] && confirmPassword?.touched)"
-                  placeholder="Confirma tu nueva contraseña">
+                  placeholder="Confirma tu nueva contrasena">
                 <div class="invalid-feedback" *ngIf="confirmPassword?.invalid && confirmPassword?.touched">
-                  <small>Debes confirmar la contraseña</small>
+                  <small>Debes confirmar la contrasena</small>
                 </div>
                 <div class="invalid-feedback" *ngIf="passwordForm.errors?.['mismatch'] && confirmPassword?.touched">
-                  <small>Las contraseñas no coinciden</small>
+                  <small>Las contrasenas no coinciden</small>
                 </div>
               </div>
 
-              <!-- Mensajes de éxito/error -->
+              <!-- Mensajes -->
               <div class="alert alert-success" *ngIf="passwordSuccess">
                 <i class="fas fa-check-circle me-2"></i>
                 {{ passwordSuccess }}
@@ -390,7 +434,7 @@
                   [disabled]="passwordForm.invalid || loadingPassword">
                   <span *ngIf="loadingPassword" class="spinner-border spinner-border-sm me-2"></span>
                   <i *ngIf="!loadingPassword" class="fas fa-key me-1"></i>
-                  {{ loadingPassword ? 'Actualizando...' : 'Cambiar Contraseña' }}
+                  {{ loadingPassword ? 'Actualizando...' : 'Cambiar Contrasena' }}
                 </button>
               </div>
             </form>
@@ -412,9 +456,9 @@
               <table class="table table-hover">
                 <thead>
                   <tr>
-                    <th>Acción</th>
+                    <th>Accion</th>
                     <th>Fecha y Hora</th>
-                    <th>Dirección IP</th>
+                    <th>Direccion IP</th>
                     <th>Dispositivo</th>
                   </tr>
                 </thead>
@@ -439,7 +483,7 @@
             <div class="alert alert-info mt-3">
               <i class="fas fa-shield-alt me-2"></i>
               <strong>Consejo de seguridad:</strong> Revisa regularmente tu actividad reciente. 
-              Si ves algo sospechoso, cambia tu contraseña inmediatamente y contacta al administrador.
+              Si ves algo sospechoso, cambia tu contrasena inmediatamente y contacta al administrador.
             </div>
           </div>
         </div>

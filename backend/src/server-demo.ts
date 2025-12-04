@@ -5,12 +5,15 @@ import compression from 'compression';
 import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
+import fs from 'fs';
+import path from 'path';
 
 // Cargar variables de entorno
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+let lastAvatarUrl: string | null = null;
 
 // Rate limiting
 const limiter = rateLimit({
@@ -25,7 +28,7 @@ const limiter = rateLimit({
 
 // Middlewares
 app.use(helmet({
-  crossOriginResourcePolicy: { policy: "cross-origin" }
+  crossOriginResourcePolicy: { policy: 'cross-origin' }
 }));
 app.use(compression());
 app.use(morgan('combined'));
@@ -37,6 +40,29 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+
+// Helper para guardar avatar base64 en disco (demo sin BD)
+const saveAvatarToDisk = (base64: string): string | null => {
+  try {
+    const matches = base64.match(/^data:(image\/[a-zA-Z0-9+.-]+);base64,(.+)$/);
+    if (!matches || matches.length !== 3 || !matches[1] || !matches[2]) return null;
+
+    const mime = matches[1];
+    const ext = mime?.split('/')[1] || 'png';
+    const buffer = Buffer.from(matches[2], 'base64');
+    const uploadDir = path.join(__dirname, '../uploads/avatars');
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    const filename = `avatar-${Date.now()}.${ext}`;
+    fs.writeFileSync(path.join(uploadDir, filename), buffer);
+    return `/uploads/avatars/${filename}`;
+  } catch (err) {
+    console.error('Error guardando avatar en demo:', err);
+    return null;
+  }
+};
 
 // Rutas de demostración
 app.post('/api/auth/login', (req, res) => {
@@ -57,7 +83,8 @@ app.post('/api/auth/login', (req, res) => {
           role: 'admin',
           department: 'TI',
           position: 'Administrador del Sistema',
-          isActive: true
+          isActive: true,
+          avatarUrl: lastAvatarUrl
         },
         expiresIn: 7 * 24 * 60 * 60
       }
@@ -82,7 +109,8 @@ app.post('/api/auth/register', (req, res) => {
       department: req.body.department,
       position: req.body.position,
       role: 'user',
-      isActive: true
+      isActive: true,
+      avatarUrl: null
     },
     message: 'Usuario registrado exitosamente'
   });
@@ -100,9 +128,57 @@ app.get('/api/auth/me', (req, res) => {
       role: 'admin',
       department: 'TI',
       position: 'Administrador del Sistema',
-      isActive: true
+      isActive: true,
+      avatarUrl: lastAvatarUrl
     }
   });
+});
+
+app.put('/api/auth/profile', (req, res) => {
+  let savedAvatarUrl: string | null = null;
+
+  if (req.body.avatar && typeof req.body.avatar === 'string' && req.body.avatar.startsWith('data:image')) {
+    savedAvatarUrl = saveAvatarToDisk(req.body.avatar);
+    if (savedAvatarUrl) {
+      lastAvatarUrl = savedAvatarUrl;
+    }
+  } else if (req.body.avatarUrl) {
+    lastAvatarUrl = req.body.avatarUrl;
+  }
+
+  res.json({
+    success: true,
+    data: {
+      _id: '1',
+      username: 'admin',
+      email: req.body.email || 'admin@empresa.com',
+      firstName: req.body.firstName || 'Administrador',
+      lastName: req.body.lastName || 'del Sistema',
+      role: 'admin',
+      department: 'TI',
+      position: req.body.position || 'Administrador del Sistema',
+      phone: req.body.phone,
+      avatarUrl: lastAvatarUrl,
+      isActive: true
+    },
+    message: 'Perfil actualizado exitosamente'
+  });
+});
+
+app.put('/api/auth/change-password', (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+  
+  if (currentPassword === 'Admin123!') {
+    res.json({
+      success: true,
+      message: 'Contraseña actualizada exitosamente (demo)'
+    });
+  } else {
+    res.status(400).json({
+      success: false,
+      error: 'La contraseña actual es incorrecta'
+    });
+  }
 });
 
 app.get('/api/certifications', (req, res) => {
@@ -129,7 +205,8 @@ app.get('/api/users', (req, res) => {
       managedDepartments: [],
       permissions: [],
       createdAt: new Date('2024-01-01'),
-      updatedAt: new Date('2024-01-01')
+      updatedAt: new Date('2024-01-01'),
+      avatarUrl: lastAvatarUrl
     },
     {
       _id: '2',
@@ -145,7 +222,8 @@ app.get('/api/users', (req, res) => {
       managedDepartments: ['RRHH'],
       permissions: [],
       createdAt: new Date('2024-01-15'),
-      updatedAt: new Date('2024-01-15')
+      updatedAt: new Date('2024-01-15'),
+      avatarUrl: null
     },
     {
       _id: '3',
@@ -161,7 +239,8 @@ app.get('/api/users', (req, res) => {
       managedDepartments: [],
       permissions: [],
       createdAt: new Date('2024-02-01'),
-      updatedAt: new Date('2024-02-01')
+      updatedAt: new Date('2024-02-01'),
+      avatarUrl: null
     },
     {
       _id: '4',
@@ -177,7 +256,8 @@ app.get('/api/users', (req, res) => {
       managedDepartments: [],
       permissions: [],
       createdAt: new Date('2024-02-15'),
-      updatedAt: new Date('2024-02-15')
+      updatedAt: new Date('2024-02-15'),
+      avatarUrl: null
     },
     {
       _id: '5',
@@ -193,7 +273,8 @@ app.get('/api/users', (req, res) => {
       managedDepartments: [],
       permissions: [],
       createdAt: new Date('2024-03-01'),
-      updatedAt: new Date('2024-03-01')
+      updatedAt: new Date('2024-03-01'),
+      avatarUrl: null
     }
   ];
 
@@ -286,7 +367,8 @@ app.post('/api/users', (req, res) => {
       managedDepartments: req.body.managedDepartments || [],
       permissions: req.body.permissions || [],
       createdAt: new Date(),
-      updatedAt: new Date()
+      updatedAt: new Date(),
+      avatarUrl: null
     },
     message: 'Usuario creado exitosamente (demo)'
   });
@@ -307,7 +389,8 @@ app.get('/api/users/:id', (req, res) => {
       isActive: true,
       departmentLeader: false,
       managedDepartments: [],
-      permissions: []
+      permissions: [],
+      avatarUrl: null
     }
   });
 });
@@ -365,48 +448,13 @@ app.use((req, res) => {
   });
 });
 
-app.put('/api/auth/profile', (req, res) => {
-  res.json({
-    success: true,
-    data: {
-      _id: '1',
-      username: 'admin',
-      email: req.body.email || 'admin@empresa.com',
-      firstName: req.body.firstName || 'Administrador',
-      lastName: req.body.lastName || 'del Sistema',
-      role: 'admin',
-      department: 'TI',
-      position: req.body.position || 'Administrador del Sistema',
-      phone: req.body.phone,
-      isActive: true
-    },
-    message: 'Perfil actualizado exitosamente'
-  });
-});
-
-app.put('/api/auth/change-password', (req, res) => {
-  const { currentPassword, newPassword } = req.body;
-  
-  if (currentPassword === 'Admin123!') {
-    res.json({
-      success: true,
-      message: 'Contraseña actualizada exitosamente (demo)'
-    });
-  } else {
-    res.status(400).json({
-      success: false,
-      error: 'La contraseña actual es incorrecta'
-    });
-  }
-});
-
 // Iniciar servidor
 app.listen(PORT, () => {
-  console.log(`🚀 Servidor DEMO corriendo en puerto ${PORT}`);
-  console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
-  console.log(`⚠️  MODO DEMO: Sin base de datos MongoDB`);
-  console.log(`🔑 Login demo: admin@empresa.com / Admin123!`);
+  console.log(`✅ Servidor DEMO corriendo en puerto ${PORT}`);
+  console.log(`🌱 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`❤️ Health check: http://localhost:${PORT}/api/health`);
+  console.log(`ℹ️  MODO DEMO: Sin base de datos MongoDB`);
+  console.log(`🔐 Login demo: admin@empresa.com / Admin123!`);
 });
 
 export default app;

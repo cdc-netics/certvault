@@ -68,7 +68,8 @@
               "buildTarget": "certif-app:build:production"
             },
             "development": {
-              "buildTarget": "certif-app:build:development"
+              "buildTarget": "certif-app:build:development",
+              "proxyConfig": "proxy.conf.json"
             }
           },
           "defaultConfiguration": "development"

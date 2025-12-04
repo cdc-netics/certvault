@@ -60,7 +60,8 @@ export interface RoleOption {
   providedIn: 'root'
 })
 export class UserService {
-  private readonly API_URL = 'http://localhost:3000/api/users';
+  // Relative path to work in dev/prod behind proxy
+  private readonly API_URL = '/api/users';
 
   constructor(private readonly http: HttpClient) {}
 
