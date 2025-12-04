@@ -78,7 +78,11 @@ import { AuthService } from '../../../core/services/auth.service';
                     {{ isLoading ? 'Iniciando sesión...' : 'Iniciar Sesión' }}
                   </button>
 
-                 
+                  
+                  <div class="small-info"> 
+                  <p class="text-muted">Developed By CDC Team with love ❤️</p> 
+                  <p class="text-muted">Version 1.3</p> 
+                  </div>
                 </form>
 
                 
@@ -103,6 +107,13 @@ import { AuthService } from '../../../core/services/auth.service';
       width: 96px;
       max-width: 40%;
       height: auto;
+    }
+    
+    .small-info {
+      font-size: 0.85rem;
+      line-height: 1.2;
+      margin-top: 1rem;
+      text-align: center;
     }
     
     .form-control:focus {
@@ -154,4 +165,7 @@ export class LoginComponent {
     }
   }
 }
+
+
+
 
