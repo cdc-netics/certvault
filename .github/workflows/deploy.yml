@@ -10,8 +10,8 @@ jobs:
     runs-on: self-hosted
 
     steps:
-      - name: Checkout código
-        uses: actions/checkout@v4
+      - name: Ir al proyecto
+        run: cd /home/cdc/certvault/backend/
 
       - name: Build aplicación
         run: npm run build
@@ -19,3 +19,10 @@ jobs:
       - name: Reiniciar servicio (Ej: PM2 / Docker / Node)
         run: |
           pm2 restart certiapp
+
+      - name: Ir al proyecto
+        run: cd /home/cdc/certvault/certi-app/
+
+      - name: Build aplicación
+        run: npm run build
+
