@@ -1,7 +1,7 @@
 name: Deploy automático a producción
 
 on:
-  pull_request:
+  push:
     branches:
       - main
 
@@ -10,25 +10,24 @@ jobs:
     runs-on: self-hosted
 
     steps:
-      - name: Install backend
+      - name: Obtener código actualizado
+        uses: actions/checkout@v4
+
+      - name: Instalar backend
         working-directory: /home/cdc/certvault/backend
-        run: |
-          npm install
+        run: npm install
 
       - name: Build backend
         working-directory: /home/cdc/certvault/backend
-        run: |
-          npm run build
+        run: npm run build
 
-      - name: Restart backend service
+      - name: Reiniciar backend service
         run: pm2 restart certiapp
 
-      - name: Install frontend
+      - name: Instalar frontend
         working-directory: /home/cdc/certvault/certif-app
-        run: |
-          npm install
+        run: npm install
 
       - name: Build frontend
         working-directory: /home/cdc/certvault/certif-app
-        run: |
-          npm run build
+        run: npm run build
