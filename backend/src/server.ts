@@ -42,8 +42,8 @@ app.use(morgan('combined'));
 
 // Rate limiting (aplicar después de CORS para que incluya cabeceras en 429)
 const limiter = rateLimit({
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000'), // 15 minutos
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100'),
+  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '60000'), // 1 minuto
+  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '500'), // 500 solicitudes por minuto
   message: {
     error: 'Demasiadas solicitudes desde esta IP, intenta de nuevo mas tarde.',
   },
