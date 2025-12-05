@@ -22,54 +22,51 @@ export interface User {
 }
 
 export enum UserRole {
-  ADMIN = 'admin',           // Administrador global del sistema
-  READER = 'reader',         // Solo lectura (consulta)
-  TECNICO = 'tecnico',       // Técnico especializado
-  LIDER = 'lider',          // Líder de área/departamento
-
+  ADMIN = 'admin',
+  READER = 'reader',
+  TECNICO = 'tecnico',
+  LIDER = 'lider'
 }
 
 export enum Department {
-  ADMINISTRACION = 'Administración'
-  INFRAESTRUCTURA = 'Infraestructura'
-  PROYECTOS = 'Proyectos'
-  TI = 'TI'
-  RRHH = 'RRHH'
-  FINANZAS = 'Finanzas'
-  OPERACIONES = 'Operaciones'
-  VENTAS = 'Ventas'
-  MARKETING = 'Marketing'
-  INGENIERIA = 'Ingeniería'
-  // CALIDAD = 'Calidad'
-  SEGURIDAD = 'Seguridad'
-  // LEGAL = 'Legal'
+  ADMINISTRACION = 'Administracion',
+  INFRAESTRUCTURA = 'Infraestructura',
+  PROYECTOS = 'Proyectos',
+  TI = 'TI',
+  RRHH = 'RRHH',
+  FINANZAS = 'Finanzas',
+  OPERACIONES = 'Operaciones',
+  VENTAS = 'Ventas',
+  MARKETING = 'Marketing',
+  INGENIERIA = 'Ingenieria',
+  SEGURIDAD = 'Seguridad',
   CIBERSEGURIDAD = 'Ciberseguridad'
 }
 
 // Permisos RBAC
 export enum Permission {
-  // Gestión de usuarios
-  CREATE_USERS = 'create_users'
-  READ_USERS = 'read_users'
-  UPDATE_USERS = 'update_users'
-  DELETE_USERS = 'delete_users'
-  MANAGE_ROLES = 'manage_roles'
+  // Gestion de usuarios
+  CREATE_USERS = 'create_users',
+  READ_USERS = 'read_users',
+  UPDATE_USERS = 'update_users',
+  DELETE_USERS = 'delete_users',
+  MANAGE_ROLES = 'manage_roles',
   
-  // Gestión de certificaciones
-  CREATE_CERTIFICATIONS = 'create_certifications'
-  READ_CERTIFICATIONS = 'read_certifications'
-  UPDATE_CERTIFICATIONS = 'update_certifications'
-  DELETE_CERTIFICATIONS = 'delete_certifications'
+  // Gestion de certificaciones
+  CREATE_CERTIFICATIONS = 'create_certifications',
+  READ_CERTIFICATIONS = 'read_certifications',
+  UPDATE_CERTIFICATIONS = 'update_certifications',
+  DELETE_CERTIFICATIONS = 'delete_certifications',
   
-  // Gestión de departamentos
-  MANAGE_DEPARTMENTS = 'manage_departments'
-  MANAGE_OWN_DEPARTMENT = 'manage_own_department'
+  // Gestion de departamentos
+  MANAGE_DEPARTMENTS = 'manage_departments',
+  MANAGE_OWN_DEPARTMENT = 'manage_own_department',
   
-  // Reportes y estadísticas
-  VIEW_REPORTS = 'view_reports'
-  EXPORT_DATA = 'export_data'
+  // Reportes y estadisticas
+  VIEW_REPORTS = 'view_reports',
+  EXPORT_DATA = 'export_data',
   
-  // Administración del sistema
+  // Administracion del sistema
   SYSTEM_ADMIN = 'system_admin'
 }
 
@@ -99,7 +96,7 @@ export interface RegisterRequest {
   permissions?: Permission[];
 }
 
-// Helper interface para obtener información de permisos
+// Helper interface para obtener informacion de permisos
 export interface UserPermissions {
   canCreateUsers: boolean;
   canUpdateUsers: boolean;
@@ -125,20 +122,16 @@ export const UserRoleLabels: Record<UserRole, string> = {
 
 // Helper para obtener etiquetas de departamentos
 export const DepartmentLabels: Record<Department, string> = {
-  [Department.ADMINISTRACION]: 'Administración'
-  [Department.INFRAESTRUCTURA]: 'Infraestructura'
-  [Department.PROYECTOS]: 'Proyectos'
-  [Department.TI]: 'Tecnología de la Información'
-  [Department.RRHH]: 'Recursos Humanos'
-  [Department.FINANZAS]: 'Finanzas'
-  [Department.OPERACIONES]: 'Operaciones'
-  [Department.VENTAS]: 'Ventas'
-  [Department.MARKETING]: 'Marketing'
-  [Department.INGENIERIA]: 'Ingeniería'
-  // [Department.CALIDAD]: 'Calidad'
-  [Department.SEGURIDAD]: 'Seguridad'
-  // [Department.LEGAL]: 'Legal'
+  [Department.ADMINISTRACION]: 'Administracion',
+  [Department.INFRAESTRUCTURA]: 'Infraestructura',
+  [Department.PROYECTOS]: 'Proyectos',
+  [Department.TI]: 'Tecnologia de la Informacion',
+  [Department.RRHH]: 'Recursos Humanos',
+  [Department.FINANZAS]: 'Finanzas',
+  [Department.OPERACIONES]: 'Operaciones',
+  [Department.VENTAS]: 'Ventas',
+  [Department.MARKETING]: 'Marketing',
+  [Department.INGENIERIA]: 'Ingenieria',
+  [Department.SEGURIDAD]: 'Seguridad',
   [Department.CIBERSEGURIDAD]: 'Ciberseguridad'
 };
-
-

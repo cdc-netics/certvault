@@ -1,4 +1,4 @@
-import { Request, Response } from 'express';
+Ôªøimport { Request, Response } from 'express';
 import path from 'path';
 import fs from 'fs';
 import {
@@ -7,6 +7,7 @@ import {
   CertificationStatus
 } from '../models/Certification';
 import { AuthRequest } from '../middleware/auth';
+import { UserRole } from '../models/User';
 
 
 const normalizeTags = (tags?: unknown): string[] => {
@@ -58,7 +59,7 @@ export const createCertification = async (req: AuthRequest, res: Response): Prom
     } else {
       res.status(500).json({
         success: false,
-        error: 'Error al crear la certificaciÛn'
+        error: 'Error al crear la certificaci√≥n'
       });
     }
   }
@@ -133,7 +134,7 @@ export const getCertificationById = async (req: Request, res: Response): Promise
   try {
     const certification = await Certification.findById(req.params.id);
     if (!certification) {
-      res.status(404).json({ success: false, error: 'CertificaciÛn no encontrada' });
+      res.status(404).json({ success: false, error: 'Certificaci√≥n no encontrada' });
       return;
     }
 
@@ -141,7 +142,7 @@ export const getCertificationById = async (req: Request, res: Response): Promise
   } catch (error) {
     res.status(500).json({
       success: false,
-      error: 'Error al obtener la certificaciÛn'
+      error: 'Error al obtener la certificaci√≥n'
     });
   }
 };
@@ -155,7 +156,7 @@ export const updateCertification = async (req: AuthRequest, res: Response): Prom
 
     const certification = await Certification.findById(req.params.id);
     if (!certification) {
-      res.status(404).json({ success: false, error: 'CertificaciÛn no encontrada' });
+      res.status(404).json({ success: false, error: 'Certificaci√≥n no encontrada' });
       return;
     }
 
@@ -163,11 +164,17 @@ export const updateCertification = async (req: AuthRequest, res: Response): Prom
       certification.employeeId?.toString() === req.user._id?.toString() ||
       certification.createdBy?.toString() === req.user._id?.toString();
 
+    const isDepartmentLeader =
+      req.user.role === UserRole.LIDER &&
+      (certification.department === req.user.department ||
+        (req.user.managedDepartments || []).includes(certification.department as any));
 
-    if (!isOwner) {
+    const isAdmin = req.user.role === UserRole.ADMIN;
+
+    if (!isOwner && !isDepartmentLeader && !isAdmin) {
       res.status(403).json({
         success: false,
-        error: 'Solo el propietario puede actualizar esta certificaciÛn'
+        error: 'Solo el propietario o el l√≠der de su departamento pueden actualizar esta certificaci√≥n'
       });
       return;
     }
@@ -184,7 +191,7 @@ export const updateCertification = async (req: AuthRequest, res: Response): Prom
     });
 
     if (!updated) {
-      res.status(404).json({ success: false, error: 'CertificaciÛn no encontrada' });
+      res.status(404).json({ success: false, error: 'Certificaci√≥n no encontrada' });
       return;
     }
 
@@ -193,7 +200,7 @@ export const updateCertification = async (req: AuthRequest, res: Response): Prom
     console.error('Error updating certification:', error);
     res.status(500).json({
       success: false,
-      error: 'Error al actualizar la certificaciÛn'
+      error: 'Error al actualizar la certificaci√≥n'
     });
   }
 };
@@ -201,15 +208,15 @@ export const deleteCertification = async (req: Request, res: Response): Promise<
   try {
     const certification = await Certification.findByIdAndDelete(req.params.id);
     if (!certification) {
-      res.status(404).json({ success: false, error: 'CertificaciÛn no encontrada' });
+      res.status(404).json({ success: false, error: 'Certificaci√≥n no encontrada' });
       return;
     }
 
-    res.json({ success: true, message: 'CertificaciÛn eliminada' });
+    res.json({ success: true, message: 'Certificaci√≥n eliminada' });
   } catch (error) {
     res.status(500).json({
       success: false,
-      error: 'Error al eliminar la certificaciÛn'
+      error: 'Error al eliminar la certificaci√≥n'
     });
   }
 };
@@ -246,7 +253,7 @@ export const getCertificationStats = async (_req: Request, res: Response): Promi
   } catch (error) {
     res.status(500).json({
       success: false,
-      error: 'Error al obtener estadÌsticas'
+      error: 'Error al obtener estad√≠sticas'
     });
   }
 };
@@ -288,7 +295,7 @@ export const getUserCertifications = async (req: Request, res: Response): Promis
 export const uploadCertificate = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     if (!req.file) {
-      res.status(400).json({ success: false, error: 'No se enviÛ archivo' });
+      res.status(400).json({ success: false, error: 'No se envi√≥ archivo' });
       return;
     }
 
@@ -340,7 +347,7 @@ export const getTechnologies = async (_req: Request, res: Response): Promise<voi
   } catch (error) {
     res.status(500).json({
       success: false,
-      error: 'Error al obtener tecnologÌas'
+      error: 'Error al obtener tecnolog√≠as'
     });
   }
 };
@@ -356,6 +363,7 @@ export const getDepartments = async (_req: Request, res: Response): Promise<void
     });
   }
 };
+
 
 
 
