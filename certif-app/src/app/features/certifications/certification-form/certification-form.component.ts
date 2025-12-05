@@ -433,6 +433,18 @@ export class CertificationFormComponent implements OnInit {
       this.successMessage = '';
 
       const formValue = this.certificationForm.value;
+      const employeeIdValue = this.isEditMode && this.originalCertification
+        ? (this.originalCertification as any).employeeId || this.originalCertification.employeeId
+        : this.currentUser._id;
+
+      const employeeNameValue = this.isEditMode && this.originalCertification
+        ? (this.originalCertification as any).employeeName || this.originalCertification.employeeName || ''
+        : `${this.currentUser.firstName} ${this.currentUser.lastName}`;
+
+      const departmentValue = this.isEditMode && this.originalCertification
+        ? this.originalCertification.department
+        : this.currentUser.department;
+
       const processedCurrent = {
         title: formValue.title,
         description: formValue.description || '',
@@ -440,9 +452,9 @@ export class CertificationFormComponent implements OnInit {
         technology: formValue.technology,
         provider: formValue.provider,
         level: formValue.level as CertificationLevel,
-        employeeId: this.currentUser._id,
-        employeeName: `${this.currentUser.firstName} ${this.currentUser.lastName}`,
-        department: this.currentUser.department,
+        employeeId: employeeIdValue,
+        employeeName: employeeNameValue,
+        department: departmentValue,
         issueDate: formValue.issueDate ? new Date(formValue.issueDate) : undefined,
         expirationDate: formValue.expirationDate ? new Date(formValue.expirationDate) : undefined,
         certificateNumber: formValue.certificateNumber || `CERT-${Date.now()}`,
