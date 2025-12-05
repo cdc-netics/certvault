@@ -32,7 +32,7 @@ import { AuthService } from '../../../core/services/auth.service';
                 <form [formGroup]="loginForm" (ngSubmit)="onSubmit()">
                   <!-- Email -->
                   <div class="mb-3">
-                    <label for="email" class="form-label">Email - xD </label>
+                    <label for="email" class="form-label">Email</label>
                     <input
                       type="email"
                       id="email"
@@ -81,7 +81,7 @@ import { AuthService } from '../../../core/services/auth.service';
                   
                   <div class="small-info"> 
                   <p class="text-muted">Developed By CDC Team with love ❤️</p> 
-                  <p class="text-muted">Version 1.4</p> 
+                  <p class="text-muted">Version 1.5</p> 
                   </div>
                 </form>
 

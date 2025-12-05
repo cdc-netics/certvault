@@ -30,7 +30,7 @@ const PORT = process.env.PORT || 3000;
 
 // Middlewares
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:4200',
+  origin: process.env.FRONTEND_URL || 'http://10.0.101.27:4200',
   credentials: true,
   optionsSuccessStatus: 200
 }));

@@ -446,7 +446,7 @@ export class CertificationsListComponent implements OnInit, OnDestroy {
   getCertificateUrl(cert: Certification): string {
     if (!cert.certificateUrl) return '';
     if (cert.certificateUrl.startsWith('http')) return cert.certificateUrl;
-    const backendBase = 'http://localhost:3000';
+    const backendBase = 'http://10.0.101.27:3000';
     return `${backendBase}${cert.certificateUrl.startsWith('/') ? '' : '/'}${cert.certificateUrl}`;
   }
 
