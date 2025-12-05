@@ -147,6 +147,7 @@
                   class="form-select"
                   id="department"
                   formControlName="department"
+                  [disabled]="!canEditDepartmentField"
                   [class.is-invalid]="department?.invalid && department?.touched">
                   <option value="">Selecciona un departamento</option>
                   <option *ngFor="let dept of availableDepartments" [value]="dept.value">
@@ -167,6 +168,7 @@
                   class="form-control"
                   id="position"
                   formControlName="position"
+                  [disabled]="!canEditPositionField"
                   [class.is-invalid]="position?.invalid && position?.touched"
                   placeholder="Ej: Analista, Gerente, Técnico">
                 <div class="invalid-feedback" *ngIf="position?.invalid && position?.touched">
@@ -199,6 +201,7 @@
                   class="form-select"
                   id="role"
                   formControlName="role"
+                  [disabled]="!canEditRoles || targetUserIsAdmin"
                   (change)="onRoleChange()"
                   [class.is-invalid]="role?.invalid && role?.touched">
                   <option *ngFor="let roleOption of availableRoles" 

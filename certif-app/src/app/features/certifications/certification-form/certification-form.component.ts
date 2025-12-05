@@ -14,7 +14,7 @@ import { BackButtonComponent } from '../../../shared/components/back-button/back
   template: `
     <div class="container-fluid">
       <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-        <h1 class="h2">{{ isEditMode ? 'Editar Certificación' : 'Nueva Certificación' }}</h1>
+        <h1 class="h2">{{ isEditMode ? 'Editar Certificacion' : 'Nueva Certificacion' }}</h1>
         <div class="btn-toolbar mb-2 mb-md-0">
           <app-back-button [customRoute]="'/certifications'"></app-back-button>
         </div>
@@ -26,14 +26,14 @@ import { BackButtonComponent } from '../../../shared/components/back-button/back
             <div class="card-body">
               <form [formGroup]="certificationForm" (ngSubmit)="onSubmit()" enctype="multipart/form-data">
                 
-                <!-- Información Básica -->
+                <!-- Informacion Basica -->
                 <div class="mb-4">
-                  <h5 class="card-title mb-3">Información Básica</h5>
+                  <h5 class="card-title mb-3">Informacion Basica</h5>
                   
                   <div class="row">
-                    <!-- Certificación -->
+                    <!-- Certificacion -->
                     <div class="col-md-6 mb-3">
-                      <label for="title" class="form-label">Certificación *</label>
+                      <label for="title" class="form-label">Certificacion *</label>
                       <input
                         type="text"
                         id="title"
@@ -41,10 +41,10 @@ import { BackButtonComponent } from '../../../shared/components/back-button/back
                         class="form-control"
                         [class.is-invalid]="certificationForm.get('title')?.invalid && certificationForm.get('title')?.touched"
                         formControlName="title"
-                        placeholder="Nombre de la certificación"
+                        placeholder="Nombre de la certificacion"
                       >
                       <div class="invalid-feedback" *ngIf="certificationForm.get('title')?.invalid && certificationForm.get('title')?.touched">
-                        <small *ngIf="certificationForm.get('title')?.errors?.['required']">La certificación es requerida</small>
+                        <small *ngIf="certificationForm.get('title')?.errors?.['required']">La certificacion es requerida</small>
                       </div>
                     </div>
 
@@ -58,11 +58,11 @@ import { BackButtonComponent } from '../../../shared/components/back-button/back
                         formControlName="type"
                       >
                         <option value="">Seleccionar tipo</option>
-                        <option value="technical">Técnica</option>
+                        <option value="technical">Tecnica</option>
                         <option value="professional">Profesional</option>
                         <option value="security">Seguridad</option>
                         <option value="cloud">Cloud</option>
-                        <option value="management">Gestión</option>
+                        <option value="management">Gestion</option>
                         <option value="soft_skills">Habilidades Blandas</option>
                         <option value="compliance">Cumplimiento</option>
                         <option value="other">Otro</option>
@@ -114,9 +114,9 @@ import { BackButtonComponent } from '../../../shared/components/back-button/back
                   </div>
 
                   <div class="row">
-                    <!-- ID/Número de Certificado -->
+                    <!-- ID/Numero de Certificado -->
                     <div class="col-md-6 mb-3">
-                      <label for="certificateNumber" class="form-label">ID/Número de Certificado</label>
+                      <label for="certificateNumber" class="form-label">ID/Numero de Certificado</label>
                       <input
                         type="text"
                         id="certificateNumber"
@@ -127,9 +127,9 @@ import { BackButtonComponent } from '../../../shared/components/back-button/back
                       >
                     </div>
 
-                    <!-- Tecnología -->
+                    <!-- Tecnologia -->
                     <div class="col-md-6 mb-3">
-                      <label for="technology" class="form-label">Tecnología/Concepto *</label>
+                      <label for="technology" class="form-label">Tecnologia/Concepto *</label>
                       <input
                         type="text"
                         id="technology"
@@ -140,7 +140,7 @@ import { BackButtonComponent } from '../../../shared/components/back-button/back
                         placeholder="Ej: React, Python, Project Management"
                       >
                       <div class="invalid-feedback" *ngIf="certificationForm.get('technology')?.invalid && certificationForm.get('technology')?.touched">
-                        <small *ngIf="certificationForm.get('technology')?.errors?.['required']">La tecnología es requerida</small>
+                        <small *ngIf="certificationForm.get('technology')?.errors?.['required']">La tecnologia es requerida</small>
                       </div>
                     </div>
                   </div>
@@ -151,9 +151,9 @@ import { BackButtonComponent } from '../../../shared/components/back-button/back
                   <h5 class="card-title mb-3">Fechas</h5>
                   
                   <div class="row">
-                    <!-- Fecha de Emisión -->
+                    <!-- Fecha de Emision -->
                     <div class="col-md-6 mb-3">
-                      <label for="issueDate" class="form-label">Fecha de Emisión *</label>
+                      <label for="issueDate" class="form-label">Fecha de Emision *</label>
                       <input
                         type="date"
                         id="issueDate"
@@ -163,7 +163,7 @@ import { BackButtonComponent } from '../../../shared/components/back-button/back
                         formControlName="issueDate"
                       >
                       <div class="invalid-feedback" *ngIf="certificationForm.get('issueDate')?.invalid && certificationForm.get('issueDate')?.touched">
-                        <small *ngIf="certificationForm.get('issueDate')?.errors?.['required']">La fecha de emisión es requerida</small>
+                        <small *ngIf="certificationForm.get('issueDate')?.errors?.['required']">La fecha de emision es requerida</small>
                       </div>
                     </div>
 
@@ -182,9 +182,9 @@ import { BackButtonComponent } from '../../../shared/components/back-button/back
                   </div>
                 </div>
 
-                <!-- Información Adicional -->
+                <!-- Informacion Adicional -->
                 <div class="mb-4">
-                  <h5 class="card-title mb-3">Información Adicional</h5>
+                  <h5 class="card-title mb-3">Informacion Adicional</h5>
                   
                   <div class="row">
                     <!-- Tags -->
@@ -198,12 +198,12 @@ import { BackButtonComponent } from '../../../shared/components/back-button/back
                         formControlName="tagsInput"
                         placeholder="Tags separados por comas"
                       >
-                      <small class="form-text text-muted">Separar múltiples tags con comas</small>
+                      <small class="form-text text-muted">Separar multiples tags con comas</small>
                     </div>
 
                     <!-- Badge -->
                     <div class="col-md-6 mb-3">
-                      <label for="hasBadge" class="form-label">¿Tiene Badge?</label>
+                      <label for="hasBadge" class="form-label">Tiene Badge?</label>
                       <select
                         id="hasBadge"
                         name="badge"
@@ -211,7 +211,7 @@ import { BackButtonComponent } from '../../../shared/components/back-button/back
                         formControlName="hasBadge"
                       >
                         <option value="">Badge?</option>
-                        <option value="true">Sí</option>
+                        <option value="true">Si</option>
                         <option value="false">No</option>
                       </select>
                     </div>
@@ -220,27 +220,27 @@ import { BackButtonComponent } from '../../../shared/components/back-button/back
                   <div class="row">
                     <!-- Link -->
                     <div class="col-md-12 mb-3">
-                      <label for="validationUrl" class="form-label">Link de Validación</label>
+                      <label for="validationUrl" class="form-label">Link de Validacion</label>
                       <input
                         type="url"
                         id="validationUrl"
                         name="link"
                         class="form-control"
                         formControlName="validationUrl"
-                        placeholder="Link de badge Credly o validación (opcional)"
+                        placeholder="Link de badge Credly o validacion (opcional)"
                       >
                     </div>
                   </div>
 
-                  <!-- Descripción -->
+                  <!-- Descripcion -->
                   <div class="mb-3">
-                    <label for="description" class="form-label">Descripción</label>
+                    <label for="description" class="form-label">Descripcion</label>
                     <textarea
                       id="description"
                       class="form-control"
                       formControlName="description"
                       rows="3"
-                      placeholder="Descripción de la certificación"
+                      placeholder="Descripcion de la certificacion"
                     ></textarea>
                   </div>
 
@@ -255,7 +255,13 @@ import { BackButtonComponent } from '../../../shared/components/back-button/back
                       (change)="onFileSelected($event)"
                       accept=".pdf,.jpg,.jpeg,.png"
                     >
-                    <small class="form-text text-muted">Formatos permitidos: PDF, JPG, PNG (máx. 5MB)</small>
+                    <div class="mt-2" *ngIf="existingCertificateUrl">
+                      <small class="form-text text-muted d-block">Archivo actual: {{ existingCertificateName || 'certificado' }}</small>
+                      <a class="btn btn-link btn-sm ps-0" [href]="getCertificateUrl(existingCertificateUrl)" target="_blank" rel="noopener">
+                        <i class="fas fa-eye me-1"></i> Ver certificado actual
+                      </a>
+                    </div>
+                    <small class="form-text text-muted">Formatos permitidos: PDF, JPG, PNG (max. 5MB)</small>
                   </div>
                 </div>
 
@@ -324,6 +330,8 @@ export class CertificationFormComponent implements OnInit {
   selectedFile: File | null = null;
   certificationId: string | null = null;
   currentUser: any;
+  existingCertificateUrl: string | null = null;
+  existingCertificateName: string | null = null;
 
   constructor(
     private readonly fb: FormBuilder,
@@ -351,7 +359,7 @@ export class CertificationFormComponent implements OnInit {
   ngOnInit(): void {
     this.currentUser = this.authService.getCurrentUser();
     
-    // Verificar si es modo edición
+    // Verificar si es modo edicion
     this.route.params.subscribe(params => {
       if (params['id']) {
         this.isEditMode = true;
@@ -367,6 +375,10 @@ export class CertificationFormComponent implements OnInit {
       next: (response) => {
         if (response.success && response.data) {
           const cert = response.data;
+          this.existingCertificateUrl = cert.certificateUrl || null;
+          this.existingCertificateName = cert.certificateUrl
+            ? cert.certificateUrl.split('/').pop() || null
+            : null;
           this.certificationForm.patchValue({
             title: cert.title,
             description: cert.description,
@@ -384,8 +396,8 @@ export class CertificationFormComponent implements OnInit {
         }
         this.isLoading = false;
       },
-      error: (error) => {
-        this.errorMessage = 'Error al cargar la certificación';
+      error: () => {
+        this.errorMessage = 'Error al cargar la certificacion';
         this.isLoading = false;
       }
     });
@@ -394,7 +406,7 @@ export class CertificationFormComponent implements OnInit {
   onFileSelected(event: any): void {
     const file = event.target.files[0];
     if (file) {
-      // Validar tamaño (5MB máximo)
+      // Validar tamano (5MB maximo)
       if (file.size > 5 * 1024 * 1024) {
         this.errorMessage = 'El archivo no puede superar los 5MB';
         return;
@@ -403,7 +415,7 @@ export class CertificationFormComponent implements OnInit {
       // Validar tipo
       const allowedTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
       if (!allowedTypes.includes(file.type)) {
-        this.errorMessage = 'Formato de archivo no válido. Use PDF, JPG o PNG';
+        this.errorMessage = 'Formato de archivo no valido. Use PDF, JPG o PNG';
         return;
       }
       
@@ -446,14 +458,14 @@ export class CertificationFormComponent implements OnInit {
         next: (response) => {
           if (response.success) {
             this.successMessage = this.isEditMode 
-              ? 'Certificación actualizada exitosamente'
-              : 'Certificación creada exitosamente';
+              ? 'Certificacion actualizada exitosamente'
+              : 'Certificacion creada exitosamente';
             
             // Si hay archivo, subirlo
             if (this.selectedFile && response.data?._id) {
               this.uploadFile(response.data._id);
             } else {
-              // Redireccionar después de un momento
+              // Redireccionar despues de un momento
               setTimeout(() => {
                 this.router.navigate(['/certifications']);
               }, 2000);
@@ -461,15 +473,15 @@ export class CertificationFormComponent implements OnInit {
           }
         },
         error: (error) => {
-          this.errorMessage = error.message || 'Error al guardar la certificación';
+          this.errorMessage = error.message || 'Error al guardar la certificacion';
           this.isLoading = false;
         }
       });
     } else {
       // Marcar todos los campos como tocados para mostrar errores
-      for (const key of Object.keys(this.certificationForm.controls)) {
+      Object.keys(this.certificationForm.controls).forEach(key => {
         this.certificationForm.get(key)?.markAsTouched();
-      }
+      });
     }
   }
 
@@ -481,16 +493,22 @@ export class CertificationFormComponent implements OnInit {
             this.successMessage += ' y archivo subido correctamente';
           }
           this.isLoading = false;
-          // Redireccionar después de un momento
+          // Redireccionar despues de un momento
           setTimeout(() => {
             this.router.navigate(['/certifications']);
           }, 2000);
         },
-        error: (error) => {
-          this.errorMessage = 'Certificación guardada pero error al subir archivo';
+        error: () => {
+          this.errorMessage = 'Certificacion guardada pero error al subir archivo';
           this.isLoading = false;
         }
       });
     }
+  }
+
+  getCertificateUrl(url: string): string {
+    if (url.startsWith('http')) return url;
+    const backendBase = 'http://10.0.101.27:3000';
+    return `${backendBase}${url.startsWith('/') ? '' : '/'}${url}`;
   }
 }

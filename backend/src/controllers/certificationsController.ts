@@ -200,7 +200,7 @@ export const updateCertification = async (req: AuthRequest, res: Response): Prom
     console.error('Error updating certification:', error);
     res.status(500).json({
       success: false,
-      error: 'Error al actualizar la certificación'
+      error: error instanceof Error ? error.message : 'Error al actualizar la certificación'
     });
   }
 };
