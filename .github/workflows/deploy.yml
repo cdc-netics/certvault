@@ -25,9 +25,9 @@ jobs:
         working-directory: ${{ github.workspace }}/backend
         run: npm run build
 
-      - name: Move backend
+      - name: Rsync backend
         working-directory: ${{ github.workspace }}/backend
-        run: cp -r ${{ github.workspace }}/backend/dist/* /home/cdc/certiappdist/
+        run: rsync -av --delete ${{ github.workspace }}/backend/dist/ /home/cdc/certvault/backend/dist/
 
       - name: Reiniciar backend service
         run: pm2 restart certiapp
@@ -39,3 +39,7 @@ jobs:
       - name: Build frontend
         working-directory: ${{ github.workspace }}/certif-app
         run: npm run build
+
+      - name: Rsync frontend
+        working-directory: ${{ github.workspace }}/certif-app
+        run: rsync -av --delete ${{ github.workspace }}/certif-app/dist/certif-app/ /home/cdc/certvault/certif-app/dist/certif-app/
