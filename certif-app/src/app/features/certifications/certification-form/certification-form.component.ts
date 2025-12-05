@@ -521,7 +521,7 @@ export class CertificationFormComponent implements OnInit {
 
       const operation = this.isEditMode && this.certificationId
         ? this.certificationService.updateCertification(this.certificationId, payload)
-        : this.certificationService.createCertification(processedCurrent);
+        : this.certificationService.createCertification(payload);
 
       operation.subscribe({
         next: (response) => {
@@ -577,7 +577,7 @@ export class CertificationFormComponent implements OnInit {
 
   getCertificateUrl(url: string): string {
     if (url.startsWith('http')) return url;
-    const backendBase = 'http://localhost:3000';
+    const backendBase = 'http://10.0.101.27:3000';
     return `${backendBase}${url.startsWith('/') ? '' : '/'}${url}`;
   }
 }
