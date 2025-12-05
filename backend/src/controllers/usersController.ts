@@ -284,7 +284,29 @@ export const updateUser = async (req: AuthRequest, res: Response): Promise<void>
   try {
     const currentUser = req.user!;
     const { id } = req.params;
-    const updateData: UpdateUserRequest = req.body;
+    // Sanitizar campos permitidos (evita escribir campos arbitrarios)
+    const allowedFields: (keyof UpdateUserRequest)[] = [
+      'username',
+      'email',
+      'firstName',
+      'lastName',
+      'role',
+      'department',
+      'position',
+      'phone',
+      'avatarUrl',
+      'avatar',
+      'isActive',
+      'departmentLeader',
+      'managedDepartments',
+      'permissions'
+    ];
+    const updateData: UpdateUserRequest = {};
+    allowedFields.forEach(field => {
+      if (req.body[field] !== undefined) {
+        (updateData as any)[field] = req.body[field];
+      }
+    });
 
     // Verificar permisos básicos
     if (!currentUser.hasPermission(Permission.UPDATE_USERS)) {
