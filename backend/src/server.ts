@@ -6,7 +6,7 @@ import compression from 'compression';
 import morgan from 'morgan';
 import dotenv from 'dotenv';
 import path from 'path';
-import rateLimit from 'express-rate-limit';
+// import rateLimit from 'express-rate-limit';
 
 // Importar configuracion de base de datos y seed
 import { database } from './config/database';
@@ -41,13 +41,13 @@ app.use(compression());
 app.use(morgan('combined'));
 
 // Rate limiting
-const limiter = rateLimit({
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '60000', 10), // default 1 minute
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '500', 10),     // default 500 req/min
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-app.use(limiter);
+// const limiter = rateLimit({
+//   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '60000', 10), // default 1 minute
+//   max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '500', 10),     // default 500 req/min
+//   standardHeaders: true,
+//   legacyHeaders: false,
+// });
+// app.use(limiter);
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
