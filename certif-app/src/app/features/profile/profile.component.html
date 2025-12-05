@@ -243,11 +243,15 @@
                     class="form-control"
                     id="position"
                     formControlName="position"
+                    [disabled]="!canEditPosition"
                     [class.is-invalid]="position?.invalid && position?.touched"
                     placeholder="Tu cargo o posicion">
                   <div class="invalid-feedback" *ngIf="position?.invalid && position?.touched">
                     <small>Maximo 100 caracteres</small>
                   </div>
+                  <small class="form-text text-muted" *ngIf="!canEditPosition">
+                    Solo administradores o lideres pueden cambiar el cargo
+                  </small>
                 </div>
               </div>
 
@@ -258,7 +262,7 @@
                   <select 
                     class="form-select" 
                     formControlName="department"
-                    [disabled]="!isAdmin"
+                    [disabled]="!canEditDepartment"
                     [class.is-invalid]="department?.invalid && department?.touched">
                     <option value="" disabled>Selecciona un departamento</option>
                     <option *ngFor="let dept of departmentOptions" [ngValue]="dept.value">
@@ -268,7 +272,7 @@
                   <div class="invalid-feedback" *ngIf="department?.invalid && department?.touched">
                     <small>El departamento es obligatorio</small>
                   </div>
-                  <small class="form-text text-muted" *ngIf="!isAdmin">
+                  <small class="form-text text-muted" *ngIf="!canEditDepartment">
                     Solo un administrador puede cambiar tu departamento
                   </small>
                 </div>

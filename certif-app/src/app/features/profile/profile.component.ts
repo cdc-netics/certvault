@@ -28,7 +28,7 @@ export class ProfileComponent implements OnInit, OnDestroy {
   avatarFileName = '';
   private avatarChanged = false;
   private readonly maxAvatarSizeBytes = 2 * 1024 * 1024; // 2MB
-  roleLockedForSelf = false;
+  roleLockedForSelf = true;
   
   // Estados
   loading = false;
@@ -73,8 +73,8 @@ export class ProfileComponent implements OnInit, OnDestroy {
       email: ['', [Validators.required, Validators.email]],
       phone: ['', [Validators.pattern(/^[\+]?[1-9][\d]{0,15}$/)]],
       position: ['', [Validators.maxLength(100)]],
-      department: ['', Validators.required],
-      role: ['', Validators.required],
+      department: [{ value: '', disabled: true }, Validators.required],
+      role: [{ value: '', disabled: true }, Validators.required],
       avatar: ['']
     });
 
@@ -100,16 +100,32 @@ export class ProfileComponent implements OnInit, OnDestroy {
         email: this.currentUser.email,
         phone: this.currentUser.phone || '',
         position: this.currentUser.position || '',
-        department: this.currentUser.department,
-        role: this.currentUser.role,
-        avatar: this.currentUser.avatar || this.currentUser.avatarUrl || ''
-      });
-      // Evitar que un admin se cambie su propio rol; mantener habilitado el cambio de departamento
-      this.roleLockedForSelf = this.currentUser.role === UserRole.ADMIN;
-      if (this.roleLockedForSelf) {
-        this.profileForm.get('role')?.disable();
-      } else {
-        this.profileForm.get('role')?.enable();
+      department: this.currentUser.department,
+      role: this.currentUser.role,
+      avatar: this.currentUser.avatar || this.currentUser.avatarUrl || ''
+    });
+      // Rol bloqueado para todos
+      this.roleLockedForSelf = true;
+      this.profileForm.get('role')?.disable();
+
+      // Departamento solo editable por admin
+      const departmentControl = this.profileForm.get('department');
+      if (departmentControl) {
+        if (this.isAdmin) {
+          departmentControl.enable();
+        } else {
+          departmentControl.disable();
+        }
+      }
+
+      // Cargo/posición solo editable por admin o líder
+      const positionControl = this.profileForm.get('position');
+      if (positionControl) {
+        if (this.canEditPosition) {
+          positionControl.enable();
+        } else {
+          positionControl.disable();
+        }
       }
       this.avatarPreview = this.currentUser.avatar || this.currentUser.avatarUrl || null;
       this.avatarChanged = false;
@@ -312,6 +328,18 @@ export class ProfileComponent implements OnInit, OnDestroy {
 
   get isAdmin(): boolean {
     return this.currentUser?.role === UserRole.ADMIN;
+  }
+
+  get isLeader(): boolean {
+    return this.currentUser?.role === UserRole.LIDER;
+  }
+
+  get canEditDepartment(): boolean {
+    return this.isAdmin;
+  }
+
+  get canEditPosition(): boolean {
+    return this.isAdmin || this.isLeader;
   }
 
   private buildOptions(): void {
