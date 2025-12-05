@@ -445,7 +445,11 @@ export class CertificationFormComponent implements OnInit {
         ? this.originalCertification.department
         : this.currentUser.department;
 
-      const processedCurrent = {
+      const certificateNumberValue = (formValue.certificateNumber || '').trim();
+      const validationUrlValue = (formValue.validationUrl || '').trim();
+      const expirationDateValue = formValue.expirationDate ? new Date(formValue.expirationDate) : null;
+
+      const processedCurrent: any = {
         title: formValue.title,
         description: formValue.description || '',
         type: formValue.type as CertificationType,
@@ -456,16 +460,16 @@ export class CertificationFormComponent implements OnInit {
         employeeName: employeeNameValue,
         department: departmentValue,
         issueDate: formValue.issueDate ? new Date(formValue.issueDate) : undefined,
-        expirationDate: formValue.expirationDate ? new Date(formValue.expirationDate) : undefined,
-        certificateNumber: formValue.certificateNumber || `CERT-${Date.now()}`,
-        validationUrl: formValue.validationUrl || '',
+        expirationDate: expirationDateValue,
+        certificateNumber: certificateNumberValue ? certificateNumberValue : null,
+        validationUrl: validationUrlValue ? validationUrlValue : null,
         tags: formValue.tagsInput ? formValue.tagsInput.split(',').map((tag: string) => tag.trim()) : [],
         status: CertificationStatus.ACTIVE
       };
 
       const buildDiffPayload = (): Partial<Certification> => {
         if (!this.originalCertification) {
-          return processedCurrent;
+          return processedCurrent as Partial<Certification>;
         }
 
         const orig = {
@@ -481,7 +485,7 @@ export class CertificationFormComponent implements OnInit {
           issueDate: this.originalCertification.issueDate ? new Date(this.originalCertification.issueDate) : undefined,
           expirationDate: this.originalCertification.expirationDate ? new Date(this.originalCertification.expirationDate) : undefined,
           certificateNumber: this.originalCertification.certificateNumber,
-          validationUrl: this.originalCertification.validationUrl || '',
+        validationUrl: this.originalCertification.validationUrl || null,
           tags: this.originalCertification.tags || [],
           status: this.originalCertification.status || CertificationStatus.ACTIVE
         };
@@ -507,10 +511,13 @@ export class CertificationFormComponent implements OnInit {
           }
         });
 
-        return diff;
+        return diff as Partial<Certification>;
       };
 
-      const payload = this.isEditMode ? buildDiffPayload() : processedCurrent;
+      const payload = this.isEditMode ? buildDiffPayload() : {
+        ...(processedCurrent as any),
+        certificateNumber: processedCurrent.certificateNumber || `CERT-${Date.now()}`
+      } as Partial<Certification>;
 
       const operation = this.isEditMode && this.certificationId
         ? this.certificationService.updateCertification(this.certificationId, payload)
