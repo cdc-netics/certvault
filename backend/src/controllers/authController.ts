@@ -2,6 +2,7 @@ import { Response } from 'express';
 import * as jwt from 'jsonwebtoken';
 import { User, IUser, UserRole } from '../models/User';
 import { AuthRequest } from '../middleware/auth';
+import { saveBase64Avatar } from '../utils/avatar';
 
 interface RegisterData {
   username: string;
@@ -337,9 +338,20 @@ export const updateProfile = async (req: AuthRequest, res: Response): Promise<vo
 
     const avatarProvided = avatarUrl !== undefined || avatar !== undefined;
     if (avatarProvided) {
-      // Permitir limpiar avatar cuando llega string vacío
-      req.user.avatarUrl = avatarUrl || avatar || undefined;
-      req.user.avatar = avatar || undefined;
+      // Permitir limpiar avatar cuando llega string vacio
+      if (avatar && typeof avatar === 'string' && avatar.startsWith('data:image')) {
+        try {
+          const storedUrl = saveBase64Avatar(avatar);
+          req.user.avatarUrl = storedUrl;
+          req.user.avatar = undefined;
+        } catch (err) {
+          res.status(400).json({ success: false, error: 'Avatar invalido' });
+          return;
+        }
+      } else {
+        req.user.avatarUrl = avatarUrl || avatar || undefined;
+        req.user.avatar = avatar || undefined;
+      }
     }
 
     await req.user.save();
@@ -440,3 +452,4 @@ export const changePassword = async (req: AuthRequest, res: Response): Promise<v
     });
   }
 };
+
