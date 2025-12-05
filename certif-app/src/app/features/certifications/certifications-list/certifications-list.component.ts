@@ -484,11 +484,8 @@ export class CertificationsListComponent implements OnInit, OnDestroy {
   canEditCertification(cert: Certification): boolean {
     const user = this.authService.getCurrentUser();
     if (!user) return false;
-    if (this.authService.isAdmin() || this.authService.isLeader() || this.authService.isTechnician()) {
-      return true;
-    }
     const isOwner = cert.employeeId === user._id || cert.createdBy === user._id;
-    return !this.authService.isReader() && isOwner;
+    return isOwner;
   }
 
   private handleQueryParams(): void {

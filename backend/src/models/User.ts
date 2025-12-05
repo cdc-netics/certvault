@@ -1,16 +1,16 @@
-Ôªøimport mongoose, { Document, Schema } from 'mongoose';
+import mongoose, { Document, Schema } from 'mongoose';
 import bcrypt from 'bcryptjs';
 
 export enum UserRole {
   ADMIN = 'admin',           // Administrador global del sistema
   READER = 'reader',         // Solo lectura (consulta)
-  TECNICO = 'tecnico',       // T√©cnico especializado
-  LIDER = 'lider',          // L√≠der de √°rea/departamento
-  USER = 'user'             // Usuario b√°sico
+  TECNICO = 'tecnico',       // TÈcnico especializado
+  LIDER = 'lider',          // LÌder de ·rea/departamento
+
 }
 
 export enum Department {
-  ADMINISTRACION = 'Administraci√≥n',
+  ADMINISTRACION = 'AdministraciÛn',
   INFRAESTRUCTURA = 'Infraestructura',
   PROYECTOS = 'Proyectos',
   TI = 'TI',
@@ -19,7 +19,7 @@ export enum Department {
   OPERACIONES = 'Operaciones',
   VENTAS = 'Ventas',
   MARKETING = 'Marketing',
-  INGENIERIA = 'Ingenier√≠a',
+  INGENIERIA = 'IngenierÌa',
   CALIDAD = 'Calidad',
   SEGURIDAD = 'Seguridad',
   LEGAL = 'Legal',
@@ -28,28 +28,28 @@ export enum Department {
 
 // Permisos RBAC
 export enum Permission {
-  // Gesti√≥n de usuarios
+  // GestiÛn de usuarios
   CREATE_USERS = 'create_users',
   READ_USERS = 'read_users',
   UPDATE_USERS = 'update_users',
   DELETE_USERS = 'delete_users',
   MANAGE_ROLES = 'manage_roles',
   
-  // Gesti√≥n de certificaciones
+  // GestiÛn de certificaciones
   CREATE_CERTIFICATIONS = 'create_certifications',
   READ_CERTIFICATIONS = 'read_certifications',
   UPDATE_CERTIFICATIONS = 'update_certifications',
   DELETE_CERTIFICATIONS = 'delete_certifications',
   
-  // Gesti√≥n de departamentos
+  // GestiÛn de departamentos
   MANAGE_DEPARTMENTS = 'manage_departments',
   MANAGE_OWN_DEPARTMENT = 'manage_own_department',
   
-  // Reportes y estad√≠sticas
+  // Reportes y estadÌsticas
   VIEW_REPORTS = 'view_reports',
   EXPORT_DATA = 'export_data',
   
-  // Administraci√≥n del sistema
+  // AdministraciÛn del sistema
   SYSTEM_ADMIN = 'system_admin'
 }
 
@@ -69,10 +69,10 @@ export interface IUser extends Document {
   lastLogin?: Date;
   refreshToken?: string;
   // Nuevos campos RBAC
-  departmentLeader?: boolean;   // Es l√≠der de su departamento
-  managedDepartments?: Department[];  // Departamentos que gestiona (para l√≠deres multi-√°rea)
-  permissions?: Permission[];   // Permisos espec√≠ficos adicionales
-  createdBy?: mongoose.Types.ObjectId;  // Qui√©n cre√≥ este usuario
+  departmentLeader?: boolean;   // Es lÌder de su departamento
+  managedDepartments?: Department[];  // Departamentos que gestiona (para lÌderes multi-·rea)
+  permissions?: Permission[];   // Permisos especÌficos adicionales
+  createdBy?: mongoose.Types.ObjectId;  // QuiÈn creÛ este usuario
   createdAt: Date;
   updatedAt: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;
@@ -89,7 +89,7 @@ const userSchema = new Schema<IUser>(
       unique: true,
       trim: true,
       minlength: [3, 'El nombre de usuario debe tener al menos 3 caracteres'],
-      maxlength: [20, 'El nombre de usuario no puede tener m√°s de 20 caracteres']
+      maxlength: [20, 'El nombre de usuario no puede tener m·s de 20 caracteres']
     },
     email: {
       type: String,
@@ -97,30 +97,30 @@ const userSchema = new Schema<IUser>(
       unique: true,
       lowercase: true,
       trim: true,
-      match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, 'Email inv√°lido']
+      match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, 'Email inv·lido']
     },
     password: {
       type: String,
-      required: [true, 'La contrase√±a es requerida'],
-      minlength: [6, 'La contrase√±a debe tener al menos 6 caracteres'],
+      required: [true, 'La contraseÒa es requerida'],
+      minlength: [6, 'La contraseÒa debe tener al menos 6 caracteres'],
       select: false
     },
     firstName: {
       type: String,
       required: [true, 'El nombre es requerido'],
       trim: true,
-      maxlength: [50, 'El nombre no puede tener m√°s de 50 caracteres']
+      maxlength: [50, 'El nombre no puede tener m·s de 50 caracteres']
     },
     lastName: {
       type: String,
       required: [true, 'El apellido es requerido'],
       trim: true,
-      maxlength: [50, 'El apellido no puede tener m√°s de 50 caracteres']
+      maxlength: [50, 'El apellido no puede tener m·s de 50 caracteres']
     },
     role: {
       type: String,
       enum: Object.values(UserRole),
-      default: UserRole.USER,
+      default: UserRole.READER,
       required: true
     },
     department: {
@@ -132,12 +132,12 @@ const userSchema = new Schema<IUser>(
       type: String,
       required: [true, 'El cargo es requerido'],
       trim: true,
-      maxlength: [100, 'El cargo no puede tener m√°s de 100 caracteres']
+      maxlength: [100, 'El cargo no puede tener m·s de 100 caracteres']
     },
     phone: {
       type: String,
       trim: true,
-      match: [/^[\+]?[1-9][\d]{0,15}$/, 'N√∫mero de tel√©fono inv√°lido']
+      match: [/^[\+]?[1-9][\d]{0,15}$/, 'N˙mero de telÈfono inv·lido']
     },
     avatarUrl: {
       type: String,
@@ -187,7 +187,7 @@ userSchema.virtual('fullName').get(function() {
   return `${this.firstName} ${this.lastName}`;
 });
 
-// Encriptar contrase√±a antes de guardar
+// Encriptar contraseÒa antes de guardar
 userSchema.pre('save', async function(next) {
   if (!this.isModified('password')) return next();
   
@@ -200,19 +200,19 @@ userSchema.pre('save', async function(next) {
   }
 });
 
-// M√©todo para comparar contrase√±as
+// MÈtodo para comparar contraseÒas
 userSchema.methods.comparePassword = async function(candidatePassword: string): Promise<boolean> {
   return bcrypt.compare(candidatePassword, this.password);
 };
 
-// M√©todo para verificar permisos
+// MÈtodo para verificar permisos
 userSchema.methods.hasPermission = function(permission: Permission): boolean {
   // El admin tiene todos los permisos
   if (this.role === UserRole.ADMIN) {
     return true;
   }
   
-  // Verificar permisos espec√≠ficos asignados
+  // Verificar permisos especÌficos asignados
   if (this.permissions && this.permissions.includes(permission)) {
     return true;
   }
@@ -245,24 +245,19 @@ userSchema.methods.hasPermission = function(permission: Permission): boolean {
       Permission.READ_CERTIFICATIONS,
       Permission.READ_USERS,
       Permission.VIEW_REPORTS
-    ],
-    [UserRole.USER]: [
-      Permission.READ_CERTIFICATIONS,
-      Permission.VIEW_REPORTS
-    ]
-  };
+    ],};
   
   return rolePermissions[this.role as UserRole]?.includes(permission) || false;
 };
 
-// M√©todo para verificar si puede gestionar un departamento
+// MÈtodo para verificar si puede gestionar un departamento
 userSchema.methods.canManageDepartment = function(department: Department): boolean {
   // El admin puede gestionar cualquier departamento
   if (this.role === UserRole.ADMIN) {
     return true;
   }
   
-  // Los l√≠deres pueden gestionar su propio departamento
+  // Los lÌderes pueden gestionar su propio departamento
   if (this.role === UserRole.LIDER) {
     if (this.department === department) {
       return true;
@@ -275,7 +270,7 @@ userSchema.methods.canManageDepartment = function(department: Department): boole
   return false;
 };
 
-// √çndices adicionales (email y username ya son √∫nicos en el esquema)
+// Õndices adicionales (email y username ya son ˙nicos en el esquema)
 userSchema.index({ department: 1 });
 userSchema.index({ role: 1 });
 userSchema.index({ isActive: 1 });
@@ -284,4 +279,5 @@ userSchema.index({ managedDepartments: 1 });
 userSchema.index({ createdBy: 1 });
 
 export const User = mongoose.model<IUser>('User', userSchema);
+
 

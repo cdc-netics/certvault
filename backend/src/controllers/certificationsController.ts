@@ -7,7 +7,7 @@ import {
   CertificationStatus
 } from '../models/Certification';
 import { AuthRequest } from '../middleware/auth';
-import { Permission, UserRole } from '../models/User';
+
 
 const normalizeTags = (tags?: unknown): string[] => {
   if (!tags) return [];
@@ -162,12 +162,12 @@ export const updateCertification = async (req: AuthRequest, res: Response): Prom
     const isOwner =
       certification.employeeId?.toString() === req.user._id?.toString() ||
       certification.createdBy?.toString() === req.user._id?.toString();
-    const hasPermission = req.user.hasPermission(Permission.UPDATE_CERTIFICATIONS);
 
-    if (req.user.role === UserRole.READER || (!hasPermission && !isOwner)) {
+
+    if (!isOwner) {
       res.status(403).json({
         success: false,
-        error: 'No tienes permisos para actualizar esta certificación'
+        error: 'Solo el propietario puede actualizar esta certificación'
       });
       return;
     }
@@ -356,5 +356,6 @@ export const getDepartments = async (_req: Request, res: Response): Promise<void
     });
   }
 };
+
 
 

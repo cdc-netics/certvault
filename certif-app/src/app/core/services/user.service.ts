@@ -1,4 +1,4 @@
-ï»¿import { Injectable } from '@angular/core';
+import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams, HttpErrorResponse } from '@angular/common/http';
 import { Observable, throwError } from 'rxjs';
 import { catchError } from 'rxjs/operators';
@@ -65,7 +65,7 @@ export class UserService {
 
   constructor(private readonly http: HttpClient) {}
 
-  // Obtener lista de usuarios con filtros y paginaciÃ³n
+  // Obtener lista de usuarios con filtros y paginación
   getUsers(query: UsersQuery = {}): Observable<ApiResponse<UsersResponse>> {
     let params = new HttpParams();
     
@@ -105,7 +105,7 @@ export class UserService {
       .pipe(catchError(this.handleError));
   }
 
-  // Obtener estadÃ­sticas de usuarios
+  // Obtener estadísticas de usuarios
   getUserStats(): Observable<ApiResponse<UserStats>> {
     return this.http.get<ApiResponse<UserStats>>(`${this.API_URL}/stats`)
       .pipe(catchError(this.handleError));
@@ -125,8 +125,8 @@ export class UserService {
 
   // Helper: Obtener permisos de usuario
   getUserPermissions(user: User): UserPermissions {
-    // SimulaciÃ³n de verificaciÃ³n de permisos basada en rol
-    // En un sistema real, esto vendrÃ­a del backend
+    // Simulación de verificación de permisos basada en rol
+    // En un sistema real, esto vendría del backend
     const permissions: UserPermissions = {
       canCreateUsers: this.hasPermission(user, Permission.CREATE_USERS),
       canUpdateUsers: this.hasPermission(user, Permission.UPDATE_USERS),
@@ -145,14 +145,14 @@ export class UserService {
     return permissions;
   }
 
-  // Helper: Verificar si el usuario tiene un permiso especÃ­fico
+  // Helper: Verificar si el usuario tiene un permiso específico
   private hasPermission(user: User, permission: Permission): boolean {
     // El admin tiene todos los permisos
     if (user.role === UserRole.ADMIN) {
       return true;
     }
 
-    // Verificar permisos especÃ­ficos asignados
+    // Verificar permisos específicos asignados
     if (user.permissions?.includes(permission)) {
       return true;
     }
@@ -184,11 +184,7 @@ export class UserService {
         Permission.READ_USERS,
         Permission.VIEW_REPORTS
       ],
-      [UserRole.USER]: [
-        Permission.READ_CERTIFICATIONS,
-        Permission.VIEW_REPORTS
-      ]
-    };
+      };
 
     return rolePermissions[user.role]?.includes(permission) || false;
   }
@@ -210,7 +206,7 @@ export class UserService {
       return true;
     }
 
-    // Los lÃ­deres pueden gestionar su propio departamento
+    // Los líderes pueden gestionar su propio departamento
     if (user.role === UserRole.LIDER) {
       // Puede gestionar su departamento principal
       if (user.department === department) {
@@ -233,8 +229,7 @@ export class UserService {
       [UserRole.LIDER]: 'badge bg-warning text-dark',
       [UserRole.TECNICO]: 'badge bg-info',
       [UserRole.READER]: 'badge bg-secondary',
-      [UserRole.USER]: 'badge bg-primary'
-    };
+      };
     return classes[role] || 'badge bg-light text-dark';
   }
 
@@ -245,8 +240,7 @@ export class UserService {
       [UserRole.LIDER]: 'fas fa-star',
       [UserRole.TECNICO]: 'fas fa-cogs',
       [UserRole.READER]: 'fas fa-eye',
-      [UserRole.USER]: 'fas fa-user'
-    };
+      };
     return icons[role] || 'fas fa-user';
   }
 
@@ -264,3 +258,4 @@ export class UserService {
     return throwError(() => new Error(errorMessage));
   }
 }
+

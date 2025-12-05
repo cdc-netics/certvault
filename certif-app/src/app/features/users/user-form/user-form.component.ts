@@ -88,7 +88,7 @@ export class UserFormComponent implements OnInit, OnDestroy {
       confirmPassword: [''],
       firstName: ['', [Validators.required, Validators.maxLength(50)]],
       lastName: ['', [Validators.required, Validators.maxLength(50)]],
-      role: [UserRole.USER, Validators.required],
+      role: [UserRole.READER, Validators.required],
       department: ['', Validators.required],
       position: ['', [Validators.required, Validators.maxLength(100)]],
       phone: [''],
@@ -155,7 +155,7 @@ export class UserFormComponent implements OnInit, OnDestroy {
           if (response.success && response.data) {
             const allRoles = response.data;
             if (this.currentUser?.role === UserRole.LIDER) {
-              const allowed = [UserRole.READER, UserRole.TECNICO, UserRole.USER];
+              const allowed = [UserRole.READER, UserRole.TECNICO];
               this.availableRoles = allRoles.filter(r => allowed.includes(r.value));
             } else {
               this.availableRoles = allRoles;

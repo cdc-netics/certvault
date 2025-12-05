@@ -72,7 +72,7 @@ export const register = async (req: AuthRequest, res: Response): Promise<void> =
       department,
       position,
       phone,
-      role: UserRole.USER,
+      role: UserRole.READER,
       isActive: true
     });
 
