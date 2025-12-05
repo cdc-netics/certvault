@@ -27,7 +27,7 @@ jobs:
 
       - name: Move backend
         working-directory: ${{ github.workspace }}/backend
-        run: cp ${{ github.workspace }}/backend/dist/* /home/cdc/certiappdist/
+        run: cp -r ${{ github.workspace }}/backend/dist/* /home/cdc/certiappdist/
 
       - name: Reiniciar backend service
         run: pm2 restart certiapp
