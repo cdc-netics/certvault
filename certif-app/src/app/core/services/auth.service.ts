@@ -67,7 +67,8 @@ export class AuthService {
     return this.http.get<ApiResponse<User>>(`${this.API_URL}/me`).pipe(
       tap(response => {
         if (response.success && response.data) {
-          this.currentUserSubject.next(response.data);
+          // Refrescar el usuario persistido para mantener campos como el avatar
+          this.setCurrentUser(response.data);
         } else {
           this.logout();
         }

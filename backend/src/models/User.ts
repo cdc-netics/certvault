@@ -63,6 +63,8 @@ export interface IUser extends Document {
   department: Department;
   position: string;
   phone?: string;
+  avatarUrl?: string;
+  avatar?: string;
   isActive: boolean;
   lastLogin?: Date;
   refreshToken?: string;
@@ -136,6 +138,14 @@ const userSchema = new Schema<IUser>(
       type: String,
       trim: true,
       match: [/^[\+]?[1-9][\d]{0,15}$/, 'Número de teléfono inválido']
+    },
+    avatarUrl: {
+      type: String,
+      trim: true
+    },
+    avatar: {
+      type: String,
+      trim: true
     },
     isActive: {
       type: Boolean,

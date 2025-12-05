@@ -99,6 +99,8 @@ export const register = async (req: AuthRequest, res: Response): Promise<void> =
           department: user.department,
           position: user.position,
           phone: user.phone,
+          avatarUrl: user.avatarUrl,
+          avatar: user.avatar,
           isActive: user.isActive
         },
         expiresIn: 7 * 24 * 60 * 60 // 7 días en segundos
@@ -166,6 +168,8 @@ export const login = async (req: AuthRequest, res: Response): Promise<void> => {
           department: user.department,
           position: user.position,
           phone: user.phone,
+          avatarUrl: user.avatarUrl,
+          avatar: user.avatar,
           isActive: user.isActive,
           lastLogin: user.lastLogin
         },
@@ -231,6 +235,8 @@ export const refreshToken = async (req: AuthRequest, res: Response): Promise<voi
           department: user.department,
           position: user.position,
           phone: user.phone,
+          avatarUrl: user.avatarUrl,
+          avatar: user.avatar,
           isActive: user.isActive
         },
         expiresIn: 7 * 24 * 60 * 60
@@ -293,6 +299,8 @@ export const getCurrentUser = async (req: AuthRequest, res: Response): Promise<v
         department: req.user.department,
         position: req.user.position,
         phone: req.user.phone,
+        avatarUrl: req.user.avatarUrl,
+        avatar: req.user.avatar,
         isActive: req.user.isActive,
         lastLogin: req.user.lastLogin,
         createdAt: req.user.createdAt
@@ -320,12 +328,19 @@ export const updateProfile = async (req: AuthRequest, res: Response): Promise<vo
       return;
     }
 
-    const { firstName, lastName, phone } = req.body;
+    const { firstName, lastName, phone, avatarUrl, avatar } = req.body;
 
     // Actualizar campos permitidos
     if (firstName) req.user.firstName = firstName;
     if (lastName) req.user.lastName = lastName;
     if (phone !== undefined) req.user.phone = phone;
+
+    const avatarProvided = avatarUrl !== undefined || avatar !== undefined;
+    if (avatarProvided) {
+      // Permitir limpiar avatar cuando llega string vacío
+      req.user.avatarUrl = avatarUrl || avatar || undefined;
+      req.user.avatar = avatar || undefined;
+    }
 
     await req.user.save();
 
@@ -341,6 +356,8 @@ export const updateProfile = async (req: AuthRequest, res: Response): Promise<vo
         department: req.user.department,
         position: req.user.position,
         phone: req.user.phone,
+        avatarUrl: req.user.avatarUrl,
+        avatar: req.user.avatar,
         isActive: req.user.isActive
       },
       message: 'Perfil actualizado exitosamente'

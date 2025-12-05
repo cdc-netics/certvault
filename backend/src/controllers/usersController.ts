@@ -12,6 +12,8 @@ interface CreateUserRequest {
   department: Department;
   position: string;
   phone?: string;
+  avatarUrl?: string;
+  avatar?: string;
   departmentLeader?: boolean;
   managedDepartments?: Department[];
   permissions?: Permission[];
@@ -26,6 +28,8 @@ interface UpdateUserRequest {
   department?: Department;
   position?: string;
   phone?: string;
+  avatarUrl?: string;
+  avatar?: string;
   isActive?: boolean;
   departmentLeader?: boolean;
   managedDepartments?: Department[];
