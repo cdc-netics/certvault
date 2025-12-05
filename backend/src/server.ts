@@ -4,9 +4,9 @@ import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
 import morgan from 'morgan';
-import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import path from 'path';
+import rateLimit from 'express-rate-limit';
 
 // Importar configuracion de base de datos y seed
 import { database } from './config/database';
@@ -40,13 +40,10 @@ app.use(helmet({
 app.use(compression());
 app.use(morgan('combined'));
 
-// Rate limiting (aplicar después de CORS para que incluya cabeceras en 429)
+// Rate limiting
 const limiter = rateLimit({
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '60000'), // 1 minuto
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '500'), // 500 solicitudes por minuto
-  message: {
-    error: 'Demasiadas solicitudes desde esta IP, intenta de nuevo mas tarde.',
-  },
+  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '60000', 10), // default 1 minute
+  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '500', 10),     // default 500 req/min
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -83,12 +80,12 @@ app.use(errorHandler);
 // Conectar a MongoDB y configurar base de datos
 const connectDB = async (): Promise<void> => {
   try {
-    console.log('?? Inicializando conexión a MongoDB...');
+    console.log('Inicializando conexion a MongoDB...');
     await database.connect();
-    console.log('? Conexión a MongoDB establecida exitosamente');
+    console.log('Conexion a MongoDB establecida exitosamente');
     await createDefaultAdminAndSeed();
   } catch (error) {
-    console.error('? Error conectando a MongoDB:', error);
+    console.error('Error conectando a MongoDB:', error);
     process.exit(1);
   }
 };
@@ -98,8 +95,9 @@ const createDefaultAdminAndSeed = async (): Promise<void> => {
   try {
     const { User, UserRole, Department, Permission } = await import('./models/User');
     const adminExists = await User.findOne({ role: UserRole.ADMIN });
+
     if (!adminExists) {
-      console.log('?? Creando usuario administrador por defecto...');
+      console.log('Creando usuario administrador por defecto...');
       const adminUser = new User({
         username: process.env.ADMIN_USERNAME || 'admin',
         email: process.env.ADMIN_EMAIL || 'admin@empresa.com',
@@ -113,35 +111,35 @@ const createDefaultAdminAndSeed = async (): Promise<void> => {
         permissions: Object.values(Permission)
       });
       await adminUser.save();
-      console.log('? Usuario administrador creado exitosamente');
-      console.log(`??  Email: ${adminUser.email}`);
-      console.log(`??  Contraseña: ${process.env.ADMIN_PASSWORD || 'Admin123!'}`);
-      console.log('?? Primera instalación detectada, creando datos de ejemplo...');
+      console.log('Usuario administrador creado exitosamente');
+      console.log(`Email: ${adminUser.email}`);
+      console.log(`Contrasena: ${process.env.ADMIN_PASSWORD || 'Admin123!'}`);
+      console.log('Primera instalacion detectada, creando datos de ejemplo...');
       await seedDatabase();
     } else {
-      console.log('?? Usuario administrador ya existe');
+      console.log('Usuario administrador ya existe');
       const userCount = await User.countDocuments();
       if (userCount === 1) {
-        console.log('?? Ejecutando seed de datos de ejemplo...');
+        console.log('Ejecutando seed de datos de ejemplo...');
         await seedDatabase();
       } else {
-        console.log('?? Base de datos ya contiene datos');
+        console.log('Base de datos ya contiene datos');
       }
     }
   } catch (error) {
-    console.error('? Error en configuración inicial:', error);
+    console.error('Error en configuracion inicial:', error);
   }
 };
 
 // Manejo de cierre graceful
 process.on('SIGTERM', async () => {
-  console.log('?? Recibida señal SIGTERM, cerrando servidor...');
+  console.log('Recibida senal SIGTERM, cerrando servidor...');
   await database.disconnect();
   process.exit(0);
 });
 
 process.on('SIGINT', async () => {
-  console.log('?? Recibida señal SIGINT, cerrando servidor...');
+  console.log('Recibida senal SIGINT, cerrando servidor...');
   await database.disconnect();
   process.exit(0);
 });
@@ -150,9 +148,9 @@ process.on('SIGINT', async () => {
 const startServer = async (): Promise<void> => {
   await connectDB();
   app.listen(PORT, () => {
-    console.log(`?? Servidor corriendo en puerto ${PORT}`);
-    console.log(`?? Environment: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`?? Health: http://localhost:${PORT}/api/health`);
+    console.log(`Servidor corriendo en puerto ${PORT}`);
+    console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`Health: http://localhost:${PORT}/api/health`);
   });
 };
 
@@ -160,12 +158,12 @@ const requiredEnvVars = ['MONGODB_URI', 'JWT_SECRET'];
 const missingEnvVars = requiredEnvVars.filter(envVar => !process.env[envVar]);
 
 if (missingEnvVars.length > 0) {
-  console.error('? Variables de entorno faltantes:', missingEnvVars.join(', '));
+  console.error('Variables de entorno faltantes:', missingEnvVars.join(', '));
   process.exit(1);
 }
 
 startServer().catch(error => {
-  console.error('? Error iniciando servidor:', error);
+  console.error('Error iniciando servidor:', error);
   process.exit(1);
 });
 
