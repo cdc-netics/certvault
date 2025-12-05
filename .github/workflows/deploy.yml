@@ -12,6 +12,8 @@ jobs:
     steps:
       - name: Obtener código actualizado
         uses: actions/checkout@v6
+        with:
+            clean: true
 
       - name: Instalar backend
         working-directory: ${{ github.workspace }}/backend
