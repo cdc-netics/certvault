@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { User, UserRole, Department, Permission } from '../models/User';
 import { AuthRequest } from '../middleware/auth';
+import { saveBase64Avatar } from '../utils/avatar';
 
 interface CreateUserRequest {
   username: string;
@@ -367,6 +368,26 @@ export const updateUser = async (req: AuthRequest, res: Response): Promise<void>
         error: 'No puedes cambiar tu propio rol'
       });
       return;
+    }
+
+    // Procesar avatar si se envía
+    const avatarProvided = Object.prototype.hasOwnProperty.call(updateData, 'avatar') ||
+      Object.prototype.hasOwnProperty.call(updateData, 'avatarUrl');
+    if (avatarProvided) {
+      const incomingAvatar = (updateData as UpdateUserRequest).avatar;
+      if (incomingAvatar && typeof incomingAvatar === 'string' && incomingAvatar.startsWith('data:image')) {
+        try {
+          const storedUrl = saveBase64Avatar(incomingAvatar);
+          updateData.avatarUrl = storedUrl;
+          updateData.avatar = undefined;
+        } catch (err) {
+          res.status(400).json({ success: false, error: 'Avatar invalido' });
+          return;
+        }
+      } else {
+        updateData.avatarUrl = updateData.avatarUrl || updateData.avatar || undefined;
+        updateData.avatar = updateData.avatar || undefined;
+      }
     }
 
     // Actualizar usuario
