@@ -81,7 +81,7 @@ import { AuthService } from '../../../core/services/auth.service';
                   
                   <div class="small-info"> 
                   <p class="text-muted">Developed By CDC Team with love ❤️</p> 
-                  <p class="text-muted">Version 1.5</p> 
+                  <p class="text-muted">Version 1.6</p> 
                   </div>
                 </form>
 

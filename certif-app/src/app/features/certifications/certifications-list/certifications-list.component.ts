@@ -178,6 +178,12 @@ import { Subscription } from 'rxjs';
                       <i class="fas fa-eye me-1"></i> Ver Certificacion/Badge
                     </a>
                   </ng-container>
+                  <a
+                    class="btn btn-sm btn-outline-warning"
+                    *ngIf="canEditCertification(cert)"
+                    [routerLink]="['/certifications/edit', cert._id]">
+                    <i class="fas fa-pen me-1"></i> Editar
+                  </a>
                   <button 
                     class="btn btn-sm btn-outline-danger"
                     type="button"
@@ -473,6 +479,16 @@ export class CertificationsListComponent implements OnInit, OnDestroy {
 
   canDeleteCertifications(): boolean {
     return this.authService.isAdmin();
+  }
+
+  canEditCertification(cert: Certification): boolean {
+    const user = this.authService.getCurrentUser();
+    if (!user) return false;
+    if (this.authService.isAdmin() || this.authService.isLeader() || this.authService.isTechnician()) {
+      return true;
+    }
+    const isOwner = cert.employeeId === user._id || cert.createdBy === user._id;
+    return !this.authService.isReader() && isOwner;
   }
 
   private handleQueryParams(): void {
