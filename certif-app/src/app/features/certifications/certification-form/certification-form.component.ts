@@ -4,7 +4,7 @@ import { ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angula
 import { Router, RouterModule, ActivatedRoute } from '@angular/router';
 import { CertificationService } from '../../../core/services/certification.service';
 import { AuthService } from '../../../core/services/auth.service';
-import { CertificationType, CertificationLevel, CertificationStatus } from '../../../core/models/certification.model';
+import { CertificationType, CertificationLevel, CertificationStatus, Certification } from '../../../core/models/certification.model';
 import { BackButtonComponent } from '../../../shared/components/back-button/back-button.component';
 
 @Component({
@@ -332,6 +332,7 @@ export class CertificationFormComponent implements OnInit {
   currentUser: any;
   existingCertificateUrl: string | null = null;
   existingCertificateName: string | null = null;
+  private originalCertification: Certification | null = null;
 
   constructor(
     private readonly fb: FormBuilder,
@@ -375,6 +376,7 @@ export class CertificationFormComponent implements OnInit {
       next: (response) => {
         if (response.success && response.data) {
           const cert = response.data;
+          this.originalCertification = cert;
           this.existingCertificateUrl = cert.certificateUrl || null;
           this.existingCertificateName = cert.certificateUrl
             ? cert.certificateUrl.split('/').pop() || null
@@ -431,8 +433,7 @@ export class CertificationFormComponent implements OnInit {
       this.successMessage = '';
 
       const formValue = this.certificationForm.value;
-      
-      const certificationData = {
+      const processedCurrent = {
         title: formValue.title,
         description: formValue.description || '',
         type: formValue.type as CertificationType,
@@ -442,7 +443,7 @@ export class CertificationFormComponent implements OnInit {
         employeeId: this.currentUser._id,
         employeeName: `${this.currentUser.firstName} ${this.currentUser.lastName}`,
         department: this.currentUser.department,
-        issueDate: new Date(formValue.issueDate),
+        issueDate: formValue.issueDate ? new Date(formValue.issueDate) : undefined,
         expirationDate: formValue.expirationDate ? new Date(formValue.expirationDate) : undefined,
         certificateNumber: formValue.certificateNumber || `CERT-${Date.now()}`,
         validationUrl: formValue.validationUrl || '',
@@ -450,9 +451,58 @@ export class CertificationFormComponent implements OnInit {
         status: CertificationStatus.ACTIVE
       };
 
+      const buildDiffPayload = (): Partial<Certification> => {
+        if (!this.originalCertification) {
+          return processedCurrent;
+        }
+
+        const orig = {
+          title: this.originalCertification.title,
+          description: this.originalCertification.description || '',
+          type: this.originalCertification.type,
+          technology: this.originalCertification.technology,
+          provider: this.originalCertification.provider,
+          level: this.originalCertification.level,
+          employeeId: (this.originalCertification as any).employeeId || this.originalCertification.employeeId,
+          employeeName: (this.originalCertification as any).employeeName || this.originalCertification.employeeName || '',
+          department: this.originalCertification.department,
+          issueDate: this.originalCertification.issueDate ? new Date(this.originalCertification.issueDate) : undefined,
+          expirationDate: this.originalCertification.expirationDate ? new Date(this.originalCertification.expirationDate) : undefined,
+          certificateNumber: this.originalCertification.certificateNumber,
+          validationUrl: this.originalCertification.validationUrl || '',
+          tags: this.originalCertification.tags || [],
+          status: this.originalCertification.status || CertificationStatus.ACTIVE
+        };
+
+        const diff: Partial<Certification> = {};
+        (Object.keys(processedCurrent) as Array<keyof typeof processedCurrent>).forEach((key) => {
+          const currentValue = processedCurrent[key];
+          const originalValue = (orig as any)[key];
+
+          const areDates = key === 'issueDate' || key === 'expirationDate';
+          const isArray = Array.isArray(currentValue) || Array.isArray(originalValue);
+
+          const normalizeDate = (value: any) => value ? new Date(value).toISOString() : '';
+
+          const changed = isArray
+            ? JSON.stringify(currentValue || []) !== JSON.stringify(originalValue || [])
+            : areDates
+              ? normalizeDate(currentValue) !== normalizeDate(originalValue)
+              : currentValue !== originalValue;
+
+          if (changed && currentValue !== undefined) {
+            (diff as any)[key] = currentValue;
+          }
+        });
+
+        return diff;
+      };
+
+      const payload = this.isEditMode ? buildDiffPayload() : processedCurrent;
+
       const operation = this.isEditMode && this.certificationId
-        ? this.certificationService.updateCertification(this.certificationId, certificationData)
-        : this.certificationService.createCertification(certificationData);
+        ? this.certificationService.updateCertification(this.certificationId, payload)
+        : this.certificationService.createCertification(processedCurrent);
 
       operation.subscribe({
         next: (response) => {
@@ -508,7 +558,7 @@ export class CertificationFormComponent implements OnInit {
 
   getCertificateUrl(url: string): string {
     if (url.startsWith('http')) return url;
-    const backendBase = 'http://10.0.101.27:3000';
+    const backendBase = 'http://localhost:3000';
     return `${backendBase}${url.startsWith('/') ? '' : '/'}${url}`;
   }
 }
