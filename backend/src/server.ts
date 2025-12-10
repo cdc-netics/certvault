@@ -29,6 +29,8 @@ dotenv.config({
 });
 
 const app = express();
+app.disable('x-powered-by');
+app.set('trust proxy', 1);
 const PORT = process.env.PORT || 3000;
 
 // Configuracion de CORS con multiples orígenes permitidos
@@ -38,7 +40,9 @@ const allowedOrigins = [
   'http://localhost:4200',
   'http://127.0.0.1:4200',
   'http://localhost:3000',
-  'http://127.0.0.1:3000'
+  'http://127.0.0.1:3000',
+  'http://10.0.101.27',
+  'http://10.0.101.27:4200'
 ].filter(Boolean);
 const allowAllOrigins = false; // En productivo solo se permiten los orígenes explícitos
 
@@ -48,8 +52,10 @@ const corsOptions: cors.CorsOptions = {
     if (allowAllOrigins) return callback(null, true);
     if (!origin) return callback(null, true); // Permitir requests sin origen (Postman, curl)
     const normalized = normalizeOrigin(origin);
-    const isAllowed = allowedOrigins.some(o => normalized === o || normalized.startsWith(o));
-    return callback(null, isAllowed);
+    if (allowedOrigins.includes(normalized)) {
+      return callback(null, true);
+    }
+    return callback(new Error('Not allowed by CORS'));
   },
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
@@ -67,14 +73,21 @@ app.use(helmet({
 app.use(compression());
 app.use(morgan('combined'));
 
-// Rate limiting
-// const limiter = rateLimit({
-//   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '60000', 10), // default 1 minute
-//   max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '500', 10),     // default 500 req/min
-//   standardHeaders: true,
-//   legacyHeaders: false,
-// });
-// app.use(limiter);
+// Rate limiting reforzado
+const limiter = rateLimit({
+  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000', 10), // 15 minutos
+  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100', 10),
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.ip || req.socket.remoteAddress || 'unknown',
+  handler: (_req, res) => {
+    res.status(429).json({
+      success: false,
+      error: 'Demasiadas solicitudes desde esta IP, intenta de nuevo mas tarde.'
+    });
+  }
+});
+app.use(limiter);
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
