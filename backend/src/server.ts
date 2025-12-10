@@ -5,7 +5,6 @@ import helmet from 'helmet';
 import compression from 'compression';
 import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
-import path from 'path';
 import dotenv from 'dotenv';
 import path from 'path';
 // import rateLimit from 'express-rate-limit';
