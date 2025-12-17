@@ -18,7 +18,7 @@ export class DatabaseConnection {
     }
 
     try {
-      const mongoURI = process.env.MONGODB_URI || 'mongodb://10.0.101.27:27017/certif-app';
+      const mongoURI = process.env.MONGODB_URI || 'mongodb://10.0.100.14:27017/certif-app';
       
       // Configuración de mongoose
       mongoose.set('strictQuery', false);

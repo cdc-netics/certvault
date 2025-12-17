@@ -13,7 +13,7 @@ import { ApiResponse, PaginatedResponse, PaginationParams } from '../models/comm
   providedIn: 'root'
 })
 export class CertificationService {
-  private readonly API_URL = 'http://10.0.101.27:3000/api/certifications';
+  private readonly API_URL = 'http://10.0.100.14:3000/api/certifications';
 
   // BehaviorSubject para compartir filtros entre componentes
   private readonly filtersSubject = new BehaviorSubject<CertificationFilter>({});

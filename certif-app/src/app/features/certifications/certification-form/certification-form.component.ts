@@ -577,7 +577,7 @@ export class CertificationFormComponent implements OnInit {
 
   getCertificateUrl(url: string): string {
     if (url.startsWith('http')) return url;
-    const backendBase = 'http://10.0.101.27:3000';
+    const backendBase = 'http://10.0.100.14:3000';
     return `${backendBase}${url.startsWith('/') ? '' : '/'}${url}`;
   }
 }
