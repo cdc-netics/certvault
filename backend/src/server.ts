@@ -4,6 +4,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
 import morgan from 'morgan';
+import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import path from 'path';
 // import rateLimit from 'express-rate-limit';
@@ -22,32 +23,71 @@ import dashboardRoutes from './routes/dashboard';
 import { errorHandler } from './middleware/errorHandler';
 import { notFound } from './middleware/notFound';
 
-// Cargar variables de entorno
-dotenv.config();
+// Cargar variables de entorno sin depender del directorio desde el que se ejecute
+dotenv.config({
+  path: path.resolve(__dirname, '../.env')
+});
 
 const app = express();
+app.disable('x-powered-by');
+app.set('trust proxy', 1);
 const PORT = process.env.PORT || 3000;
 
+// Configuracion de CORS con multiples orígenes permitidos
+const normalizeOrigin = (value: string) => value.replace(/\/$/, '');
+const allowedOrigins = [
+  ...(process.env.FRONTEND_URL ? process.env.FRONTEND_URL.split(',').map(o => normalizeOrigin(o.trim())) : []),
+  'http://localhost:4200',
+  'http://127.0.0.1:4200',
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+  'http://10.0.101.27',
+  'http://10.0.101.27:4200'
+].filter(Boolean);
+const allowAllOrigins = false; // En productivo solo se permiten los orígenes explícitos
+
 // Middlewares
-app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://10.0.100.14:4200',
+const corsOptions: cors.CorsOptions = {
+  origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+    if (allowAllOrigins) return callback(null, true);
+    if (!origin) return callback(null, true); // Permitir requests sin origen (Postman, curl)
+    const normalized = normalizeOrigin(origin);
+    if (allowedOrigins.includes(normalized)) {
+      return callback(null, true);
+    }
+    return callback(new Error('Not allowed by CORS'));
+  },
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+  preflightContinue: false,
+  maxAge: 600, // cachear preflight 10 minutos
   credentials: true,
   optionsSuccessStatus: 200
-}));
+};
+app.use(cors(corsOptions));
+// Responder preflights en Express 5 usando regex en lugar de comodín
+app.options(/^\/.*$/, cors(corsOptions));
 app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' }
 }));
 app.use(compression());
 app.use(morgan('combined'));
 
-// Rate limiting
-// const limiter = rateLimit({
-//   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '60000', 10), // default 1 minute
-//   max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '500', 10),     // default 500 req/min
-//   standardHeaders: true,
-//   legacyHeaders: false,
-// });
-// app.use(limiter);
+// Rate limiting reforzado
+const limiter = rateLimit({
+  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000', 10), // 15 minutos
+  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100', 10),
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.ip || req.socket.remoteAddress || 'unknown',
+  handler: (_req, res) => {
+    res.status(429).json({
+      success: false,
+      error: 'Demasiadas solicitudes desde esta IP, intenta de nuevo mas tarde.'
+    });
+  }
+});
+app.use(limiter);
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));

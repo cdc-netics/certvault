@@ -3,7 +3,8 @@ import path from 'path';
 import crypto from 'crypto';
 
 const ensureAvatarDir = (): string => {
-  const dir = path.join(__dirname, '../uploads/avatars');
+  // Ensure avatars are stored alongside the uploads directory served by Express (/backend/uploads)
+  const dir = path.resolve(__dirname, '../../uploads/avatars');
   fs.mkdirSync(dir, { recursive: true });
   return dir;
 };
