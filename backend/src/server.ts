@@ -25,7 +25,8 @@ import { notFound } from './middleware/notFound';
 
 // Cargar variables de entorno sin depender del directorio desde el que se ejecute
 dotenv.config({
-  path: path.resolve(__dirname, '../.env')
+  path: path.resolve(__dirname, '../.env'),
+  override: true
 });
 
 const app = express();
@@ -79,7 +80,6 @@ const limiter = rateLimit({
   max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100', 10),
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req) => req.ip || req.socket.remoteAddress || 'unknown',
   handler: (_req, res) => {
     res.status(429).json({
       success: false,

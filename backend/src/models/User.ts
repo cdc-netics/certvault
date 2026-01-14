@@ -2,15 +2,14 @@ import mongoose, { Document, Schema } from 'mongoose';
 import bcrypt from 'bcryptjs';
 
 export enum UserRole {
-  ADMIN = 'admin',           // Administrador global del sistema
-  READER = 'reader',         // Solo lectura (consulta)
-  TECNICO = 'tecnico',       // Técnico especializado
-  LIDER = 'lider',          // Líder de área/departamento
-
+  ADMIN = 'admin',
+  READER = 'reader',
+  TECNICO = 'tecnico',
+  LIDER = 'lider'
 }
 
 export enum Department {
-  ADMINISTRACION = 'Administración',
+  ADMINISTRACION = 'Administracion',
   INFRAESTRUCTURA = 'Infraestructura',
   PROYECTOS = 'Proyectos',
   TI = 'TI',
@@ -19,37 +18,27 @@ export enum Department {
   OPERACIONES = 'Operaciones',
   VENTAS = 'Ventas',
   MARKETING = 'Marketing',
-  INGENIERIA = 'Ingeniería',
+  INGENIERIA = 'Ingenieria',
   CALIDAD = 'Calidad',
   SEGURIDAD = 'Seguridad',
   LEGAL = 'Legal',
   CIBERSEGURIDAD = 'Ciberseguridad'
 }
 
-// Permisos RBAC
 export enum Permission {
-  // Gestión de usuarios
   CREATE_USERS = 'create_users',
   READ_USERS = 'read_users',
   UPDATE_USERS = 'update_users',
   DELETE_USERS = 'delete_users',
   MANAGE_ROLES = 'manage_roles',
-  
-  // Gestión de certificaciones
   CREATE_CERTIFICATIONS = 'create_certifications',
   READ_CERTIFICATIONS = 'read_certifications',
   UPDATE_CERTIFICATIONS = 'update_certifications',
   DELETE_CERTIFICATIONS = 'delete_certifications',
-  
-  // Gestión de departamentos
   MANAGE_DEPARTMENTS = 'manage_departments',
   MANAGE_OWN_DEPARTMENT = 'manage_own_department',
-  
-  // Reportes y estadísticas
   VIEW_REPORTS = 'view_reports',
   EXPORT_DATA = 'export_data',
-  
-  // Administración del sistema
   SYSTEM_ADMIN = 'system_admin'
 }
 
@@ -68,11 +57,15 @@ export interface IUser extends Document {
   isActive: boolean;
   lastLogin?: Date;
   refreshToken?: string;
-  // Nuevos campos RBAC
-  departmentLeader?: boolean;   // Es líder de su departamento
-  managedDepartments?: Department[];  // Departamentos que gestiona (para líderes multi-área)
-  permissions?: Permission[];   // Permisos específicos adicionales
-  createdBy?: mongoose.Types.ObjectId;  // Quién creó este usuario
+  passwordResetToken?: string;
+  passwordResetExpires?: Date;
+  verificationToken?: string;
+  verificationExpires?: Date;
+  isVerified?: boolean;
+  departmentLeader?: boolean;
+  managedDepartments?: Department[];
+  permissions?: Permission[];
+  createdBy?: mongoose.Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;
@@ -89,7 +82,7 @@ const userSchema = new Schema<IUser>(
       unique: true,
       trim: true,
       minlength: [3, 'El nombre de usuario debe tener al menos 3 caracteres'],
-      maxlength: [20, 'El nombre de usuario no puede tener más de 20 caracteres']
+      maxlength: [20, 'El nombre de usuario no puede tener mas de 20 caracteres']
     },
     email: {
       type: String,
@@ -97,25 +90,25 @@ const userSchema = new Schema<IUser>(
       unique: true,
       lowercase: true,
       trim: true,
-      match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, 'Email inválido']
+      match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, 'Email invalido']
     },
     password: {
       type: String,
-      required: [true, 'La contraseña es requerida'],
-      minlength: [6, 'La contraseña debe tener al menos 6 caracteres'],
+      required: [true, 'La contrasena es requerida'],
+      minlength: [6, 'La contrasena debe tener al menos 6 caracteres'],
       select: false
     },
     firstName: {
       type: String,
       required: [true, 'El nombre es requerido'],
       trim: true,
-      maxlength: [50, 'El nombre no puede tener más de 50 caracteres']
+      maxlength: [50, 'El nombre no puede tener mas de 50 caracteres']
     },
     lastName: {
       type: String,
       required: [true, 'El apellido es requerido'],
       trim: true,
-      maxlength: [50, 'El apellido no puede tener más de 50 caracteres']
+      maxlength: [50, 'El apellido no puede tener mas de 50 caracteres']
     },
     role: {
       type: String,
@@ -132,12 +125,12 @@ const userSchema = new Schema<IUser>(
       type: String,
       required: [true, 'El cargo es requerido'],
       trim: true,
-      maxlength: [100, 'El cargo no puede tener más de 100 caracteres']
+      maxlength: [100, 'El cargo no puede tener mas de 100 caracteres']
     },
     phone: {
       type: String,
       trim: true,
-      match: [/^[\+]?[1-9][\d]{0,15}$/, 'Número de teléfono inválido']
+      match: [/^[\+]?[1-9][\d]{0,15}$/, 'Numero de telefono invalido']
     },
     avatarUrl: {
       type: String,
@@ -158,19 +151,40 @@ const userSchema = new Schema<IUser>(
       type: String,
       select: false
     },
-    // Nuevos campos RBAC
+    passwordResetToken: {
+      type: String,
+      select: false
+    },
+    passwordResetExpires: {
+      type: Date
+    },
+    verificationToken: {
+      type: String,
+      select: false
+    },
+    verificationExpires: {
+      type: Date
+    },
+    isVerified: {
+      type: Boolean,
+      default: true
+    },
     departmentLeader: {
       type: Boolean,
       default: false
     },
-    managedDepartments: [{
-      type: String,
-      enum: Object.values(Department)
-    }],
-    permissions: [{
-      type: String,
-      enum: Object.values(Permission)
-    }],
+    managedDepartments: [
+      {
+        type: String,
+        enum: Object.values(Department)
+      }
+    ],
+    permissions: [
+      {
+        type: String,
+        enum: Object.values(Permission)
+      }
+    ],
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User'
@@ -182,15 +196,13 @@ const userSchema = new Schema<IUser>(
   }
 );
 
-// Virtual para nombre completo
-userSchema.virtual('fullName').get(function() {
+userSchema.virtual('fullName').get(function () {
   return `${this.firstName} ${this.lastName}`;
 });
 
-// Encriptar contraseña antes de guardar
-userSchema.pre('save', async function(next) {
+userSchema.pre('save', async function (next) {
   if (!this.isModified('password')) return next();
-  
+
   try {
     const salt = await bcrypt.genSalt(12);
     this.password = await bcrypt.hash(this.password, salt);
@@ -200,24 +212,21 @@ userSchema.pre('save', async function(next) {
   }
 });
 
-// Método para comparar contraseñas
-userSchema.methods.comparePassword = async function(candidatePassword: string): Promise<boolean> {
+userSchema.methods.comparePassword = async function (
+  candidatePassword: string
+): Promise<boolean> {
   return bcrypt.compare(candidatePassword, this.password);
 };
 
-// Método para verificar permisos
-userSchema.methods.hasPermission = function(permission: Permission): boolean {
-  // El admin tiene todos los permisos
+userSchema.methods.hasPermission = function (permission: Permission): boolean {
   if (this.role === UserRole.ADMIN) {
     return true;
   }
-  
-  // Verificar permisos específicos asignados
+
   if (this.permissions && this.permissions.includes(permission)) {
     return true;
   }
-  
-  // Permisos por rol
+
   const rolePermissions: Record<UserRole, Permission[]> = {
     [UserRole.ADMIN]: Object.values(Permission),
     [UserRole.LIDER]: [
@@ -245,19 +254,17 @@ userSchema.methods.hasPermission = function(permission: Permission): boolean {
       Permission.READ_CERTIFICATIONS,
       Permission.READ_USERS,
       Permission.VIEW_REPORTS
-    ],};
-  
+    ]
+  };
+
   return rolePermissions[this.role as UserRole]?.includes(permission) || false;
 };
 
-// Método para verificar si puede gestionar un departamento
-userSchema.methods.canManageDepartment = function(department: Department): boolean {
-  // El admin puede gestionar cualquier departamento
+userSchema.methods.canManageDepartment = function (department: Department): boolean {
   if (this.role === UserRole.ADMIN) {
     return true;
   }
-  
-  // Los líderes pueden gestionar su propio departamento
+
   if (this.role === UserRole.LIDER) {
     if (this.department === department) {
       return true;
@@ -266,18 +273,17 @@ userSchema.methods.canManageDepartment = function(department: Department): boole
       return true;
     }
   }
-  
+
   return false;
 };
 
-// Índices adicionales (email y username ya son únicos en el esquema)
 userSchema.index({ department: 1 });
 userSchema.index({ role: 1 });
 userSchema.index({ isActive: 1 });
 userSchema.index({ departmentLeader: 1 });
 userSchema.index({ managedDepartments: 1 });
 userSchema.index({ createdBy: 1 });
+userSchema.index({ passwordResetExpires: 1 }, { expireAfterSeconds: 0 });
+userSchema.index({ verificationExpires: 1 }, { expireAfterSeconds: 0 });
 
 export const User = mongoose.model<IUser>('User', userSchema);
-
-

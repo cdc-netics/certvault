@@ -23,7 +23,6 @@ export class UserFormComponent implements OnInit, OnDestroy {
   isEditMode = false;
   userId: string | null = null;
 
-  // Opciones
   availableRoles: RoleOption[] = [];
   availableDepartments: DepartmentOption[] = [];
   targetUserIsAdmin = false;
@@ -31,11 +30,9 @@ export class UserFormComponent implements OnInit, OnDestroy {
   canEditPositionField = false;
   canEditRoles = false;
   canSetLeader = false;
+  canAdminChangePassword = false;
 
-  // Control
   private readonly destroy$ = new Subject<void>();
-
-  // Permisos
   currentUser: User | null = null;
 
   constructor(
@@ -47,22 +44,24 @@ export class UserFormComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
-    // Obtener usuario actual
     this.currentUser = this.authService.getCurrentUser();
+    this.canAdminChangePassword = this.authService.isAdmin();
     this.updatePermissions();
 
-    // Inicializar formulario
     this.initializeForm();
-    this.applyFieldLocks(); // Estado inicial para creación
+    this.applyFieldLocks();
+    this.setPasswordValidators();
+    this.userForm.get('password')?.valueChanges
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(() => this.userForm.get('confirmPassword')?.updateValueAndValidity({ onlySelf: true }));
 
-    // Cargar datos iniciales
     this.loadRoles();
     this.loadDepartments();
 
-    // Verificar si es modo edición
     this.route.params.pipe(takeUntil(this.destroy$)).subscribe(params => {
       if (params['id']) {
         this.isEditMode = true;
+        this.setPasswordValidators();
         this.userId = params['id'];
         if (this.userId) {
           this.loadUser(this.userId);
@@ -125,7 +124,7 @@ export class UserFormComponent implements OnInit, OnDestroy {
     this.userForm = this.fb.group({
       username: ['', [Validators.required, Validators.minLength(3), Validators.maxLength(20)]],
       email: ['', [Validators.required, Validators.email]],
-      password: ['', this.isEditMode ? [] : [Validators.required, Validators.minLength(6)]],
+      password: [''],
       confirmPassword: [''],
       firstName: ['', [Validators.required, Validators.maxLength(50)]],
       lastName: ['', [Validators.required, Validators.maxLength(50)]],
@@ -139,15 +138,30 @@ export class UserFormComponent implements OnInit, OnDestroy {
       permissions: [[]]
     });
 
-    // Validador para confirmar contraseña
     this.userForm.get('confirmPassword')?.setValidators([
       this.confirmPasswordValidator.bind(this)
     ]);
   }
 
+  private setPasswordValidators(): void {
+    const passwordControl = this.userForm.get('password');
+    if (!passwordControl) return;
+
+    const validators = this.isEditMode
+      ? [Validators.minLength(6)]
+      : [Validators.required, Validators.minLength(6)];
+
+    passwordControl.setValidators(validators);
+    passwordControl.updateValueAndValidity({ emitEvent: false });
+    this.userForm.get('confirmPassword')?.updateValueAndValidity({ emitEvent: false });
+  }
+
   private confirmPasswordValidator(control: any) {
     const password = this.userForm?.get('password')?.value;
     const confirmPassword = control.value;
+    if (!password && !confirmPassword) {
+      return null;
+    }
     return password === confirmPassword ? null : { passwordMismatch: true };
   }
 
@@ -176,9 +190,6 @@ export class UserFormComponent implements OnInit, OnDestroy {
               permissions: target.permissions || []
             });
 
-            // En modo edición, la contraseña no es requerida
-            this.userForm.get('password')?.clearValidators();
-            this.userForm.get('password')?.updateValueAndValidity();
             this.applyFieldLocks(target);
           }
           this.loading = false;
@@ -197,7 +208,6 @@ export class UserFormComponent implements OnInit, OnDestroy {
       .subscribe({
         next: (response) => {
           if (response.success && response.data) {
-            // Filtrar cualquier rol "user" si viene del backend
             const filtered = response.data.filter(r => r.value !== (UserRole as any).USER);
             if (this.currentUser?.role === UserRole.LIDER) {
               const allowed = [UserRole.READER, UserRole.TECNICO];
@@ -245,11 +255,9 @@ export class UserFormComponent implements OnInit, OnDestroy {
     this.loading = true;
     const formData = this.userForm.value;
 
-    // Remover confirmPassword del payload
     delete (formData as any).confirmPassword;
 
     if (this.isEditMode && this.userId) {
-      // Si no se cambió la contraseña, removerla del payload
       if (!formData.password) {
         delete (formData as any).password;
       }
@@ -271,7 +279,7 @@ export class UserFormComponent implements OnInit, OnDestroy {
         });
     } else {
       const createRequest: RegisterRequest = formData as RegisterRequest;
-      
+
       this.userService.createUser(createRequest)
         .pipe(takeUntil(this.destroy$))
         .subscribe({
@@ -297,7 +305,6 @@ export class UserFormComponent implements OnInit, OnDestroy {
     }
   }
 
-  // Getters para validación
   get username() { return this.userForm.get('username'); }
   get email() { return this.userForm.get('email'); }
   get password() { return this.userForm.get('password'); }
@@ -309,7 +316,6 @@ export class UserFormComponent implements OnInit, OnDestroy {
   get position() { return this.userForm.get('position'); }
   get phone() { return this.userForm.get('phone'); }
 
-  // Helpers para UI
   getRoleLabel(role: UserRole): string {
     return this.userService.getRoleLabel(role);
   }
@@ -320,8 +326,7 @@ export class UserFormComponent implements OnInit, OnDestroy {
 
   onRoleChange(): void {
     const selectedRole = this.userForm.get('role')?.value;
-    
-    // Si no es admin o líder, no puede ser department leader
+
     if (![UserRole.ADMIN, UserRole.LIDER].includes(selectedRole)) {
       this.userForm.get('departmentLeader')?.setValue(false);
       this.userForm.get('managedDepartments')?.setValue([]);
@@ -331,7 +336,6 @@ export class UserFormComponent implements OnInit, OnDestroy {
   canSelectRole(role: UserRole): boolean {
     if (this.targetUserIsAdmin) return false;
     if (!this.canEditRoles) return false;
-    // Los líderes no pueden asignar admin o líder
     if (this.currentUser?.role === UserRole.LIDER) {
       return ![UserRole.ADMIN, UserRole.LIDER].includes(role);
     }

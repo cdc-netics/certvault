@@ -15,22 +15,17 @@ import { AuthService } from '../../../core/services/auth.service';
           <div class="col-md-6 col-lg-4">
             <div class="card shadow-sm-custom">
               <div class="card-body p-4">
-
-                <!-- Logo/Header -->
                 <div class="text-center mb-4">
                   <img
                     src="/resources/NETICS-Isotipo.png"
-                    
                     alt="Netics isotipo"
                     class="login-logo mb-3"
                   />
                   <h2 class="text-primary fw-bold">CertiVault</h2>
-                  <p class="text-muted">Gestión de Certificaciones Empresariales</p>
+                  <p class="text-muted">Gestion de Certificaciones Empresariales</p>
                 </div>
 
-                <!-- Login Form -->
                 <form [formGroup]="loginForm" (ngSubmit)="onSubmit()">
-                  <!-- Email -->
                   <div class="mb-3">
                     <label for="email" class="form-label">Email</label>
                     <input
@@ -43,13 +38,17 @@ import { AuthService } from '../../../core/services/auth.service';
                     >
                     <div class="invalid-feedback" *ngIf="loginForm.get('email')?.invalid && loginForm.get('email')?.touched">
                       <small *ngIf="loginForm.get('email')?.errors?.['required']">El email es requerido</small>
-                      <small *ngIf="loginForm.get('email')?.errors?.['email']">Formato de email inválido</small>
+                      <small *ngIf="loginForm.get('email')?.errors?.['email']">Formato de email invalido</small>
                     </div>
                   </div>
 
-                  <!-- Password -->
                   <div class="mb-3">
-                    <label for="password" class="form-label">Contraseña</label>
+                    <div class="d-flex justify-content-between align-items-center">
+                      <label for="password" class="form-label mb-0">Contraseña</label>
+                      <a class="small text-primary text-decoration-none" routerLink="/forgot-password">
+                        ¿Olvidaste tu contraseña?
+                      </a>
+                    </div>
                     <input
                       type="password"
                       id="password"
@@ -63,29 +62,38 @@ import { AuthService } from '../../../core/services/auth.service';
                     </div>
                   </div>
 
-                  <!-- Error Message -->
-                  <div class="alert alert-danger" *ngIf="errorMessage">
-                    <small>{{ errorMessage }}</small>
+                  <div
+                    class="alert alert-warning soft-alert d-flex align-items-start gap-2"
+                    role="alert"
+                    *ngIf="errorMessage"
+                  >
+                    
+                    <div>
+                      <div class="fw-semibold">No pudimos iniciar sesion</div>
+                      <div class="small text-muted">{{ errorMessage }}</div>
+                      <div class="small text-muted mt-1">
+                        Si el problema continua, intenta restablecer tu contraseña o contacta al administrador.
+                      </div>
+                    </div>
                   </div>
 
-                  <!-- Submit Button -->
                   <button
                     type="submit"
                     class="btn btn-primary w-100 mb-3"
                     [disabled]="loginForm.invalid || isLoading"
                   >
                     <span *ngIf="isLoading" class="spinner-border spinner-border-sm me-2" role="status"></span>
-                    {{ isLoading ? 'Iniciando sesión...' : 'Iniciar Sesión' }}
+                    {{ isLoading ? 'Iniciando sesion...' : 'Iniciar Sesion' }}
                   </button>
 
-                  
-                  <div class="small-info"> 
-                
-                  <p class="text-muted">Version 1.7</p> 
+                  <div class="small-info text-center">
+                    <p class="text-muted mb-0">Version 1.7</p>
+                    <p class="mb-0 mt-2">
+                      <small class="text-muted">¿Aun no tienes cuenta? <a routerLink="/register" class="text-primary text-decoration-none">Regístrate</a></small>
+                    </p>
+
                   </div>
                 </form>
-
-                
               </div>
             </div>
           </div>
@@ -97,28 +105,41 @@ import { AuthService } from '../../../core/services/auth.service';
     .bg-light-custom {
       background: linear-gradient(135deg, #00C3B4 0%, #008f86 100%);
     }
-    
     .card {
       backdrop-filter: blur(10px);
       background: rgba(255, 255, 255, 0.95);
     }
-
     .login-logo {
       width: 96px;
       max-width: 40%;
       height: auto;
     }
-    
     .small-info {
       font-size: 0.85rem;
       line-height: 1.2;
       margin-top: 1rem;
       text-align: center;
     }
-    
     .form-control:focus {
       border-color: var(--primary-color);
       box-shadow: 0 0 0 0.2rem rgba(37, 99, 235, 0.25);
+    }
+    .soft-alert {
+      background: #fff7e6;
+      border: 1px solid #ffe0b3;
+      border-radius: 12px;
+    }
+    .alert-icon {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #f59e0b;
+      color: #fff;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      margin-top: 2px;
     }
   `]
 })
@@ -150,7 +171,7 @@ export class LoginComponent {
           }
         },
         error: (error) => {
-          this.errorMessage = error.message || 'Error al iniciar sesión';
+          this.errorMessage = error.message || 'Error al iniciar sesion';
           this.isLoading = false;
         },
         complete: () => {
@@ -158,14 +179,9 @@ export class LoginComponent {
         }
       });
     } else {
-      // Marcar todos los campos como tocados para mostrar errores
       for (const key of Object.keys(this.loginForm.controls)) {
         this.loginForm.get(key)?.markAsTouched();
       }
     }
   }
 }
-
-
-
-

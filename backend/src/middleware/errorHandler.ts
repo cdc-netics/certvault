@@ -11,63 +11,72 @@ export const errorHandler = (
   err: CustomError,
   req: Request,
   res: Response,
-  next: NextFunction
+  _next: NextFunction
 ): void => {
   let error = { ...err };
   error.message = err.message;
 
-  // Log del error
-  console.error('❌ Error:', err);
+  console.error('Error en peticion:', {
+    path: req.path,
+    method: req.method,
+    message: err.message,
+    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+  });
 
-  // Error de validación de Mongoose
   if (err.name === 'ValidationError') {
-    const message = Object.values(err.errors || {}).map((val: any) => val.message).join(', ');
-    error = { 
-      message, 
-      statusCode: 400 
+    const message = Object.values(err.errors || {})
+      .map((val: any) => val.message)
+      .join(', ');
+    error = {
+      message,
+      statusCode: 400
     } as CustomError;
   }
 
-  // Error de duplicado de Mongoose
   if (err.code === 11000) {
     const field = Object.keys(err.keyValue || {})[0];
     const message = `Ya existe un registro con ese ${field}`;
-    error = { 
-      message, 
-      statusCode: 400 
+    error = {
+      message,
+      statusCode: 400
     } as CustomError;
   }
 
-  // Error de ObjectId inválido de Mongoose
   if (err.name === 'CastError') {
     const message = 'Recurso no encontrado';
-    error = { 
-      message, 
-      statusCode: 404 
+    error = {
+      message,
+      statusCode: 404
     } as CustomError;
   }
 
-  // Error de JWT
   if (err.name === 'JsonWebTokenError') {
-    const message = 'Token inválido';
-    error = { 
-      message, 
-      statusCode: 401 
+    const message = 'Token invalido';
+    error = {
+      message,
+      statusCode: 401
     } as CustomError;
   }
 
-  // Error de JWT expirado
   if (err.name === 'TokenExpiredError') {
     const message = 'Token expirado';
-    error = { 
-      message, 
-      statusCode: 401 
+    error = {
+      message,
+      statusCode: 401
     } as CustomError;
   }
 
-  res.status(error.statusCode || 500).json({
+  const statusCode = error.statusCode || 500;
+  const userMessage =
+    statusCode >= 500
+      ? 'No pudimos procesar tu solicitud en este momento. Intenta de nuevo en unos minutos.'
+      : error.message || 'Solicitud invalida';
+
+  res.status(statusCode).json({
     success: false,
-    error: error.message || 'Error interno del servidor',
+    error: userMessage,
+    message: userMessage,
+    code: statusCode,
     ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
   });
 };

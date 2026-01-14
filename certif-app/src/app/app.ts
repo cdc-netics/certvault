@@ -14,6 +14,7 @@ export class App implements OnInit, OnDestroy {
   protected readonly title = signal('Netics-CertiVault - Sistema de Certificaciones');
   sidebarCollapsed = false;
   private routerSub?: Subscription;
+  private readonly publicRoutes = ['/login', '/register', '/forgot-password', '/reset-password', '/verify-email'];
 
   constructor(
     private readonly router: Router,
@@ -45,7 +46,8 @@ export class App implements OnInit, OnDestroy {
   }
 
   isLoginPage(): boolean {
-    return this.router.url.startsWith('/login');
+    const current = this.router.url;
+    return this.publicRoutes.some(route => current.startsWith(route));
   }
 
   private setSidebarByRoute(url: string): void {

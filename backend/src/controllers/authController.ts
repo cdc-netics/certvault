@@ -1,8 +1,10 @@
+import crypto from 'crypto';
 import { Response } from 'express';
-import * as jwt from 'jsonwebtoken';
-import { User, IUser, UserRole } from '../models/User';
+import jwt from 'jsonwebtoken';
+import { User, UserRole } from '../models/User';
 import { AuthRequest } from '../middleware/auth';
 import { saveBase64Avatar } from '../utils/avatar';
+import { sendPasswordResetEmail, sendVerificationEmail } from '../services/emailService';
 
 interface RegisterData {
   username: string;
@@ -11,7 +13,7 @@ interface RegisterData {
   firstName: string;
   lastName: string;
   department: string;
-  position: string;
+  position?: string;
   phone?: string;
 }
 
@@ -20,136 +22,133 @@ interface LoginData {
   password: string;
 }
 
-// Generar JWT
+const RESET_TOKEN_EXP_MINUTES = Number(process.env.RESET_PASSWORD_EXPIRE_MINUTES || 10);
+const VERIFY_TOKEN_EXP_MINUTES = Number(process.env.VERIFY_EMAIL_EXPIRE_MINUTES || 60);
+const APP_NAME = process.env.APP_NAME || 'CertiVault';
+
+const normalizeEmail = (email: string): string => email.trim().toLowerCase();
+
 const generateToken = (id: string): string => {
   return jwt.sign({ id }, process.env.JWT_SECRET as string, {
     expiresIn: process.env.JWT_EXPIRE || '7d'
   });
 };
 
-// Generar Refresh Token
 const generateRefreshToken = (id: string): string => {
   return jwt.sign({ id }, process.env.JWT_SECRET as string, {
     expiresIn: process.env.JWT_REFRESH_EXPIRE || '30d'
   });
 };
 
-// @desc    Registrar usuario
-// @route   POST /api/auth/register
-// @access  Public
+const buildResetLink = (token: string, email: string): string => {
+  const base = (process.env.FRONTEND_URL || 'http://localhost:4200').replace(/\/$/, '');
+  return `${base}/reset-password?token=${token}&email=${encodeURIComponent(email)}`;
+};
+
+const buildVerifyLink = (token: string, email: string): string => {
+  const base = (process.env.FRONTEND_URL || 'http://localhost:4200').replace(/\/$/, '');
+  return `${base}/verify-email?token=${token}&email=${encodeURIComponent(email)}`;
+};
+
 export const register = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { 
-      username, 
-      email, 
-      password, 
-      firstName, 
-      lastName, 
-      department, 
-      position, 
-      phone 
-    }: RegisterData = req.body;
+    const { username, email, password, firstName, lastName, department, position, phone }: RegisterData =
+      req.body;
 
-    // Verificar si el usuario ya existe
+    const normalizedEmail = normalizeEmail(email);
+
     const userExists = await User.findOne({
-      $or: [{ email }, { username }]
+      $or: [{ email: normalizedEmail }, { username }]
     });
 
     if (userExists) {
       res.status(400).json({
         success: false,
-        error: 'El usuario ya existe con ese email o nombre de usuario'
+        error: 'El usuario ya existe con ese email o nombre de usuario',
+        message: 'El usuario ya existe con ese email o nombre de usuario'
       });
       return;
     }
 
-    // Crear usuario
+    const verificationToken = crypto.randomBytes(32).toString('hex');
+    const hashedVerificationToken = crypto.createHash('sha256').update(verificationToken).digest('hex');
+
     const user = await User.create({
       username,
-      email,
+      email: normalizedEmail,
       password,
       firstName,
       lastName,
       department,
-      position,
+      position: position || 'Colaborador',
       phone,
       role: UserRole.READER,
-      isActive: true
+      isActive: true,
+      isVerified: false,
+      verificationToken: hashedVerificationToken,
+      verificationExpires: new Date(Date.now() + VERIFY_TOKEN_EXP_MINUTES * 60 * 1000)
     });
 
-    // Generar tokens
-    const token = generateToken(user._id as string);
-    const refreshToken = generateRefreshToken(user._id as string);
-
-    // Guardar refresh token
-    user.refreshToken = refreshToken;
-    await user.save();
+    const verifyLink = buildVerifyLink(verificationToken, user.email);
+    await sendVerificationEmail({
+      to: user.email,
+      name: user.firstName || user.username,
+      verifyLink,
+      expiresInMinutes: VERIFY_TOKEN_EXP_MINUTES
+    });
 
     res.status(201).json({
       success: true,
-      data: {
-        token,
-        refreshToken,
-        user: {
-          _id: user._id,
-          username: user.username,
-          email: user.email,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          role: user.role,
-          department: user.department,
-          position: user.position,
-          phone: user.phone,
-          avatarUrl: user.avatarUrl,
-          avatar: user.avatar,
-          isActive: user.isActive
-        },
-        expiresIn: 7 * 24 * 60 * 60 // 7 días en segundos
-      }
+      message: 'Registro exitoso. Revisa tu correo para confirmar la cuenta antes de iniciar sesión.'
     });
   } catch (error) {
     console.error('Error en registro:', error);
     res.status(500).json({
       success: false,
-      error: 'Error interno del servidor'
+      error: 'No pudimos completar el registro. Intenta nuevamente.',
+      message: 'No pudimos completar el registro. Intenta nuevamente.'
     });
   }
 };
 
-// @desc    Iniciar sesión
-// @route   POST /api/auth/login
-// @access  Public
 export const login = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { email, password }: LoginData = req.body;
 
-    // Verificar si el usuario existe y obtener password
-    const user = await User.findOne({ email }).select('+password +refreshToken');
+    const user = await User.findOne({ email: normalizeEmail(email) }).select('+password +refreshToken');
 
     if (!user || !user.isActive) {
       res.status(401).json({
         success: false,
-        error: 'Credenciales inválidas o usuario inactivo'
+        error: 'Correo o contraseña incorrectos, o la cuenta esta inactiva.',
+        message: 'Correo o contraseña incorrectos, o la cuenta esta inactiva.'
       });
       return;
     }
 
-    // Verificar contraseña
+    if (user.isVerified === false) {
+      res.status(401).json({
+        success: false,
+        error: 'Debes verificar tu correo antes de iniciar sesión.',
+        message: 'Debes verificar tu correo antes de iniciar sesión.'
+      });
+      return;
+    }
+
     const isPasswordValid = await user.comparePassword(password);
 
     if (!isPasswordValid) {
       res.status(401).json({
         success: false,
-        error: 'Credenciales inválidas'
+        error: 'Correo o contraseña incorrectos.',
+        message: 'Correo o contraseña incorrectos.'
       });
       return;
     }
 
-    // Generar tokens
     const token = generateToken(user._id as string);
     const refreshToken = generateRefreshToken(user._id as string);
 
-    // Actualizar último login y refresh token
     user.lastLogin = new Date();
     user.refreshToken = refreshToken;
     await user.save();
@@ -174,21 +173,20 @@ export const login = async (req: AuthRequest, res: Response): Promise<void> => {
           isActive: user.isActive,
           lastLogin: user.lastLogin
         },
-        expiresIn: 7 * 24 * 60 * 60 // 7 días en segundos
-      }
+        expiresIn: 7 * 24 * 60 * 60
+      },
+      message: 'Inicio de sesion exitoso'
     });
   } catch (error) {
     console.error('Error en login:', error);
     res.status(500).json({
       success: false,
-      error: 'Error interno del servidor'
+      error: 'No pudimos iniciar sesion. Intenta nuevamente.',
+      message: 'No pudimos iniciar sesion. Intenta nuevamente.'
     });
   }
 };
 
-// @desc    Refrescar token
-// @route   POST /api/auth/refresh
-// @access  Public
 export const refreshToken = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { refreshToken: clientRefreshToken } = req.body;
@@ -196,28 +194,27 @@ export const refreshToken = async (req: AuthRequest, res: Response): Promise<voi
     if (!clientRefreshToken) {
       res.status(401).json({
         success: false,
-        error: 'Refresh token requerido'
+        error: 'Refresh token requerido',
+        message: 'Refresh token requerido'
       });
       return;
     }
 
-    // Verificar refresh token
     const decoded = jwt.verify(clientRefreshToken, process.env.JWT_SECRET as string) as { id: string };
     const user = await User.findById(decoded.id).select('+refreshToken');
 
     if (!user || user.refreshToken !== clientRefreshToken || !user.isActive) {
       res.status(401).json({
         success: false,
-        error: 'Refresh token inválido'
+        error: 'Refresh token invalido',
+        message: 'Refresh token invalido'
       });
       return;
     }
 
-    // Generar nuevos tokens
     const newToken = generateToken(user._id as string);
     const newRefreshToken = generateRefreshToken(user._id as string);
 
-    // Actualizar refresh token
     user.refreshToken = newRefreshToken;
     await user.save();
 
@@ -246,44 +243,40 @@ export const refreshToken = async (req: AuthRequest, res: Response): Promise<voi
   } catch (error) {
     res.status(401).json({
       success: false,
-      error: 'Refresh token inválido'
+      error: 'Refresh token invalido',
+      message: 'Refresh token invalido'
     });
   }
 };
 
-// @desc    Cerrar sesión
-// @route   POST /api/auth/logout
-// @access  Private
 export const logout = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     if (req.user) {
-      // Limpiar refresh token
       req.user.refreshToken = undefined;
       await req.user.save();
     }
 
     res.json({
       success: true,
-      message: 'Sesión cerrada exitosamente'
+      message: 'Sesion cerrada exitosamente'
     });
   } catch (error) {
     console.error('Error en logout:', error);
     res.status(500).json({
       success: false,
-      error: 'Error interno del servidor'
+      error: 'No pudimos cerrar la sesion. Intenta nuevamente.',
+      message: 'No pudimos cerrar la sesion. Intenta nuevamente.'
     });
   }
 };
 
-// @desc    Obtener usuario actual
-// @route   GET /api/auth/me
-// @access  Private
 export const getCurrentUser = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     if (!req.user) {
       res.status(401).json({
         success: false,
-        error: 'Usuario no autenticado'
+        error: 'Usuario no autenticado',
+        message: 'Usuario no autenticado'
       });
       return;
     }
@@ -311,41 +304,38 @@ export const getCurrentUser = async (req: AuthRequest, res: Response): Promise<v
     console.error('Error obteniendo usuario actual:', error);
     res.status(500).json({
       success: false,
-      error: 'Error interno del servidor'
+      error: 'No pudimos cargar tu perfil. Intenta nuevamente.',
+      message: 'No pudimos cargar tu perfil. Intenta nuevamente.'
     });
   }
 };
 
-// @desc    Actualizar perfil
-// @route   PUT /api/auth/profile
-// @access  Private
 export const updateProfile = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     if (!req.user) {
       res.status(401).json({
         success: false,
-        error: 'Usuario no autenticado'
+        error: 'Usuario no autenticado',
+        message: 'Usuario no autenticado'
       });
       return;
     }
 
     const { firstName, lastName, phone, avatarUrl, avatar } = req.body;
 
-    // Actualizar campos permitidos
     if (firstName) req.user.firstName = firstName;
     if (lastName) req.user.lastName = lastName;
     if (phone !== undefined) req.user.phone = phone;
 
     const avatarProvided = avatarUrl !== undefined || avatar !== undefined;
     if (avatarProvided) {
-      // Permitir limpiar avatar cuando llega string vacio
       if (avatar && typeof avatar === 'string' && avatar.startsWith('data:image')) {
         try {
           const storedUrl = saveBase64Avatar(avatar);
           req.user.avatarUrl = storedUrl;
           req.user.avatar = undefined;
-        } catch (err) {
-          res.status(400).json({ success: false, error: 'Avatar invalido' });
+        } catch {
+          res.status(400).json({ success: false, error: 'Avatar invalido', message: 'Avatar invalido' });
           return;
         }
       } else {
@@ -378,65 +368,63 @@ export const updateProfile = async (req: AuthRequest, res: Response): Promise<vo
     console.error('Error actualizando perfil:', error);
     res.status(500).json({
       success: false,
-      error: 'Error interno del servidor'
+      error: 'No pudimos actualizar el perfil. Intenta nuevamente.',
+      message: 'No pudimos actualizar el perfil. Intenta nuevamente.'
     });
   }
 };
 
-// @desc    Cambiar contraseña
-// @route   PUT /api/auth/change-password
-// @access  Private
 export const changePassword = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     if (!req.user) {
       res.status(401).json({
         success: false,
-        error: 'Usuario no autenticado'
+        error: 'Usuario no autenticado',
+        message: 'Usuario no autenticado'
       });
       return;
     }
 
     const { currentPassword, newPassword } = req.body;
 
-    // Validar que se proporcionen ambas contraseñas
     if (!currentPassword || !newPassword) {
       res.status(400).json({
         success: false,
-        error: 'Se requiere la contraseña actual y la nueva contraseña'
+        error: 'Se requiere la contraseña actual y la nueva contraseña',
+        message: 'Se requiere la contraseña actual y la nueva contraseña'
       });
       return;
     }
 
-    // Obtener usuario con la contraseña
     const user = await User.findById(req.user._id).select('+password');
     if (!user) {
       res.status(404).json({
         success: false,
-        error: 'Usuario no encontrado'
+        error: 'Usuario no encontrado',
+        message: 'Usuario no encontrado'
       });
       return;
     }
 
-    // Verificar contraseña actual
     const isMatch = await user.comparePassword(currentPassword);
     if (!isMatch) {
       res.status(400).json({
         success: false,
-        error: 'La contraseña actual es incorrecta'
+        error: 'La contraseña actual es incorrecta',
+        message: 'La contraseña actual es incorrecta'
       });
       return;
     }
 
-    // Validar nueva contraseña
     if (newPassword.length < 6) {
       res.status(400).json({
         success: false,
-        error: 'La nueva contraseña debe tener al menos 6 caracteres'
+        error: 'La nueva contraseña debe tener al menos 6 caracteres',
+        message: 'La nueva contraseña debe tener al menos 6 caracteres'
       });
       return;
     }
 
-    // Actualizar contraseña
     user.password = newPassword;
     await user.save();
 
@@ -448,8 +436,159 @@ export const changePassword = async (req: AuthRequest, res: Response): Promise<v
     console.error('Error cambiando contraseña:', error);
     res.status(500).json({
       success: false,
-      error: 'Error interno del servidor'
+      error: 'No pudimos cambiar la contraseña. Intenta nuevamente.',
+      message: 'No pudimos cambiar la contraseña. Intenta nuevamente.'
     });
   }
 };
 
+export const forgotPassword = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { email } = req.body as { email: string };
+    if (!email) {
+      res.status(400).json({
+        success: false,
+        error: 'El email es requerido',
+        message: 'El email es requerido'
+      });
+      return;
+    }
+
+    const normalizedEmail = normalizeEmail(email);
+    const user = await User.findOne({ email: normalizedEmail });
+
+    if (user) {
+      const token = crypto.randomBytes(32).toString('hex');
+      const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+      user.passwordResetToken = hashedToken;
+      user.passwordResetExpires = new Date(Date.now() + RESET_TOKEN_EXP_MINUTES * 60 * 1000);
+      await user.save();
+
+      const resetLink = buildResetLink(token, user.email);
+      await sendPasswordResetEmail({
+        to: user.email,
+        name: user.firstName || user.username,
+        resetLink,
+        expiresInMinutes: RESET_TOKEN_EXP_MINUTES
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Si el correo esta registrado, enviamos un enlace para restablecer la contraseña.'
+    });
+  } catch (error) {
+    console.error('Error solicitando reset de contraseña:', error);
+    res.status(500).json({
+      success: false,
+      error: 'No pudimos enviar el enlace. Intenta nuevamente.',
+      message: 'No pudimos enviar el enlace. Intenta nuevamente.'
+    });
+  }
+};
+
+export const resetPassword = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { token, newPassword, email } = req.body as { token: string; newPassword: string; email?: string };
+
+    if (!token || !newPassword) {
+      res.status(400).json({
+        success: false,
+        error: 'Token y nueva contraseña son requeridos',
+        message: 'Token y nueva contraseña son requeridos'
+      });
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      res.status(400).json({
+        success: false,
+        error: 'La nueva contraseña debe tener al menos 6 caracteres',
+        message: 'La nueva contraseña debe tener al menos 6 caracteres'
+      });
+      return;
+    }
+
+    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+    const user = await User.findOne({
+      passwordResetToken: hashedToken,
+      passwordResetExpires: { $gt: new Date() },
+      ...(email ? { email: normalizeEmail(email) } : {})
+    }).select('+password');
+
+    if (!user) {
+      res.status(400).json({
+        success: false,
+        error: 'El enlace de restablecimiento es invalido o ya expiro',
+        message: 'El enlace de restablecimiento es invalido o ya expiro'
+      });
+      return;
+    }
+
+    user.password = newPassword;
+    user.passwordResetToken = undefined;
+    user.passwordResetExpires = undefined;
+    user.refreshToken = undefined;
+    await user.save();
+
+    res.json({
+      success: true,
+      message: 'Contraseña actualizada. Ya puedes iniciar sesion.'
+    });
+  } catch (error) {
+    console.error('Error restableciendo contraseña:', error);
+    res.status(500).json({
+      success: false,
+      error: 'No pudimos restablecer la contraseña. Intenta nuevamente.',
+      message: 'No pudimos restablecer la contraseña. Intenta nuevamente.'
+    });
+  }
+};
+
+export const verifyEmail = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { token, email } = req.body as { token: string; email?: string };
+
+    if (!token) {
+      res.status(400).json({
+        success: false,
+        error: 'Token de verificacion requerido',
+        message: 'Token de verificacion requerido'
+      });
+      return;
+    }
+
+    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+    const user = await User.findOne({
+      verificationToken: hashedToken,
+      verificationExpires: { $gt: new Date() },
+      ...(email ? { email: normalizeEmail(email) } : {})
+    });
+
+    if (!user) {
+      res.status(400).json({
+        success: false,
+        error: 'El enlace de verificacion es invalido o expiro',
+        message: 'El enlace de verificacion es invalido o expiro'
+      });
+      return;
+    }
+
+    user.isVerified = true;
+    user.verificationToken = undefined;
+    user.verificationExpires = undefined;
+    await user.save();
+
+    res.json({
+      success: true,
+      message: 'Cuenta verificada. Ya puedes iniciar sesion.'
+    });
+  } catch (error) {
+    console.error('Error verificando correo:', error);
+    res.status(500).json({
+      success: false,
+      error: 'No pudimos verificar el correo. Intenta nuevamente.',
+      message: 'No pudimos verificar el correo. Intenta nuevamente.'
+    });
+  }
+};
