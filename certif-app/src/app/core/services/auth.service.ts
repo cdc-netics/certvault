@@ -33,6 +33,21 @@ export class AuthService {
       );
   }
 
+  requestPasswordReset(email: string): Observable<ApiResponse<void>> {
+    return this.http.post<ApiResponse<void>>(`${this.API_URL}/forgot-password`, { email })
+      .pipe(catchError(this.handleError));
+  }
+
+  verifyEmail(payload: { token: string; email?: string }): Observable<ApiResponse<any>> {
+    return this.http.post<ApiResponse<any>>(`${this.API_URL}/verify-email`, payload)
+      .pipe(catchError(this.handleError));
+  }
+
+  resetPassword(payload: { token: string; newPassword: string; email?: string }): Observable<ApiResponse<void>> {
+    return this.http.post<ApiResponse<void>>(`${this.API_URL}/reset-password`, payload)
+      .pipe(catchError(this.handleError));
+  }
+
   register(userData: RegisterRequest): Observable<ApiResponse<User>> {
     return this.http.post<ApiResponse<User>>(`${this.API_URL}/register`, userData)
       .pipe(catchError(this.handleError));
@@ -154,17 +169,22 @@ export class AuthService {
   }
 
   private handleError(error: HttpErrorResponse): Observable<never> {
-    let errorMessage = 'Ha ocurrido un error desconocido';
-    
-    if (error.error instanceof ErrorEvent) {
-      // Error del lado del cliente
-      errorMessage = `Error: ${error.error.message}`;
-    } else {
-      // Error del lado del servidor
-      errorMessage = error.error?.message || `Error ${error.status}: ${error.statusText}`;
+    const apiMessage = error.error?.message || error.error?.error;
+    const status = error.status;
+
+    let friendlyMessage = apiMessage || 'Ha ocurrido un error inesperado';
+
+    if (status === 0) {
+      friendlyMessage = 'No pudimos conectarnos con el servidor. Verifica tu conexion o intenta mas tarde.';
+    } else if (status === 400) {
+      friendlyMessage = apiMessage || 'Revisa los datos ingresados e intenta nuevamente.';
+    } else if (status === 401) {
+      friendlyMessage = apiMessage || 'Tu sesion expiro o las credenciales no son validas.';
+    } else if (status >= 500) {
+      friendlyMessage = 'Tuvimos un problema temporal. Intenta de nuevo en unos minutos.';
     }
-    
-    return throwError(() => new Error(errorMessage));
+
+    return throwError(() => new Error(friendlyMessage));
   }
 
   // Actualizar perfil de usuario
