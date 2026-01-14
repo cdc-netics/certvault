@@ -2,46 +2,37 @@ name: Deploy automático a producción
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
+  workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: self-hosted
 
     steps:
-      - name: Obtener código actualizado
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0 
-          clean: true
-          ref: main
-          #
+      - name: Sync repo
+        run: |
+          cd /home/cdc/certvault
+          git fetch origin
+          git reset --hard origin/main
+          git clean -fd
 
-      - name: Instalar backend
-        working-directory: ${{ github.workspace }}/backend
-        run: npm install
+      - name: Install backend deps
+        run: |
+          cd /home/cdc/certvault/backend
+          npm ci
 
       - name: Build backend
-        working-directory: ${{ github.workspace }}/backend
-        run: npm run build
-
-      - name: Rsync backend
-        working-directory: ${{ github.workspace }}/backend
-        run: rsync -av --delete ${{ github.workspace }}/backend/dist/ /home/cdc/certvault/backend/dist/
-
-      - name: Reiniciar backend service
-        #run: pm2 restart certif-app-backen
-        run: pm2 restart certif-app-backend
-
-      - name: Instalar frontend
-        working-directory: ${{ github.workspace }}/certif-app
-        run: npm install
+        run: |
+          cd /home/cdc/certvault/backend
+          npm run build
 
       - name: Build frontend
-        working-directory: ${{ github.workspace }}/certif-app
-        run: npm run build
+        run: |
+          cd /home/cdc/certvault/certif-app
+          npm ci
+          npm run build
 
-      - name: Rsync frontend
-        working-directory: ${{ github.workspace }}/certif-app
-        run: rsync -av --delete ${{ github.workspace }}/certif-app/dist/certif-app/ /home/cdc/certvault/certif-app/dist/certif-app/
+      - name: Restart
+        run: |
+          pm2 restart certif-app-backend
