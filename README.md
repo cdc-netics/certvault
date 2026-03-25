@@ -54,7 +54,7 @@ CertiVault/
 │   ├── .env                # Variables de entorno
 │   ├── package.json
 │   └── tsconfig.json
-└── certif-app/
+└── certvault/
     ├── src/
     │   ├── app/
     │   │   ├── core/       # Servicios, modelos, guards
@@ -113,8 +113,8 @@ CertiVault/
 
 ### 1. Clonar el proyecto
 ```bash
-git clone https://github.com/tu-org/Certif-app-2.5.git
-cd Certif-app-2.5
+git clone https://github.com/tu-org/certvault
+cd certvault
 ```
 
 ### 2. Backend
@@ -128,7 +128,7 @@ npm run dev # o npm start
 
 ### 3. Frontend
 ```bash
-cd ../certif-app
+cd ../certvault
 npm install
 ng serve # o ng build
 ```
@@ -179,7 +179,7 @@ npm start
 ### 3. Configurar el Frontend
 
 ```bash
-cd ../certif-app
+cd ../certvault
 
 # Instalar dependencias
 npm install
