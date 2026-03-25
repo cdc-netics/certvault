@@ -1,62 +1,99 @@
+## 🔒 Seguridad
+
+### Decisiones de Seguridad y Checklist Pre-producción
+
+#### Autenticación y Autorización
+
+**JWT Tokens:**
+- Duración: 4h (usuarios autenticados)
+- Algoritmo: HS256
+- Secret: variable `JWT_SECRET` en `.env` (puede generarse con `openssl rand -base64 32`)
+- Clock skew tolerance: ±60 segundos (ver manejo en backend/src/controllers/authController.ts)
+
+**RBAC (Control de Acceso Basado en Roles):**
+- **admin:** Acceso completo
+- **lider:** Gestión y visibilidad extendida
+- **tecnico:** Operación diaria
+- **reader:** Solo lectura
+
+**Validación de Roles:**
+- Middleware: `auth.ts` (autenticación y autorización)
+- Endpoints sensibles protegidos con validación de roles (`checkRole` en backend/src/middleware/auth.ts)
+
+#### Cifrado de Datos
+
+**Contraseñas de Usuarios:**
+- Hash con bcryptjs (12 salt rounds, ver backend/src/models/User.ts)
+- Nunca se almacenan contraseñas en texto plano
+
+**Datos sensibles:**
+- Variables de entorno para secretos y credenciales (`.env`)
+- Acceso restringido a uploads y recursos privados (ver rutas protegidas en backend/src/routes/)
+
+
+
 # Netics-CertiVault - Sistema de Gestión de Certificaciones Empresariales
 
-## 📋 Descripción
+### Netics-CertiVault
+Sistema web para la gestión centralizada de certificaciones empresariales. Permite administrar, monitorear y hacer seguimiento de certificaciones técnicas y profesionales de empleados, con control de usuarios, roles y reportes.
 
-Netics-CertiVault es una aplicación web completa para la gestión centralizada de certificaciones de todas las áreas de una empresa. Permite administrar, monitorear y hacer seguimiento de las certificaciones técnicas y profesionales de los empleados.
+### ¿Qué es este sistema?
+Netics-CertiVault es una plataforma moderna que ayuda a empresas a organizar y controlar todas sus certificaciones internas y externas, facilitando la gestión documental, la trazabilidad y el cumplimiento normativo.
 
-## 🚀 Características Principales
+## ✨ Características Principales
 
-- **🔐 Sistema de Autenticación**: Login/registro con JWT tokens y roles de usuario
-- **👥 Gestión de Usuarios**: Panel administrativo para gestión de usuarios y permisos
-- **📜 Gestión de Certificaciones**: CRUD completo para certificaciones con:
-  - Fechas de emisión y expiración
-  - Tipos y niveles de certificación
-  - Tecnologías y proveedores
-  - Asignación por empleado y departamento
-- **📊 Dashboard**: Panel de control con estadísticas y métricas
-- **🔔 Notificaciones**: Alertas de certificaciones próximas a expirar
-- **📈 Reportes**: Exportación de datos en múltiples formatos
-- **🎨 Diseño Moderno**: UI responsiva con Bootstrap 5
+### 🔐 Autenticación y Usuarios
+- Login seguro con JWT (email o username)
+- Administración de usuarios y roles (Admin, Líder, Técnico, Lector)
+- Recuperación y cambio de contraseña con validación avanzada
 
-## 🛠️ Tecnologías Utilizadas
+### 📜 Gestión de Certificaciones
+- CRUD completo de certificaciones
+- Fechas de emisión y expiración, tipos, niveles, tecnologías y proveedores
+- Asignación por empleado y departamento
+- Certificaciones de usuarios desactivados quedan archivadas y solo visibles para administradores/líderes
 
-### Backend
-- **Node.js** con **TypeScript**
-- **Express.js** - Framework web
-- **MongoDB** con **Mongoose** - Base de datos
-- **JWT** - Autenticación
-- **bcryptjs** - Encriptación de contraseñas
-- **Helmet** - Seguridad
-- **Express Rate Limit** - Rate limiting
+### 📊 Dashboard y Reportes
+- Panel de control con métricas y estadísticas
+- Exportación de datos (CSV, Excel)
+- Alertas de certificaciones próximas a expirar
 
-### Frontend
-- **Angular 17+** con **TypeScript**
-- **Bootstrap 5** - Framework CSS
-- **RxJS** - Programación reactiva
-- **Angular Material** - Componentes UI adicionales
+### 🎨 Interfaz Moderna
+- UI responsiva (Angular 17+, Bootstrap 5)
+- Filtros avanzados, paginación y búsqueda
+- Accesibilidad y experiencia de usuario mejorada
+
+---
+
+## 🛠️ Tecnologías
+
+- **Backend:** Node.js + TypeScript + Express + MongoDB (Mongoose)
+- **Frontend:** Angular 17+, Bootstrap 5, RxJS
+- **Seguridad:** JWT, bcryptjs, Helmet, validación robusta
+
+---
 
 ## 📁 Estructura del Proyecto
 
 ```
-Certif-app-2.0/
+CertiVault/
 ├── backend/
 │   ├── src/
-│   │   ├── controllers/     # Controladores de la API
-│   │   ├── models/         # Modelos de MongoDB
-│   │   ├── routes/         # Rutas de la API
-│   │   ├── middleware/     # Middleware personalizado
-│   │   ├── utils/          # Utilidades
-│   │   └── server.ts       # Punto de entrada del servidor
-│   ├── dist/              # Código compilado
-│   ├── .env               # Variables de entorno
+│   │   ├── controllers/     # Lógica de negocio y API
+│   │   ├── models/         # Modelos de datos (Mongoose)
+│   │   ├── routes/         # Endpoints de la API
+│   │   ├── middleware/     # Seguridad y validaciones
+│   │   ├── utils/          # Utilidades y seeders
+│   │   └── server.ts       # Entrada principal del servidor
+│   ├── .env                # Variables de entorno
 │   ├── package.json
 │   └── tsconfig.json
 └── certif-app/
     ├── src/
     │   ├── app/
-    │   │   ├── core/           # Servicios, modelos, guards
-    │   │   ├── features/       # Módulos de funcionalidades
-    │   │   ├── shared/         # Componentes compartidos
+    │   │   ├── core/       # Servicios, modelos, guards
+    │   │   ├── features/   # Funcionalidades principales
+    │   │   ├── shared/     # Componentes reutilizables
     │   │   └── app.component.ts
     │   ├── assets/
     │   └── styles.scss
@@ -64,21 +101,57 @@ Certif-app-2.0/
     └── angular.json
 ```
 
-## ⚡ Instalación y Configuración
+---
+
+## 🚀 Instalación y Configuración
 
 ### Prerrequisitos
-
-- **Node.js** (versión 18 o superior)
-- **npm** o **yarn**
-- **MongoDB** (local o MongoDB Atlas)
-- **Angular CLI** (opcional pero recomendado)
+- Node.js 18+
+- npm o yarn
+- MongoDB (local o Atlas)
+- Angular CLI (opcional)
 
 ### 1. Clonar el proyecto
-
 ```bash
-cd "C:\Users\areyes\Desktop\Certif-app-2.0"
+git clone https://github.com/tu-org/Certif-app-2.5.git
+cd Certif-app-2.5
 ```
 
+### 2. Backend
+```bash
+cd backend
+npm install
+# Configurar .env (ver .env.example)
+
+npm run dev # o npm start
+```
+
+### 3. Frontend
+```bash
+cd ../certif-app
+npm install
+ng serve # o ng build
+```
+
+### 4. Acceso Inicial
+- Navegar a http://localhost:4200
+- Login con usuario administrador (ver datos en seed o .env)
+
+---
+
+## 🛡️ Seguridad y Buenas Prácticas
+- Autenticación JWT y refresh tokens
+- Contraseñas encriptadas (bcrypt)
+- Rate limiting y Helmet.js
+- Validación estricta de datos
+- Certificaciones de usuarios desactivados solo visibles para roles elevados
+
+---
+
+## 📄 Licencia y Soporte
+
+Desarrollado por Netics. Todos los derechos reservados.
+Para soporte, migración o nuevas versiones, contactar a soporte@netics.cl
 ### 2. Configurar el Backend
 
 ```bash
@@ -133,12 +206,8 @@ ng build
 
 ## 🔑 Credenciales por Defecto
 
-El sistema crea automáticamente un usuario administrador:
+El sistema crea automáticamente un usuario administrador (Consultar .env)
 
-- **Email**: `admin@empresa.com`
-- **Contraseña**: `Admin123!`
-
-> ⚠️ **IMPORTANTE**: Cambiar estas credenciales en producción
 
 ## 🚀 Uso de la Aplicación
 
@@ -172,36 +241,6 @@ El sistema crea automáticamente un usuario administrador:
 - **Validación de entrada** en todas las rutas
 - **Cors configurado** para frontend específico
 
-## 📝 Variables de Entorno
-
-Configurar las siguientes variables en el archivo `.env` del backend:
-
-```bash
-# Entorno
-NODE_ENV=development
-PORT=3000
-
-# Base de Datos
-MONGODB_URI=mongodb://localhost:27017/certif-app
-
-# JWT
-JWT_SECRET=tu_jwt_secret_muy_seguro_aqui
-JWT_EXPIRE=7d
-JWT_REFRESH_EXPIRE=30d
-
-# Usuario Admin
-ADMIN_EMAIL=admin@empresa.com
-ADMIN_PASSWORD=Admin123!
-ADMIN_USERNAME=admin
-
-# Frontend
-FRONTEND_URL=http://localhost:4200
-
-# Uploads
-UPLOAD_PATH=./uploads
-MAX_FILE_SIZE=5242880
-```
-
 ## 🚦 Scripts Disponibles
 
 ### Backend
@@ -228,19 +267,9 @@ ng lint          # Linting
 4. Push al branch (`git push origin feature/AmazingFeature`)
 5. Abrir Pull Request
 
-## 📄 Licencia
-
-Este proyecto está licenciado bajo la Licencia MIT - ver el archivo [LICENSE.md](LICENSE.md) para detalles.
-
-## 📞 Soporte
-
-Para soporte técnico o preguntas:
-- Email: soporte@empresa.com
-- Issues: [GitHub Issues](link-to-issues)
 
 ## 🗺️ Roadmap
 
-- [ ] Módulo de notificaciones por email
 - [ ] Integración con APIs de proveedores de certificaciones
 - [ ] Dashboard avanzado con gráficos interactivos
 - [ ] Aplicación móvil
