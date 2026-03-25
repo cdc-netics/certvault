@@ -1,37 +1,3 @@
-## 🔒 Seguridad
-
-### Decisiones de Seguridad y Checklist Pre-producción
-
-#### Autenticación y Autorización
-
-**JWT Tokens:**
-- Duración: 4h (usuarios autenticados)
-- Algoritmo: HS256
-- Secret: variable `JWT_SECRET` en `.env` (puede generarse con `openssl rand -base64 32`)
-- Clock skew tolerance: ±60 segundos (ver manejo en backend/src/controllers/authController.ts)
-
-**RBAC (Control de Acceso Basado en Roles):**
-- **admin:** Acceso completo
-- **lider:** Gestión y visibilidad extendida
-- **tecnico:** Operación diaria
-- **reader:** Solo lectura
-
-**Validación de Roles:**
-- Middleware: `auth.ts` (autenticación y autorización)
-- Endpoints sensibles protegidos con validación de roles (`checkRole` en backend/src/middleware/auth.ts)
-
-#### Cifrado de Datos
-
-**Contraseñas de Usuarios:**
-- Hash con bcryptjs (12 salt rounds, ver backend/src/models/User.ts)
-- Nunca se almacenan contraseñas en texto plano
-
-**Datos sensibles:**
-- Variables de entorno para secretos y credenciales (`.env`)
-- Acceso restringido a uploads y recursos privados (ver rutas protegidas en backend/src/routes/)
-
-
-
 # Netics-CertiVault - Sistema de Gestión de Certificaciones Empresariales
 
 ### Netics-CertiVault
@@ -100,6 +66,40 @@ CertiVault/
     ├── package.json
     └── angular.json
 ```
+
+---
+
+## 🔒 Seguridad
+
+### Decisiones de Seguridad y Checklist Pre-producción
+
+#### Autenticación y Autorización
+
+**JWT Tokens:**
+- Duración: 4h (usuarios autenticados)
+- Algoritmo: HS256
+- Secret: variable `JWT_SECRET` en `.env` (puede generarse con `openssl rand -base64 32`)
+- Clock skew tolerance: ±60 segundos (ver manejo en backend/src/controllers/authController.ts)
+
+**RBAC (Control de Acceso Basado en Roles):**
+- **admin:** Acceso completo
+- **lider:** Gestión y visibilidad extendida
+- **tecnico:** Operación diaria
+- **reader:** Solo lectura
+
+**Validación de Roles:**
+- Middleware: `auth.ts` (autenticación y autorización)
+- Endpoints sensibles protegidos con validación de roles (`checkRole` en backend/src/middleware/auth.ts)
+
+#### Cifrado de Datos
+
+**Contraseñas de Usuarios:**
+- Hash con bcryptjs (12 salt rounds, ver backend/src/models/User.ts)
+- Nunca se almacenan contraseñas en texto plano
+
+**Datos sensibles:**
+- Variables de entorno para secretos y credenciales (`.env`)
+- Acceso restringido a uploads y recursos privados (ver rutas protegidas en backend/src/routes/)
 
 ---
 
