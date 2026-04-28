@@ -18,12 +18,8 @@ const smtpUser = process.env.SMTP_USER;
 const smtpPass = process.env.SMTP_PASSWORD;
 const smtpSecure = (process.env.SMTP_SECURE || 'false').toLowerCase() === 'true';
 
-if (!smtpHost) {
-  throw new Error('SMTP_HOST no esta configurado. Revisa tu archivo .env');
-}
-
 export const mailTransport = nodemailer.createTransport({
-  host: smtpHost,
+  host: smtpHost || 'localhost',
   port: smtpPort,
   secure: smtpSecure,
   auth: smtpUser && smtpPass ? { user: smtpUser, pass: smtpPass } : undefined,
@@ -35,6 +31,10 @@ export const mailTransport = nodemailer.createTransport({
 
 export const verifyMailer = async (): Promise<void> => {
   try {
+    if (!smtpHost) {
+      console.warn('SMTP_HOST no esta configurado. Se omitira verificacion del transporte .env.');
+      return;
+    }
     await mailTransport.verify();
     console.log('Transporte SMTP verificado');
   } catch (error) {

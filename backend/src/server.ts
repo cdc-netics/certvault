@@ -18,10 +18,12 @@ import authRoutes from './routes/auth';
 import userRoutes from './routes/users';
 import certificationRoutes from './routes/certifications';
 import dashboardRoutes from './routes/dashboard';
+import settingsRoutes from './routes/settings';
 
 // Importar middleware
 import { errorHandler } from './middleware/errorHandler';
 import { notFound } from './middleware/notFound';
+import { auditRequest } from './services/auditService';
 
 // Cargar variables de entorno sin depender del directorio desde el que se ejecute
 dotenv.config({
@@ -72,34 +74,39 @@ app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' }
 }));
 app.use(compression());
-app.use(morgan('combined'));
+app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev', {
+  skip: (req) => req.path === '/api/health' || req.path.startsWith('/uploads')
+}));
 
-// Rate limiting reforzado
-const limiter = rateLimit({
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000', 10), // 15 minutos
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100', 10),
-  standardHeaders: true,
-  legacyHeaders: false,
-  handler: (_req, res) => {
-    res.status(429).json({
-      success: false,
-      error: 'Demasiadas solicitudes desde esta IP, intenta de nuevo mas tarde.'
-    });
-  }
-});
-app.use(limiter);
+
+// Rate limiting DESACTIVADO para desarrollo
+// const limiter = rateLimit({
+//   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000', 10), // 15 minutos
+//   max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100', 10),
+//   standardHeaders: true,
+//   legacyHeaders: false,
+//   handler: (_req, res) => {
+//     res.status(429).json({
+//       success: false,
+//       error: 'Demasiadas solicitudes desde esta IP, intenta de nuevo mas tarde.'
+//     });
+//   }
+// });
+// app.use(limiter);
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(auditRequest);
 
-// Servir archivos estaticos (uploads)
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+// Servir solo avatares publicos. Los certificados se entregan por endpoint autenticado.
+app.use('/uploads/avatars', express.static(path.join(__dirname, '../uploads/avatars')));
 
 // Rutas de la API
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/certifications', certificationRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/settings', settingsRoutes);
 
 // Ruta de salud con informacion de base de datos
 app.get('/api/health', (req, res) => {

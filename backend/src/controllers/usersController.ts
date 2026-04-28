@@ -1,7 +1,9 @@
+import crypto from 'crypto';
 import { Response } from 'express';
 import { User, UserRole, Department, Permission } from '../models/User';
 import { AuthRequest } from '../middleware/auth';
 import { saveBase64Avatar } from '../utils/avatar';
+import { sendVerificationEmail } from '../services/emailService';
 
 interface CreateUserRequest {
   username: string;
@@ -47,6 +49,13 @@ interface UsersQuery {
   isActive?: boolean;
   departmentLeader?: boolean;
 }
+
+const VERIFY_TOKEN_EXP_MINUTES = Number(process.env.VERIFY_EMAIL_EXPIRE_MINUTES || 60);
+
+const buildVerifyLink = (token: string, email: string): string => {
+  const base = (process.env.FRONTEND_URL || 'http://localhost:4200').replace(/\/$/, '');
+  return `${base}/verify-email?token=${token}&email=${encodeURIComponent(email)}`;
+};
 
 export const getUsers = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -215,13 +224,32 @@ export const createUser = async (req: AuthRequest, res: Response): Promise<void>
       return;
     }
 
+    const verificationToken = crypto.randomBytes(32).toString('hex');
+    const hashedVerificationToken = crypto.createHash('sha256').update(verificationToken).digest('hex');
+
     const newUser = new User({
       ...userData,
       email: userData.email.toLowerCase(),
+      isVerified: false,
+      verificationToken: hashedVerificationToken,
+      verificationExpires: new Date(Date.now() + VERIFY_TOKEN_EXP_MINUTES * 60 * 1000),
       createdBy: currentUser._id
     });
 
     await newUser.save();
+
+    let emailWarning = '';
+    try {
+      await sendVerificationEmail({
+        to: newUser.email,
+        name: newUser.firstName || newUser.username,
+        verifyLink: buildVerifyLink(verificationToken, newUser.email),
+        expiresInMinutes: VERIFY_TOKEN_EXP_MINUTES
+      });
+    } catch (emailError) {
+      console.error('Usuario creado, pero fallo el envio de verificacion:', emailError);
+      emailWarning = ' No se pudo enviar el correo de verificacion.';
+    }
 
     const userResponse = await User.findById(newUser._id)
       .select('-password -refreshToken')
@@ -230,7 +258,7 @@ export const createUser = async (req: AuthRequest, res: Response): Promise<void>
     res.status(201).json({
       success: true,
       data: userResponse,
-      message: 'Usuario creado exitosamente'
+      message: `Usuario creado exitosamente.${emailWarning}`
     });
   } catch (error) {
     console.error('Error creando usuario:', error);
@@ -432,11 +460,16 @@ export const deleteUser = async (req: AuthRequest, res: Response): Promise<void>
       }
     }
 
+    // Eliminar usuario
     await User.findByIdAndDelete(id);
+
+    // Eliminar certificaciones asociadas
+    const { Certification } = require('../models/Certification');
+    await Certification.deleteMany({ employeeId: id });
 
     res.json({
       success: true,
-      message: 'Usuario eliminado exitosamente'
+      message: 'Usuario y certificaciones asociadas eliminados exitosamente'
     });
   } catch (error) {
     console.error('Error eliminando usuario:', error);

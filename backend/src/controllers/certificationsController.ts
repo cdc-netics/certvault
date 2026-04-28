@@ -7,8 +7,24 @@ import {
   CertificationStatus
 } from '../models/Certification';
 import { AuthRequest } from '../middleware/auth';
-import { UserRole } from '../models/User';
+import { User, UserRole } from '../models/User';
 
+const canAccessCertification = (certification: ICertification, user: any): boolean => {
+  if (!user) return false;
+  if (user.role === UserRole.ADMIN) return true;
+
+  const isOwner =
+    certification.employeeId?.toString() === user._id?.toString() ||
+    certification.createdBy?.toString() === user._id?.toString();
+
+  if (isOwner) return true;
+
+  return (
+    user.role === UserRole.LIDER &&
+    (certification.department === user.department ||
+      (user.managedDepartments || []).includes(certification.department as any))
+  );
+};
 
 const normalizeTags = (tags?: unknown): string[] => {
   if (!tags) return [];
@@ -102,11 +118,44 @@ export const getCertifications = async (req: Request, res: Response): Promise<vo
       ];
     }
 
+    const authReq = req as any;
+    const currentUser = authReq.user;
+    const userFilter: Record<string, unknown> = {};
+
+    if (!currentUser || (currentUser.role !== UserRole.ADMIN && currentUser.role !== UserRole.LIDER)) {
+      userFilter.isActive = true;
+    } else if (currentUser.role === UserRole.LIDER) {
+      const allowedDepartments = [currentUser.department, ...(currentUser.managedDepartments || [])];
+      userFilter.$or = [
+        { isActive: true },
+        { isActive: false, department: { $in: allowedDepartments } }
+      ];
+    }
+
+    if (Object.keys(userFilter).length > 0) {
+      const visibleUsers = await User.find(userFilter, { _id: 1 }).lean();
+      filter.employeeId = { $in: visibleUsers.map(user => user._id) };
+    }
+
     const total = await Certification.countDocuments(filter);
-    const certifications = await Certification.find(filter)
+    const certificationsRaw = await Certification.find(filter)
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
-      .limit(limit);
+      .limit(limit)
+      .lean();
+
+    const userIds = certificationsRaw.map(c => c.employeeId);
+    const users = await User.find({ _id: { $in: userIds } }, { _id: 1, isActive: 1, department: 1 }).lean();
+    const userMap = Object.fromEntries(users.map((u: any) => [u._id.toString(), u]));
+
+    const certifications = certificationsRaw.map(cert => {
+      const user = userMap[cert.employeeId?.toString()];
+      return {
+        ...cert,
+        userIsActive: user ? user.isActive : false,
+        userDepartment: user ? user.department : undefined
+      };
+    });
 
     res.json({
       success: true,
@@ -130,11 +179,16 @@ export const getCertifications = async (req: Request, res: Response): Promise<vo
   }
 };
 
-export const getCertificationById = async (req: Request, res: Response): Promise<void> => {
+export const getCertificationById = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const certification = await Certification.findById(req.params.id);
     if (!certification) {
       res.status(404).json({ success: false, error: 'Certificación no encontrada' });
+      return;
+    }
+
+    if (!canAccessCertification(certification, req.user)) {
+      res.status(403).json({ success: false, error: 'No autorizado para acceder a esta certificación' });
       return;
     }
 
@@ -143,6 +197,49 @@ export const getCertificationById = async (req: Request, res: Response): Promise
     res.status(500).json({
       success: false,
       error: 'Error al obtener la certificación'
+    });
+  }
+};
+
+export const getCertificationFile = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const certification = await Certification.findById(req.params.id);
+    if (!certification) {
+      res.status(404).json({ success: false, error: 'Certificación no encontrada' });
+      return;
+    }
+
+    if (!canAccessCertification(certification, req.user)) {
+      res.status(403).json({ success: false, error: 'No autorizado para acceder a este archivo' });
+      return;
+    }
+
+    const certificateUrl = certification.certificateUrl || '';
+    if (!certificateUrl.startsWith('/uploads/certificates/')) {
+      res.status(404).json({ success: false, error: 'Archivo de certificado no disponible' });
+      return;
+    }
+
+    const fileName = path.basename(certificateUrl);
+    const filePath = path.resolve(__dirname, '../../uploads/certificates', fileName);
+    const uploadsRoot = path.resolve(__dirname, '../../uploads/certificates');
+    const relativePath = path.relative(uploadsRoot, filePath);
+
+    if (relativePath.startsWith('..') || path.isAbsolute(relativePath) || !fs.existsSync(filePath)) {
+      res.status(404).json({ success: false, error: 'Archivo de certificado no encontrado' });
+      return;
+    }
+
+    const downloadName = `${certification.certificateNumber || certification.title || 'certificado'}${path.extname(fileName)}`;
+    const disposition = req.query.download === '1' ? 'attachment' : 'inline';
+
+    res.setHeader('Content-Disposition', `${disposition}; filename="${downloadName.replace(/"/g, '')}"`);
+    res.sendFile(filePath);
+  } catch (error) {
+    console.error('Error getting certification file:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Error al obtener el archivo de certificación'
     });
   }
 };
@@ -160,18 +257,7 @@ export const updateCertification = async (req: AuthRequest, res: Response): Prom
       return;
     }
 
-    const isOwner =
-      certification.employeeId?.toString() === req.user._id?.toString() ||
-      certification.createdBy?.toString() === req.user._id?.toString();
-
-    const isDepartmentLeader =
-      req.user.role === UserRole.LIDER &&
-      (certification.department === req.user.department ||
-        (req.user.managedDepartments || []).includes(certification.department as any));
-
-    const isAdmin = req.user.role === UserRole.ADMIN;
-
-    if (!isOwner && !isDepartmentLeader && !isAdmin) {
+    if (!canAccessCertification(certification, req.user)) {
       res.status(403).json({
         success: false,
         error: 'Solo el propietario o el líder de su departamento pueden actualizar esta certificación'

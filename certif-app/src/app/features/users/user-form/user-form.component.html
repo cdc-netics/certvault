@@ -110,7 +110,11 @@
                 <div class="invalid-feedback" *ngIf="password?.invalid && password?.touched">
                   <small *ngIf="password?.errors?.['required']">La contraseña es requerida</small>
                   <small *ngIf="password?.errors?.['minlength']">Minimo 6 caracteres</small>
+                  <small *ngIf="password?.errors?.['pattern']">Debe contener al menos una mayuscula, una minuscula y un numero</small>
                 </div>
+                <small class="form-text text-muted">
+                  Prerequisito: la contraseña debe contener al menos una mayuscula, una minuscula y un numero.
+                </small>
                 <small class="form-text text-muted" *ngIf="isEditMode">
                   Dejar en blanco mantiene la contraseña actual.
                 </small>

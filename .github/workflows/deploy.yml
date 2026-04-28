@@ -1,38 +1,149 @@
-name: Deploy automático a producción
+name: Deploy automatico a produccion
 
 on:
   push:
     branches: [main]
   workflow_dispatch:
 
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: self-hosted
+    timeout-minutes: 20
+
+    env:
+      APP_DIR: /home/cdc/certvault
+      BUILD_DIR: /home/cdc/certvault-build
+      BACKUP_DIR: /home/cdc/certvault-backup
+      PM2_APP: certif-app-backend
+      HEALTH_URL: http://127.0.0.1:3000/api/health
 
     steps:
-      - name: Sync repo
+      - name: Build release outside production
+        shell: bash
         run: |
-          cd /home/cdc/certvault
-          git fetch origin
-          git reset --hard origin/main
-          git clean -fd
+          set -Eeuo pipefail
 
-      - name: Install backend deps
-        run: |
-          cd /home/cdc/certvault/backend
-          npm ci
+          rm -rf "$BUILD_DIR"
+          REPO_URL="$(git -C "$APP_DIR" config --get remote.origin.url)"
+          git clone --no-checkout "$REPO_URL" "$BUILD_DIR"
+          cd "$BUILD_DIR"
+          git fetch --depth 1 origin "${GITHUB_SHA}"
+          git checkout --force FETCH_HEAD
 
-      - name: Build backend
-        run: |
-          cd /home/cdc/certvault/backend
-          npm run build
-
-      - name: Build frontend
-        run: |
-          cd /home/cdc/certvault/certif-app
+          cd "$BUILD_DIR/backend"
           npm ci
           npm run build
 
-      - name: Restart
+          cd "$BUILD_DIR/certif-app"
+          npm ci
+          npm run build
+
+      - name: Snapshot current production
+        shell: bash
         run: |
-          pm2 restart certif-app-backend
+          set -Eeuo pipefail
+
+          rm -rf "$BACKUP_DIR"
+          mkdir -p "$BACKUP_DIR/backend" "$BACKUP_DIR/certif-app"
+
+          if [ -d "$APP_DIR/backend/dist" ]; then
+            rsync -a --delete "$APP_DIR/backend/dist/" "$BACKUP_DIR/backend/dist/"
+          fi
+
+          if [ -d "$APP_DIR/backend/node_modules" ]; then
+            rsync -a --delete "$APP_DIR/backend/node_modules/" "$BACKUP_DIR/backend/node_modules/"
+          fi
+
+          if [ -d "$APP_DIR/backend/resources" ]; then
+            rsync -a --delete "$APP_DIR/backend/resources/" "$BACKUP_DIR/backend/resources/"
+          fi
+
+          if [ -d "$APP_DIR/certif-app/dist" ]; then
+            rsync -a --delete "$APP_DIR/certif-app/dist/" "$BACKUP_DIR/certif-app/dist/"
+          fi
+
+          cp "$APP_DIR/backend/package.json" "$BACKUP_DIR/backend/package.json"
+          cp "$APP_DIR/backend/package-lock.json" "$BACKUP_DIR/backend/package-lock.json"
+          cp "$APP_DIR/backend/ecosystem.config.js" "$BACKUP_DIR/backend/ecosystem.config.js"
+
+      - name: Publish built artifacts
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          rsync -a --delete "$BUILD_DIR/backend/dist/" "$APP_DIR/backend/dist/"
+          rsync -a --delete "$BUILD_DIR/backend/node_modules/" "$APP_DIR/backend/node_modules/"
+          if [ -d "$BUILD_DIR/backend/resources" ]; then
+            rsync -a --delete "$BUILD_DIR/backend/resources/" "$APP_DIR/backend/resources/"
+          fi
+          cp "$BUILD_DIR/backend/package.json" "$APP_DIR/backend/package.json"
+          cp "$BUILD_DIR/backend/package-lock.json" "$APP_DIR/backend/package-lock.json"
+          cp "$BUILD_DIR/backend/ecosystem.config.js" "$APP_DIR/backend/ecosystem.config.js"
+
+          rsync -a --delete "$BUILD_DIR/certif-app/dist/" "$APP_DIR/certif-app/dist/"
+
+      - name: Reload backend and verify health
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          if pm2 describe "$PM2_APP" >/dev/null 2>&1; then
+            pm2 reload "$PM2_APP" --update-env
+          else
+            cd "$APP_DIR/backend"
+            pm2 start ecosystem.config.js --only "$PM2_APP"
+          fi
+
+          for attempt in {1..20}; do
+            if curl -fsS "$HEALTH_URL" >/dev/null; then
+              pm2 save
+              exit 0
+            fi
+            sleep 2
+          done
+
+          echo "Health check failed after deploy"
+          exit 1
+
+      - name: Rollback on failure
+        if: failure()
+        shell: bash
+        run: |
+          set +e
+
+          echo "Rolling back previous production artifacts..."
+
+          if [ -d "$BACKUP_DIR/backend/dist" ]; then
+            rsync -a --delete "$BACKUP_DIR/backend/dist/" "$APP_DIR/backend/dist/"
+          fi
+
+          if [ -d "$BACKUP_DIR/backend/node_modules" ]; then
+            rsync -a --delete "$BACKUP_DIR/backend/node_modules/" "$APP_DIR/backend/node_modules/"
+          fi
+
+          if [ -d "$BACKUP_DIR/backend/resources" ]; then
+            rsync -a --delete "$BACKUP_DIR/backend/resources/" "$APP_DIR/backend/resources/"
+          fi
+
+          if [ -f "$BACKUP_DIR/backend/package.json" ]; then
+            cp "$BACKUP_DIR/backend/package.json" "$APP_DIR/backend/package.json"
+          fi
+
+          if [ -f "$BACKUP_DIR/backend/package-lock.json" ]; then
+            cp "$BACKUP_DIR/backend/package-lock.json" "$APP_DIR/backend/package-lock.json"
+          fi
+
+          if [ -f "$BACKUP_DIR/backend/ecosystem.config.js" ]; then
+            cp "$BACKUP_DIR/backend/ecosystem.config.js" "$APP_DIR/backend/ecosystem.config.js"
+          fi
+
+          if [ -d "$BACKUP_DIR/certif-app/dist" ]; then
+            rsync -a --delete "$BACKUP_DIR/certif-app/dist/" "$APP_DIR/certif-app/dist/"
+          fi
+
+          pm2 reload "$PM2_APP" --update-env || pm2 restart "$PM2_APP" --update-env
+          pm2 save

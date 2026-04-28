@@ -12,6 +12,7 @@ import {
   getCertificationStats,
   getExpiringCertifications,
   getUserCertifications,
+  getCertificationFile,
   uploadCertificate,
   searchCertifications,
   getTechnologies,
@@ -78,6 +79,7 @@ router.get('/user/:userId', getUserCertifications);
 router.get('/search', searchCertifications);
 router.get('/technologies', getTechnologies);
 router.get('/departments', getDepartments);
+router.get('/:id/file', getCertificationFile);
 router.get('/:id', getCertificationById);
 router.put('/:id', updateCertification);
 router.delete('/:id', deleteCertification);

@@ -189,4 +189,12 @@ export class CertificationService {
   downloadFile(url: string): Observable<Blob> {
     return this.http.get(url, { responseType: 'blob' }).pipe(catchError(this.handleError));
   }
+
+  getCertificationFile(id: string, download = false): Observable<Blob> {
+    const params = download ? new HttpParams().set('download', '1') : undefined;
+    return this.http.get(`${this.API_URL}/${id}/file`, {
+      params,
+      responseType: 'blob'
+    }).pipe(catchError(this.handleError));
+  }
 }
