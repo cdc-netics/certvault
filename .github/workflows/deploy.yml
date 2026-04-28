@@ -20,6 +20,7 @@ jobs:
       BACKUP_DIR: /home/cdc/certvault-backup
       PM2_APP: certif-app-backend
       HEALTH_URL: http://127.0.0.1:3000/api/health
+      SETTINGS_SMOKE_URL: http://127.0.0.1:3000/api/settings/smtp-profiles
 
     steps:
       - name: Build release outside production
@@ -101,13 +102,18 @@ jobs:
 
           for attempt in {1..20}; do
             if curl -fsS "$HEALTH_URL" >/dev/null; then
-              pm2 save
-              exit 0
+              settings_status="$(curl -sS -o /tmp/certvault-settings-smoke.json -w "%{http_code}" "$SETTINGS_SMOKE_URL" || true)"
+              if [ "$settings_status" != "404" ]; then
+                pm2 save
+                exit 0
+              fi
+              echo "Settings route smoke check returned 404"
+              cat /tmp/certvault-settings-smoke.json || true
             fi
             sleep 2
           done
 
-          echo "Health check failed after deploy"
+          echo "Health or settings route check failed after deploy"
           exit 1
 
       - name: Rollback on failure
