@@ -14,6 +14,41 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 let lastAvatarUrl: string | null = null;
+let demoBranding = {
+  appName: 'CertiVault',
+  companyName: 'Netics',
+  primaryColor: '#0d6efd',
+  secondaryColor: '#6c757d',
+  sidebarLogo: '',
+  loginLogo: '',
+  reportLogo: '',
+  reportFooter: 'Reporte generado por CertiVault'
+};
+let demoSmtpProfiles: any[] = [];
+const demoAuditLogs = [
+  {
+    _id: 'audit-1',
+    action: 'login_success',
+    resource: 'auth',
+    userEmail: 'admin@empresa.com',
+    method: 'POST',
+    path: '/api/auth/login',
+    statusCode: 200,
+    ip: '127.0.0.1',
+    createdAt: new Date().toISOString()
+  },
+  {
+    _id: 'audit-2',
+    action: 'export',
+    resource: 'backup',
+    userEmail: 'admin@empresa.com',
+    method: 'GET',
+    path: '/api/settings/backup/export',
+    statusCode: 200,
+    ip: '127.0.0.1',
+    createdAt: new Date().toISOString()
+  }
+];
 
 // Rate limiting
 const limiter = rateLimit({
@@ -31,7 +66,9 @@ app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' }
 }));
 app.use(compression());
-app.use(morgan('combined'));
+app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev', {
+  skip: (req) => req.path === '/api/health' || req.path.startsWith('/uploads')
+}));
 app.use(limiter);
 app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:4200',
@@ -428,6 +465,171 @@ app.get('/api/dashboard', (req, res) => {
       expiringSoon: []
     }
   });
+});
+
+app.get('/api/settings/smtp-profiles', (req, res) => {
+  res.json({ success: true, data: demoSmtpProfiles });
+});
+
+app.post('/api/settings/smtp-profiles', (req, res) => {
+  const profile = {
+    id: `${Date.now()}`,
+    ...req.body,
+    hasPassword: Boolean(req.body.password),
+    isActive: Boolean(req.body.isActive),
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+  if (profile.isActive) {
+    demoSmtpProfiles = demoSmtpProfiles.map(item => ({ ...item, isActive: false }));
+  }
+  demoSmtpProfiles.push(profile);
+  res.status(201).json({ success: true, data: profile, message: 'Perfil SMTP creado exitosamente (demo)' });
+});
+
+app.put('/api/settings/smtp-profiles/:id', (req, res) => {
+  const index = demoSmtpProfiles.findIndex(profile => profile.id === req.params.id);
+  if (index < 0) {
+    res.status(404).json({ success: false, error: 'Perfil SMTP no encontrado' });
+    return;
+  }
+  if (req.body.isActive) {
+    demoSmtpProfiles = demoSmtpProfiles.map(item => ({ ...item, isActive: false }));
+  }
+  demoSmtpProfiles[index] = {
+    ...demoSmtpProfiles[index],
+    ...req.body,
+    hasPassword: demoSmtpProfiles[index].hasPassword || Boolean(req.body.password),
+    updatedAt: new Date().toISOString()
+  };
+  res.json({ success: true, data: demoSmtpProfiles[index], message: 'Perfil SMTP actualizado exitosamente (demo)' });
+});
+
+app.delete('/api/settings/smtp-profiles/:id', (req, res) => {
+  demoSmtpProfiles = demoSmtpProfiles.filter(profile => profile.id !== req.params.id);
+  res.json({ success: true, message: 'Perfil SMTP eliminado exitosamente (demo)' });
+});
+
+app.post('/api/settings/smtp-profiles/:id/activate', (req, res) => {
+  let selectedProfile: any | undefined;
+  demoSmtpProfiles = demoSmtpProfiles.map(profile => {
+    const isActive = profile.id === req.params.id;
+    const updated = { ...profile, isActive };
+    if (isActive) selectedProfile = updated;
+    return updated;
+  });
+  if (!selectedProfile) {
+    res.status(404).json({ success: false, error: 'Perfil SMTP no encontrado' });
+    return;
+  }
+  res.json({ success: true, data: selectedProfile, message: 'Perfil SMTP activado exitosamente (demo)' });
+});
+
+app.post('/api/settings/smtp-profiles/:id/deactivate', (req, res) => {
+  const profile = demoSmtpProfiles.find(item => item.id === req.params.id);
+  if (!profile) {
+    res.status(404).json({ success: false, error: 'Perfil SMTP no encontrado' });
+    return;
+  }
+  profile.isActive = false;
+  res.json({ success: true, data: profile, message: 'Perfil SMTP desactivado exitosamente (demo)' });
+});
+
+app.post('/api/settings/smtp-profiles/:id/test', (req, res) => {
+  const profile = demoSmtpProfiles.find(item => item.id === req.params.id);
+  if (!profile) {
+    res.status(404).json({ success: false, error: 'Perfil SMTP no encontrado' });
+    return;
+  }
+  profile.lastTestAt = new Date().toISOString();
+  profile.lastTestSuccess = true;
+  profile.lastTestMessage = req.body.to
+    ? `Conexion simulada y correo demo enviado a ${req.body.to}`
+    : 'Conexion simulada correctamente';
+  res.json({ success: true, data: profile, message: profile.lastTestMessage });
+});
+
+app.get('/api/settings/audit-logs', (req, res) => {
+  res.json({
+    success: true,
+    data: {
+      logs: demoAuditLogs,
+      pagination: {
+        currentPage: Number(req.query.page) || 1,
+        totalPages: 1,
+        totalItems: demoAuditLogs.length
+      }
+    }
+  });
+});
+
+app.get('/api/settings/backup/summary', (req, res) => {
+  res.json({
+    success: true,
+    data: {
+      users: 5,
+      certifications: 0,
+      smtpProfiles: demoSmtpProfiles.length,
+      auditLogs: demoAuditLogs.length
+    }
+  });
+});
+
+app.get('/api/settings/backup/export', (req, res) => {
+  const backup = {
+    exportedAt: new Date().toISOString(),
+    mode: 'demo',
+    collections: {
+      users: 5,
+      certifications: [],
+      smtpProfiles: demoSmtpProfiles,
+      branding: demoBranding
+    }
+  };
+  res.setHeader('Content-Type', 'application/json');
+  res.setHeader('Content-Disposition', `attachment; filename="certivault-demo-backup-${Date.now()}.json"`);
+  res.send(JSON.stringify(backup, null, 2));
+});
+
+app.get('/api/settings/branding', (req, res) => {
+  res.json({ success: true, data: demoBranding });
+});
+
+app.put('/api/settings/branding', (req, res) => {
+  demoBranding = { ...demoBranding, ...req.body };
+  res.json({ success: true, data: demoBranding, message: 'Branding actualizado exitosamente (demo)' });
+});
+
+app.get('/api/settings/reports/overview', (req, res) => {
+  res.json({
+    success: true,
+    data: {
+      totals: {
+        totalCertifications: 0,
+        active: 0,
+        expired: 0,
+        expiringSoon: 0,
+        totalUsers: 5,
+        activeUsers: 5
+      },
+      byDepartment: [
+        { _id: 'TI', count: 2 },
+        { _id: 'RRHH', count: 1 },
+        { _id: 'Finanzas', count: 1 },
+        { _id: 'Ventas', count: 1 }
+      ],
+      byStatus: [],
+      byProvider: [],
+      byTechnology: []
+    }
+  });
+});
+
+app.get('/api/settings/reports/export', (req, res) => {
+  const csv = '"Titulo","Empleado","Departamento","Proveedor","Tecnologia","Estado","Emision","Expiracion"\n';
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="certivault-demo-reporte-${Date.now()}.csv"`);
+  res.send(csv);
 });
 
 // Ruta de salud

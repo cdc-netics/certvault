@@ -1,6 +1,7 @@
 import { readFile } from 'fs/promises';
 import path from 'path';
-import { mailTransport, verifyMailer } from '../config/mailer';
+import '../config/mailer';
+import { getActiveMailer } from './smtpProfileService';
 
 interface PasswordResetPayload {
   to: string;
@@ -27,7 +28,8 @@ const getResetTemplate = async (): Promise<string> => {
 };
 
 export const sendPasswordResetEmail = async (payload: PasswordResetPayload): Promise<void> => {
-  await verifyMailer();
+  const mailer = await getActiveMailer();
+  await mailer.transporter.verify();
   const template = await getResetTemplate();
   const htmlBody = template
     ? template
@@ -36,8 +38,8 @@ export const sendPasswordResetEmail = async (payload: PasswordResetPayload): Pro
         .replace(/{{expiresIn}}/g, payload.expiresInMinutes.toString())
     : undefined;
 
-  await mailTransport.sendMail({
-    from: process.env.SMTP_FROM || payload.name || 'Soporte CertiVault',
+  await mailer.transporter.sendMail({
+    from: mailer.from,
     to: payload.to,
     subject: 'Restablecer tu contraseña - CertiVault',
     html: htmlBody,
@@ -73,7 +75,8 @@ const getVerifyTemplate = async (): Promise<string> => {
 };
 
 export const sendVerificationEmail = async (payload: VerifyEmailPayload): Promise<void> => {
-  await verifyMailer();
+  const mailer = await getActiveMailer();
+  await mailer.transporter.verify();
   const template = await getVerifyTemplate();
   const htmlBody = template
     ? template
@@ -82,8 +85,8 @@ export const sendVerificationEmail = async (payload: VerifyEmailPayload): Promis
         .replace(/{{expiresIn}}/g, payload.expiresInMinutes.toString())
     : undefined;
 
-  await mailTransport.sendMail({
-    from: process.env.SMTP_FROM || 'CertiVault',
+  await mailer.transporter.sendMail({
+    from: mailer.from,
     to: payload.to,
     subject: 'Confirma tu cuenta - CertiVault',
     html: htmlBody,

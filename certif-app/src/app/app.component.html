@@ -25,6 +25,10 @@
         <i class="fas fa-user me-2"></i>
         <span class="link-text">Mi Perfil</span>
       </a>
+      <a class="nav-link" routerLink="/settings" routerLinkActive="active" *ngIf="authService.isAdmin()">
+        <i class="fas fa-cog me-2"></i>
+        <span class="link-text">Configuraciones</span>
+      </a>
     </nav>
     <div class="sidebar-footer mt-auto">
       <button class="btn btn-outline-light w-100" (click)="logout()">

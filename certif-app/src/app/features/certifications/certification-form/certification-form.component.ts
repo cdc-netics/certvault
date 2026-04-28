@@ -210,7 +210,6 @@ import { BackButtonComponent } from '../../../shared/components/back-button/back
                         class="form-control"
                         formControlName="hasBadge"
                       >
-                        <option value="">Badge?</option>
                         <option value="true">Si</option>
                         <option value="false">No</option>
                       </select>
@@ -257,9 +256,9 @@ import { BackButtonComponent } from '../../../shared/components/back-button/back
                     >
                     <div class="mt-2" *ngIf="existingCertificateUrl">
                       <small class="form-text text-muted d-block">Archivo actual: {{ existingCertificateName || 'certificado' }}</small>
-                      <a class="btn btn-link btn-sm ps-0" [href]="getCertificateUrl(existingCertificateUrl)" target="_blank" rel="noopener">
+                      <button class="btn btn-link btn-sm ps-0" type="button" (click)="openExistingCertificate()">
                         <i class="fas fa-eye me-1"></i> Ver certificado actual
-                      </a>
+                      </button>
                     </div>
                     <small class="form-text text-muted">Formatos permitidos: PDF, JPG, PNG (max. 5MB)</small>
                   </div>
@@ -353,7 +352,7 @@ export class CertificationFormComponent implements OnInit {
       certificateNumber: [''],
       validationUrl: [''],
       tagsInput: [''],
-      hasBadge: ['']
+      hasBadge: ['false']
     });
   }
 
@@ -576,8 +575,50 @@ export class CertificationFormComponent implements OnInit {
   }
 
   getCertificateUrl(url: string): string {
-    if (url.startsWith('http')) return url;
-    const backendBase = 'http://10.0.100.14:3000';
-    return `${backendBase}${url.startsWith('/') ? '' : '/'}${url}`;
+    const rawUrl = url.trim();
+    if (rawUrl.startsWith('/uploads/')) return rawUrl;
+
+    if (rawUrl.startsWith('http')) {
+      try {
+        const parsed = new URL(rawUrl);
+        if (parsed.pathname.startsWith('/uploads/')) {
+          return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+        }
+      } catch {
+        return rawUrl;
+      }
+      return rawUrl;
+    }
+
+    return rawUrl.startsWith('/') ? rawUrl : `/${rawUrl}`;
+  }
+
+  openExistingCertificate(): void {
+    if (!this.certificationId || !this.existingCertificateUrl) return;
+
+    if (!this.isInternalCertificateUrl(this.existingCertificateUrl)) {
+      const url = this.getCertificateUrl(this.existingCertificateUrl);
+      if (url.startsWith('https://')) {
+        window.open(url, '_blank', 'noopener');
+        return;
+      }
+      this.errorMessage = 'El enlace externo no es seguro. Debe usar HTTPS.';
+      return;
+    }
+
+    this.certificationService.getCertificationFile(this.certificationId).subscribe({
+      next: (blob) => {
+        const objectUrl = URL.createObjectURL(blob);
+        window.open(objectUrl, '_blank', 'noopener');
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+      },
+      error: () => {
+        this.errorMessage = 'No se pudo abrir el certificado';
+      }
+    });
+  }
+
+  private isInternalCertificateUrl(url: string): boolean {
+    return this.getCertificateUrl(url).startsWith('/uploads/certificates/');
   }
 }

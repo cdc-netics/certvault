@@ -33,6 +33,7 @@ export class UserFormComponent implements OnInit, OnDestroy {
   canAdminChangePassword = false;
 
   private readonly destroy$ = new Subject<void>();
+  private readonly passwordComplexityRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$/;
   currentUser: User | null = null;
 
   constructor(
@@ -148,8 +149,8 @@ export class UserFormComponent implements OnInit, OnDestroy {
     if (!passwordControl) return;
 
     const validators = this.isEditMode
-      ? [Validators.minLength(6)]
-      : [Validators.required, Validators.minLength(6)];
+      ? [Validators.minLength(6), Validators.pattern(this.passwordComplexityRegex)]
+      : [Validators.required, Validators.minLength(6), Validators.pattern(this.passwordComplexityRegex)];
 
     passwordControl.setValidators(validators);
     passwordControl.updateValueAndValidity({ emitEvent: false });

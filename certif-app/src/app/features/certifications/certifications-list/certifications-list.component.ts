@@ -7,8 +7,8 @@ import { CertificationService } from '../../../core/services/certification.servi
 import { BackButtonComponent } from '../../../shared/components/back-button/back-button.component';
 import { AuthService } from '../../../core/services/auth.service';
 import { Certification, CertificationStatus, CertificationFilter } from '../../../core/models/certification.model';
-import { debounceTime, distinctUntilChanged } from 'rxjs/operators';
-import { Subscription } from 'rxjs';
+import { debounceTime, distinctUntilChanged, takeUntil } from 'rxjs/operators';
+import { Subject, Subscription } from 'rxjs';
 
 @Component({
   selector: 'app-certifications-list',
@@ -150,8 +150,57 @@ import { Subscription } from 'rxjs';
 
       <!-- Listado -->
       <div *ngIf="!isLoading && certifications.length > 0">
+        <!-- ********************* -->
+
+        <!-- Certificaciones NO DISPONIBLES (usuarios inactivos) -->
+<div *ngIf="(authService.isAdmin() || authService.isLeader()) && unavailableCertifications.length > 0" class="mb-4">
+  <div class="accordion" id="unavailableAccordion">
+    <div class="accordion-item">
+      <h2 class="accordion-header" id="headingUnavailable">
+        <button class="accordion-button collapsed bg-light text-secondary" type="button" (click)="showUnavailable = !showUnavailable" [attr.aria-expanded]="showUnavailable">
+          <i class="fas fa-archive me-2"></i>
+          Certificaciones NO DISPONIBLES (usuarios desactivados)
+          <span class="badge bg-secondary ms-2">{{ unavailableCertifications.length }}</span>
+        </button>
+      </h2>
+      <div [hidden]="!showUnavailable" class="accordion-collapse collapse show" aria-labelledby="headingUnavailable">
+        <div class="accordion-body">
+          <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-3">
+            <div class="col" *ngFor="let cert of unavailableCertifications">
+              <div class="card certification-card h-100 bg-light text-muted border-secondary" style="opacity:0.7;">
+                <div class="card-body">
+                  <div class="d-flex justify-content-between align-items-start mb-2">
+                    <h5 class="card-title mb-0">{{ cert.title }}</h5>
+                    <span class="badge bg-secondary text-uppercase">{{ cert.level }}</span>
+                  </div>
+                  <p class="text-muted mb-2">
+                    <i class="fas fa-building me-1"></i>{{ cert.provider }}
+                  </p>
+                  <p class="text-muted mb-2">
+                    <i class="fas fa-user me-1"></i>{{ cert.employeeName }} · {{ cert.department }}
+                  </p>
+                  <p class="text-muted mb-2">
+                    <i class="fas fa-calendar me-1"></i>{{ cert.issueDate | date:'yyyy-MM-dd' }}
+                    <span *ngIf="cert.expirationDate"> · Vence: {{ cert.expirationDate | date:'yyyy-MM-dd' }}</span>
+                  </p>
+                  <span class="badge bg-secondary text-uppercase">{{ cert.type }}</span>
+                  <div class="mt-3 d-flex flex-wrap gap-2 align-items-center">
+                    <span class="badge bg-secondary">No disponible</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
         <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-3">
-          <div class="col" *ngFor="let cert of certifications">
+        <!-- <div class="col" *ngFor="let cert of certifications"> -->
+          <div class="col" *ngFor="let cert of availableCertifications ">
             <div class="card certification-card h-100">
               <div class="card-body">
                 <div class="d-flex justify-content-between align-items-start mb-2">
@@ -174,9 +223,9 @@ import { Subscription } from 'rxjs';
                     <button class="btn btn-sm btn-outline-secondary" type="button" (click)="downloadCertificate(cert)">
                       <i class="fas fa-download me-1"></i> Descargar
                     </button>
-                    <a class="btn btn-sm btn-outline-primary" [href]="getCertificateUrl(cert)" target="_blank" rel="noopener">
+                    <button class="btn btn-sm btn-outline-primary" type="button" (click)="openCertificate(cert)">
                       <i class="fas fa-eye me-1"></i> Ver Certificacion/Badge
-                    </a>
+                    </button>
                   </ng-container>
                   <button
                     class="btn btn-sm btn-outline-info"
@@ -276,9 +325,9 @@ import { Subscription } from 'rxjs';
                 </div>
               </div>
               <div class="d-flex gap-2 flex-wrap">
-                <a *ngIf="selectedCertification?.certificateUrl" class="btn btn-outline-primary btn-sm" [href]="getCertificateUrl(selectedCertification!)" target="_blank" rel="noopener">
+                <button *ngIf="selectedCertification?.certificateUrl" class="btn btn-outline-primary btn-sm" type="button" (click)="openCertificate(selectedCertification!)">
                   <i class="fas fa-eye me-1"></i> Ver Certificado
-                </a>
+                </button>
                 <button *ngIf="selectedCertification?.certificateUrl" class="btn btn-outline-secondary btn-sm" type="button" (click)="downloadCertificate(selectedCertification!)">
                   <i class="fas fa-download me-1"></i> Descargar
                 </button>
@@ -330,6 +379,9 @@ import { Subscription } from 'rxjs';
   `]
 })
 export class CertificationsListComponent implements OnInit, OnDestroy {
+  availableCertifications: Certification[] = [];
+  unavailableCertifications: Certification[] = [];
+  showUnavailable = false;
   filterForm: FormGroup;
   certifications: Certification[] = [];
   filteredCertifications: Certification[] = [];
@@ -352,11 +404,12 @@ export class CertificationsListComponent implements OnInit, OnDestroy {
   showDetailsModal = false;
   
   private filtersSubscription?: Subscription;
+  private readonly destroy$ = new Subject<void>();
 
   constructor(
     private readonly fb: FormBuilder,
     private readonly certificationService: CertificationService,
-    private readonly authService: AuthService,
+    public readonly authService: AuthService,
     private readonly http: HttpClient,
     private readonly route: ActivatedRoute
   ) {
@@ -382,6 +435,8 @@ export class CertificationsListComponent implements OnInit, OnDestroy {
     if (this.filtersSubscription) {
       this.filtersSubscription.unsubscribe();
     }
+    this.destroy$.next();
+    this.destroy$.complete();
   }
 
   private subscribeToExternalFilters(): void {
@@ -393,7 +448,7 @@ export class CertificationsListComponent implements OnInit, OnDestroy {
   }
 
   private applyExternalFilters(filters: CertificationFilter): void {
-    this.filterForm.patchValue(filters);
+    this.filterForm.patchValue(filters, { emitEvent: false });
     this.showFilters = true;
   }
 
@@ -431,7 +486,8 @@ export class CertificationsListComponent implements OnInit, OnDestroy {
   setupFilterSubscription(): void {
     this.filterForm.valueChanges.pipe(
       debounceTime(300),
-      distinctUntilChanged()
+      distinctUntilChanged(),
+      takeUntil(this.destroy$)
     ).subscribe(() => {
       this.currentPage = 1;
       this.loadCertifications();
@@ -458,34 +514,46 @@ export class CertificationsListComponent implements OnInit, OnDestroy {
   }
 
   loadCertifications(): void {
-    this.isLoading = true;
-    this.errorMessage = '';
+  this.isLoading = true;
+  this.errorMessage = '';
 
-    const filters = this.buildFilters();
+  const filters = this.buildFilters();
 
-    this.certificationService.getAllCertifications(
-      { page: this.currentPage, limit: this.itemsPerPage },
-      filters
-    ).subscribe({
-      next: (response) => {
-        if (response.success && response.data) {
-          this.certifications = response.data.data;
-          this.totalCertifications = response.data.total;
-          this.totalPages = response.data.totalPages;
-          this.updateUniqueFilters();
-        } else {
-          this.certifications = [];
-          this.totalCertifications = 0;
-          this.totalPages = 1;
+  this.certificationService.getAllCertifications(
+    { page: this.currentPage, limit: this.itemsPerPage },
+    filters
+  ).subscribe({
+    next: (response) => {
+      if (response.success && response.data) {
+        this.certifications = response.data.data;
+        // Separar certificaciones disponibles y no disponibles
+        this.availableCertifications = [];
+        this.unavailableCertifications = [];
+        for (const cert of this.certifications) {
+          if ((cert as any).userIsActive === false) {
+            this.unavailableCertifications.push(cert);
+          } else {
+            this.availableCertifications.push(cert);
+          }
         }
-        this.isLoading = false;
-      },
-      error: (error) => {
-        this.errorMessage = error.message || 'Error al cargar las certificaciones';
-        this.isLoading = false;
+        this.totalCertifications = response.data.total;
+        this.totalPages = response.data.totalPages;
+        this.updateUniqueFilters();
+      } else {
+        this.certifications = [];
+        this.availableCertifications = [];
+        this.unavailableCertifications = [];
+        this.totalCertifications = 0;
+        this.totalPages = 1;
       }
-    });
-  }
+      this.isLoading = false;
+    },
+    error: (error) => {
+      this.errorMessage = error.message || 'Error al cargar las certificaciones';
+      this.isLoading = false;
+    }
+  });
+}
 
   changePage(page: number): void {
     if (page < 1 || page > this.totalPages) return;
@@ -494,15 +562,17 @@ export class CertificationsListComponent implements OnInit, OnDestroy {
   }
 
   downloadCertificate(cert: Certification): void {
-    const url = this.getCertificateUrl(cert);
-    if (!url) return;
+    if (!cert._id || !this.isInternalCertificateUrl(cert.certificateUrl)) {
+      this.errorMessage = 'La descarga segura solo está disponible para certificados cargados en CertiVault';
+      return;
+    }
 
-    this.certificationService.downloadFile(url).subscribe({
+    this.certificationService.getCertificationFile(cert._id, true).subscribe({
       next: (blob) => {
         const objectUrl = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = objectUrl;
-        link.download = cert.certificateNumber || cert.title || 'certificado';
+        link.download = this.getDownloadFileName(cert);
         link.click();
         URL.revokeObjectURL(objectUrl);
       },
@@ -512,11 +582,62 @@ export class CertificationsListComponent implements OnInit, OnDestroy {
     });
   }
 
+  openCertificate(cert: Certification): void {
+    if (!cert._id) return;
+
+    if (!this.isInternalCertificateUrl(cert.certificateUrl)) {
+      const url = this.getCertificateUrl(cert);
+      if (url.startsWith('https://')) {
+        window.open(url, '_blank', 'noopener');
+        return;
+      }
+      this.errorMessage = 'El enlace externo no es seguro. Debe usar HTTPS.';
+      return;
+    }
+
+    this.certificationService.getCertificationFile(cert._id).subscribe({
+      next: (blob) => {
+        const objectUrl = URL.createObjectURL(blob);
+        window.open(objectUrl, '_blank', 'noopener');
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+      },
+      error: () => {
+        this.errorMessage = 'No se pudo abrir la certificación';
+      }
+    });
+  }
+
   getCertificateUrl(cert: Certification): string {
     if (!cert.certificateUrl) return '';
-    if (cert.certificateUrl.startsWith('http')) return cert.certificateUrl;
-    const backendBase = 'http://10.0.100.14:3000';
-    return `${backendBase}${cert.certificateUrl.startsWith('/') ? '' : '/'}${cert.certificateUrl}`;
+    const rawUrl = cert.certificateUrl.trim();
+
+    // En produccion se sirve por mismo origen/proxy; evitamos depender de IP:PUERTO hardcodeados.
+    if (rawUrl.startsWith('/uploads/')) return rawUrl;
+
+    if (rawUrl.startsWith('http')) {
+      try {
+        const parsed = new URL(rawUrl);
+        if (parsed.pathname.startsWith('/uploads/')) {
+          return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+        }
+      } catch {
+        return rawUrl;
+      }
+      return rawUrl;
+    }
+
+    return rawUrl.startsWith('/') ? rawUrl : `/${rawUrl}`;
+  }
+
+  private isInternalCertificateUrl(url?: string): boolean {
+    if (!url) return false;
+    return this.getCertificateUrl({ certificateUrl: url } as Certification).startsWith('/uploads/certificates/');
+  }
+
+  private getDownloadFileName(cert: Certification): string {
+    const baseName = cert.certificateNumber || cert.title || 'certificado';
+    const extension = cert.certificateUrl?.match(/\.[a-z0-9]+(?:$|\?)/i)?.[0]?.replace('?', '') || '.pdf';
+    return `${baseName}${extension}`;
   }
 
   openCertificationDetails(cert: Certification): void {
@@ -567,12 +688,12 @@ export class CertificationsListComponent implements OnInit, OnDestroy {
   }
 
   private handleQueryParams(): void {
-    this.route.queryParamMap.subscribe(params => {
+    this.route.queryParamMap.pipe(takeUntil(this.destroy$)).subscribe(params => {
       const statusParam = params.get('status') as CertificationStatus | null;
       if (statusParam) {
-        this.filterForm.patchValue({ status: statusParam });
+        this.filterForm.patchValue({ status: statusParam }, { emitEvent: false });
       } else {
-        this.filterForm.patchValue({ status: '' });
+        this.filterForm.patchValue({ status: '' }, { emitEvent: false });
       }
       this.currentPage = 1;
       this.loadCertifications();

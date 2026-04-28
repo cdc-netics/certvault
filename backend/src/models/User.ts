@@ -96,6 +96,7 @@ const userSchema = new Schema<IUser>(
       type: String,
       required: [true, 'La contrasena es requerida'],
       minlength: [6, 'La contrasena debe tener al menos 6 caracteres'],
+      match: [/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$/, 'La contrasena debe contener al menos una mayuscula, una minuscula y un numero'],
       select: false
     },
     firstName: {
