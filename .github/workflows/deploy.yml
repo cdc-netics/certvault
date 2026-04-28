@@ -20,6 +20,7 @@ jobs:
       BACKUP_DIR: /home/cdc/certvault-backup
       PM2_APP: certif-app-backend
       HEALTH_URL: http://127.0.0.1:3000/api/health
+      API_BASE_URL: http://127.0.0.1:3000/api
 
     steps:
       - name: Build release outside production
@@ -101,13 +102,35 @@ jobs:
 
           for attempt in {1..20}; do
             if curl -fsS "$HEALTH_URL" >/dev/null; then
-              pm2 save
-              exit 0
+              settings_health_status="$(curl -sS -o /tmp/certvault-settings-health.json -w "%{http_code}" "$API_BASE_URL/settings/health" || true)"
+              settings_routes_status=0
+
+              for route in \
+                "$API_BASE_URL/settings/smtp-profiles" \
+                "$API_BASE_URL/settings/audit-logs" \
+                "$API_BASE_URL/settings/backup/summary" \
+                "$API_BASE_URL/settings/branding" \
+                "$API_BASE_URL/settings/reports/overview"; do
+                route_status="$(curl -sS -o /tmp/certvault-settings-route.json -w "%{http_code}" "$route" || true)"
+                if [ "$route_status" = "404" ]; then
+                  echo "Settings route smoke check returned 404 for $route"
+                  cat /tmp/certvault-settings-route.json || true
+                  settings_routes_status=1
+                fi
+              done
+
+              if [ "$settings_health_status" = "200" ] && [ "$settings_routes_status" = "0" ]; then
+                pm2 save
+                exit 0
+              fi
+
+              echo "Settings health check failed with status $settings_health_status"
+              cat /tmp/certvault-settings-health.json || true
             fi
             sleep 2
           done
 
-          echo "Health check failed after deploy"
+          echo "Health or settings route check failed after deploy"
           exit 1
 
       - name: Rollback on failure
