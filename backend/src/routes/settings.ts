@@ -23,6 +23,14 @@ import { validateRequest } from '../middleware/validation';
 
 const router = Router();
 
+router.get('/health', (_req, res) => {
+  res.json({
+    success: true,
+    module: 'settings',
+    status: 'ok'
+  });
+});
+
 router.use(authenticate, adminOnly);
 
 const idValidation = [param('id').isMongoId().withMessage('ID invalido')];
