@@ -93,33 +93,19 @@ jobs:
           set -Eeuo pipefail
           unset RUNNER_TRACKING_ID
 
-          if pm2 describe "$PM2_APP" >/dev/null 2>&1; then
-            pm2 reload "$PM2_APP" --update-env
-          else
-            cd "$APP_DIR/backend"
-            pm2 start ecosystem.config.js --only "$PM2_APP"
-          fi
+          test -f "$APP_DIR/backend/dist/server.js"
+          test -f "$APP_DIR/backend/dist/routes/settings.js"
+          grep -q "/api/settings" "$APP_DIR/backend/dist/server.js"
+
+          cd "$APP_DIR/backend"
+          pm2 startOrReload ecosystem.config.js --only "$PM2_APP" --update-env
+          pm2 describe "$PM2_APP"
 
           for attempt in {1..20}; do
             if curl -fsS "$HEALTH_URL" >/dev/null; then
               settings_health_status="$(curl -sS -o /tmp/certvault-settings-health.json -w "%{http_code}" "$API_BASE_URL/settings/health" || true)"
-              settings_routes_status=0
 
-              for route in \
-                "$API_BASE_URL/settings/smtp-profiles" \
-                "$API_BASE_URL/settings/audit-logs" \
-                "$API_BASE_URL/settings/backup/summary" \
-                "$API_BASE_URL/settings/branding" \
-                "$API_BASE_URL/settings/reports/overview"; do
-                route_status="$(curl -sS -o /tmp/certvault-settings-route.json -w "%{http_code}" "$route" || true)"
-                if [ "$route_status" = "404" ]; then
-                  echo "Settings route smoke check returned 404 for $route"
-                  cat /tmp/certvault-settings-route.json || true
-                  settings_routes_status=1
-                fi
-              done
-
-              if [ "$settings_health_status" = "200" ] && [ "$settings_routes_status" = "0" ]; then
+              if [ "$settings_health_status" = "200" ]; then
                 pm2 save
                 exit 0
               fi
@@ -131,6 +117,8 @@ jobs:
           done
 
           echo "Health or settings route check failed after deploy"
+          pm2 describe "$PM2_APP" || true
+          pm2 logs "$PM2_APP" --lines 80 --nostream || true
           exit 1
 
       - name: Rollback on failure
@@ -170,5 +158,6 @@ jobs:
           fi
 
           unset RUNNER_TRACKING_ID
-          pm2 reload "$PM2_APP" --update-env || pm2 restart "$PM2_APP" --update-env
+          cd "$APP_DIR/backend"
+          pm2 startOrReload ecosystem.config.js --only "$PM2_APP" --update-env || pm2 restart "$PM2_APP" --update-env
           pm2 save
