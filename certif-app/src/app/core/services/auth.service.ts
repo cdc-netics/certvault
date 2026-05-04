@@ -181,7 +181,7 @@ export class AuthService {
     } else if (status === 401) {
       friendlyMessage = apiMessage || 'Tu sesion expiro o las credenciales no son validas.';
     } else if (status >= 500) {
-      friendlyMessage = 'Tuvimos un problema temporal. Intenta de nuevo en unos minutos.';
+      friendlyMessage = apiMessage || 'Tuvimos un problema temporal. Intenta de nuevo en unos minutos.';
     }
 
     return throwError(() => new Error(friendlyMessage));

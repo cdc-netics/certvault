@@ -28,6 +28,24 @@ const APP_NAME = process.env.APP_NAME || 'CertiVault';
 
 const normalizeEmail = (email: string): string => email.trim().toLowerCase();
 
+const setLoginAuthenticateHeader = (res: Response): void => {
+  res.set('WWW-Authenticate', `Bearer realm="${APP_NAME}"`);
+};
+
+const getEmailDeliveryErrorMessage = (error: unknown): string => {
+  const message = error instanceof Error ? error.message : String(error || '');
+
+  if (/535|invalid login|authentication unsuccessful/i.test(message)) {
+    return 'No pudimos enviar el correo porque el servidor SMTP rechazo las credenciales configuradas. Contacta al administrador.';
+  }
+
+  if (/smtp_host|perfil smtp activo|no esta configurado/i.test(message)) {
+    return 'No pudimos enviar el correo porque no hay una configuracion SMTP valida. Contacta al administrador.';
+  }
+
+  return 'No pudimos enviar el enlace. Intenta nuevamente.';
+};
+
 const generateToken = (id: string): string => {
   return jwt.sign({ id }, process.env.JWT_SECRET as string, {
     expiresIn: process.env.JWT_EXPIRE || '7d'
@@ -114,19 +132,32 @@ export const register = async (req: AuthRequest, res: Response): Promise<void> =
 export const login = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { email, password }: LoginData = req.body;
+    const normalizedEmail = normalizeEmail(email);
 
-    const user = await User.findOne({ email: normalizeEmail(email) }).select('+password +refreshToken');
+    const user = await User.findOne({ email: normalizedEmail }).select('+password +refreshToken');
 
-    if (!user || !user.isActive) {
+    if (!user) {
+      setLoginAuthenticateHeader(res);
       res.status(401).json({
         success: false,
-        error: 'Correo o contraseña incorrectos, o la cuenta esta inactiva.',
-        message: 'Correo o contraseña incorrectos, o la cuenta esta inactiva.'
+        error: 'Correo o contraseña incorrectos.',
+        message: 'Correo o contraseña incorrectos.'
+      });
+      return;
+    }
+
+    if (!user.isActive) {
+      setLoginAuthenticateHeader(res);
+      res.status(403).json({
+        success: false,
+        error: 'Tu cuenta esta inactiva. Contacta al administrador.',
+        message: 'Tu cuenta esta inactiva. Contacta al administrador.'
       });
       return;
     }
 
     if (user.isVerified === false) {
+      setLoginAuthenticateHeader(res);
       res.status(401).json({
         success: false,
         error: 'Debes verificar tu correo antes de iniciar sesión.',
@@ -138,6 +169,7 @@ export const login = async (req: AuthRequest, res: Response): Promise<void> => {
     const isPasswordValid = await user.comparePassword(password);
 
     if (!isPasswordValid) {
+      setLoginAuthenticateHeader(res);
       res.status(401).json({
         success: false,
         error: 'Correo o contraseña incorrectos.',
@@ -465,12 +497,23 @@ export const forgotPassword = async (req: AuthRequest, res: Response): Promise<v
       await user.save();
 
       const resetLink = buildResetLink(token, user.email);
-      await sendPasswordResetEmail({
-        to: user.email,
-        name: user.firstName || user.username,
-        resetLink,
-        expiresInMinutes: RESET_TOKEN_EXP_MINUTES
-      });
+      try {
+        await sendPasswordResetEmail({
+          to: user.email,
+          name: user.firstName || user.username,
+          resetLink,
+          expiresInMinutes: RESET_TOKEN_EXP_MINUTES
+        });
+      } catch (emailError) {
+        console.error('Error enviando correo de reset:', emailError);
+        const emailErrorMessage = getEmailDeliveryErrorMessage(emailError);
+        res.status(502).json({
+          success: false,
+          error: emailErrorMessage,
+          message: emailErrorMessage
+        });
+        return;
+      }
     }
 
     res.json({
