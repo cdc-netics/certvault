@@ -27,6 +27,23 @@ export interface BrandingSettings {
   reportFooter?: string;
 }
 
+export interface PublicApiClient {
+  id: string;
+  name: string;
+  description?: string;
+  isActive: boolean;
+  canReadCertifications: boolean;
+  canDownloadFiles: boolean;
+  rateLimitPerMinute: number;
+  maxPageSize: number;
+  keyHint?: string;
+  lastUsedAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  endpoint: string;
+  downloadEndpointPattern: string;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -99,6 +116,60 @@ export class SettingsService {
       .pipe(tap(() => this.clearCache()), catchError(this.handleError));
   }
 
+  getPublicApiClients(): Observable<ApiResponse<PublicApiClient[]>> {
+    return this.cachedGet<PublicApiClient[]>('public-api-clients', `${this.API_URL}/public-api/clients`);
+  }
+
+  createPublicApiClient(payload: {
+    name: string;
+    description?: string;
+    apiKey?: string;
+    isActive: boolean;
+    canDownloadFiles: boolean;
+    rateLimitPerMinute: number;
+    maxPageSize: number;
+  }): Observable<ApiResponse<{ client: PublicApiClient; apiKey: string }>> {
+    return this.http.post<ApiResponse<{ client: PublicApiClient; apiKey: string }>>(`${this.API_URL}/public-api/clients`, payload)
+      .pipe(tap(() => this.clearCache()), catchError(this.handleError));
+  }
+
+  updatePublicApiClient(id: string, payload: {
+    name?: string;
+    description?: string;
+    apiKey?: string;
+    isActive?: boolean;
+    canDownloadFiles?: boolean;
+    rateLimitPerMinute?: number;
+    maxPageSize?: number;
+  }): Observable<ApiResponse<{ client: PublicApiClient; apiKey?: string }>> {
+    return this.http.put<ApiResponse<{ client: PublicApiClient; apiKey?: string }>>(`${this.API_URL}/public-api/clients/${id}`, payload)
+      .pipe(tap(() => this.clearCache()), catchError(this.handleError));
+  }
+
+  deletePublicApiClient(id: string): Observable<ApiResponse<void>> {
+    return this.http.delete<ApiResponse<void>>(`${this.API_URL}/public-api/clients/${id}`)
+      .pipe(tap(() => this.clearCache()), catchError(this.handleError));
+  }
+
+  rotatePublicApiClientKey(id: string): Observable<ApiResponse<{ client: PublicApiClient; apiKey: string }>> {
+    return this.http.post<ApiResponse<{ client: PublicApiClient; apiKey: string }>>(`${this.API_URL}/public-api/clients/${id}/rotate-key`, {})
+      .pipe(tap(() => this.clearCache()), catchError(this.handleError));
+  }
+
+  testPublicApiClient(id: string): Observable<ApiResponse<any>> {
+    return this.http.post<ApiResponse<any>>(`${this.API_URL}/public-api/clients/${id}/test`, {})
+      .pipe(catchError(this.handleError));
+  }
+
+  testPublicCertificationsApi(apiKey: string): Observable<ApiResponse<any>> {
+    return this.http.get<ApiResponse<any>>('/api/certifications/public/external', {
+      headers: {
+        'x-api-key': apiKey
+      },
+      params: { page: '1', limit: '3' }
+    }).pipe(catchError(this.handleError));
+  }
+
   getReportsOverview(query: Record<string, string>): Observable<ApiResponse<any>> {
     let params = new HttpParams();
     for (const [key, value] of Object.entries(query)) {
@@ -113,7 +184,7 @@ export class SettingsService {
   }
 
   private handleError(error: HttpErrorResponse): Observable<never> {
-    const message = error.error?.message || error.error?.error || 'Error procesando configuracion SMTP';
+    const message = error.error?.message || error.error?.error || 'Error procesando configuracion';
     return throwError(() => new Error(message));
   }
 

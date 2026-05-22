@@ -107,7 +107,7 @@ CertiVault/
 
 ### Prerrequisitos
 - Node.js 18+
-- npm o yarn
+- pnpm (via Corepack)
 - MongoDB (local o Atlas)
 - Angular CLI (opcional)
 
@@ -120,22 +120,71 @@ cd certvault
 ### 2. Backend
 ```bash
 cd backend
-npm install
-# Configurar .env (ver .env.example)
+pnpm install
+# Configurar variables en ../.env (ver .env.example)
 
-npm run dev # o npm start
+pnpm run dev # o pnpm start
 ```
 
 ### 3. Frontend
 ```bash
-cd ../certvault
-npm install
+cd ../certif-app
+pnpm install
 ng serve # o ng build
 ```
 
 ### 4. Acceso Inicial
 - Navegar a http://localhost:4200
 - Login con usuario administrador (ver datos en seed o .env)
+
+### 5. Ejecutar con Docker
+
+El proyecto ya incluye configuracion para levantar MongoDB, backend y frontend con Docker Compose.
+
+Archivos relevantes:
+- docker-compose.yml
+- backend/Dockerfile
+- .env.example
+- .env
+- certif-app/Dockerfile
+- certif-app/nginx.conf.template
+
+Pasos:
+
+```bash
+# 1) Copiar variables de entorno
+cp .env.example .env
+
+# 2) Ajustar secretos y credenciales en .env
+
+# 3) Construir y levantar
+docker compose up --build -d
+
+# 4) Ver logs
+docker compose logs -f
+```
+
+En PowerShell puedes usar:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Accesos:
+- Frontend: http://localhost:8080
+- API salud: http://localhost:8080/api/health
+
+Detener:
+
+```bash
+docker compose down
+```
+
+Borrar tambien volumenes de datos:
+
+```bash
+docker compose down -v
+```
 
 ---
 
@@ -145,6 +194,37 @@ ng serve # o ng build
 - Rate limiting y Helmet.js
 - Validación estricta de datos
 - Certificaciones de usuarios desactivados solo visibles para roles elevados
+
+### API externa de certificaciones (solo lectura)
+
+Se habilitaron endpoints para consumo externo protegidos por API key:
+
+- Listado: /api/certifications/public/external
+- Descarga de archivo: /api/certifications/public/external/:id/file
+- Método: GET
+- Header requerido: x-api-key: TU_CLAVE
+- Configuracion: panel web en Settings > API Externa
+
+Capacidades del panel web:
+
+- Crear multiples clientes API (cada uno con su propia key)
+- Activar/desactivar cada cliente
+- Regenerar API key por cliente desde el panel
+- Limitar requests por minuto por cliente
+- Limitar tamano maximo de pagina por cliente
+- Habilitar o deshabilitar descarga de certificados por cliente
+- Probar cada cliente desde el menu sin salir del sistema
+
+Filtros disponibles por query string:
+
+- page, limit
+- search
+- type, level, provider, department, status
+- certificateNumber
+
+Ejemplo:
+
+curl -H "x-api-key: TU_CLAVE" "http://localhost:8080/api/certifications/public/external?page=1&limit=20"
 
 ---
 
@@ -158,7 +238,7 @@ Para soporte, migración o nuevas versiones, contactar a soporte@netics.cl
 cd backend
 
 # Instalar dependencias
-npm install
+pnpm install
 
 # Configurar variables de entorno
 # Editar el archivo .env con tu configuración:
@@ -167,22 +247,22 @@ npm install
 # - ADMIN_EMAIL y ADMIN_PASSWORD: Credenciales del administrador
 
 # Compilar TypeScript
-npm run build
+pnpm run build
 
 # Ejecutar en desarrollo
-npm run dev
+pnpm run dev
 
 # O ejecutar en producción
-npm start
+pnpm start
 ```
 
 ### 3. Configurar el Frontend
 
 ```bash
-cd ../certvault
+cd ../certif-app
 
 # Instalar dependencias
-npm install
+pnpm install
 
 # Ejecutar en desarrollo
 ng serve
@@ -245,10 +325,10 @@ El sistema crea automáticamente un usuario administrador (Consultar .env)
 
 ### Backend
 ```bash
-npm run dev      # Desarrollo con hot reload
-npm run build    # Compilar TypeScript
-npm start        # Producción
-npm run lint     # Linting
+pnpm run dev      # Desarrollo con hot reload
+pnpm run build    # Compilar TypeScript
+pnpm start        # Producción
+pnpm run lint     # Linting
 ```
 
 ### Frontend

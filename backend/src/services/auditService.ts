@@ -84,6 +84,7 @@ export const auditRequest = (req: Request, res: Response, next: NextFunction): v
     const isSecurityTest = path.includes('/smtp-profiles/') && path.endsWith('/test');
     const isDenied = [401, 403, 429].includes(res.statusCode);
     const shouldRecord = isAuthEvent || isMutation || isSensitiveExport || isSecurityTest || isDenied;
+    const routeParamId = Array.isArray(req.params?.id) ? req.params.id[0] : req.params?.id;
 
     if (!shouldRecord) return;
 
@@ -105,7 +106,7 @@ export const auditRequest = (req: Request, res: Response, next: NextFunction): v
     void recordAuditLog({
       action,
       resource: resolveResource(path),
-      resourceId: req.params?.id,
+      resourceId: routeParamId,
       userId: user?._id,
       userEmail: user?.email || req.body?.email,
       userRole: user?.role,

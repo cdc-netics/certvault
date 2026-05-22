@@ -61,6 +61,22 @@ interface VerifyEmailPayload {
   expiresInMinutes: number;
 }
 
+interface CertificationSummaryPayload {
+  to: string;
+  name: string;
+  companyEmail: string;
+  certifications: Array<{
+    title: string;
+    provider: string;
+    technology: string;
+    level: string;
+    certificateNumber: string;
+    issueDate: Date;
+    expirationDate?: Date;
+    status: string;
+  }>;
+}
+
 const getVerifyTemplate = async (): Promise<string> => {
   if (cachedVerifyTemplate) return cachedVerifyTemplate;
   const templatePath = path.resolve(__dirname, '../../resources/email/verify-email.html');
@@ -96,5 +112,82 @@ Confirma tu cuenta haciendo clic en: ${payload.verifyLink}
 El enlace expira en ${payload.expiresInMinutes} minutos.
 
 Si no creaste esta cuenta, ignora este correo.`
+  });
+};
+
+export const sendUserCertificationsArchiveEmail = async (
+  payload: CertificationSummaryPayload
+): Promise<void> => {
+  const mailer = await getActiveMailer();
+  await mailer.transporter.verify();
+
+  const formatDate = (date?: Date): string => {
+    if (!date) return 'N/A';
+    return new Date(date).toISOString().slice(0, 10);
+  };
+
+  const rowsHtml = payload.certifications
+    .map(
+      (cert) => `
+        <tr>
+          <td style="padding:8px;border:1px solid #ddd;">${cert.title}</td>
+          <td style="padding:8px;border:1px solid #ddd;">${cert.provider}</td>
+          <td style="padding:8px;border:1px solid #ddd;">${cert.technology}</td>
+          <td style="padding:8px;border:1px solid #ddd;">${cert.level}</td>
+          <td style="padding:8px;border:1px solid #ddd;">${cert.certificateNumber}</td>
+          <td style="padding:8px;border:1px solid #ddd;">${formatDate(cert.issueDate)}</td>
+          <td style="padding:8px;border:1px solid #ddd;">${formatDate(cert.expirationDate)}</td>
+          <td style="padding:8px;border:1px solid #ddd;">${cert.status}</td>
+        </tr>
+      `
+    )
+    .join('');
+
+  const htmlBody = `
+    <div style="font-family: Arial, sans-serif; color: #222;">
+      <h2>Certificaciones exportadas</h2>
+      <p>Hola ${payload.name},</p>
+      <p>
+        Tu usuario asociado al correo corporativo <strong>${payload.companyEmail}</strong> fue eliminado.
+        Como respaldo, te enviamos el listado de tus certificaciones al correo personal.
+      </p>
+      <table style="border-collapse: collapse; width: 100%; margin-top: 16px;">
+        <thead>
+          <tr style="background:#f5f5f5;">
+            <th style="padding:8px;border:1px solid #ddd;">Titulo</th>
+            <th style="padding:8px;border:1px solid #ddd;">Proveedor</th>
+            <th style="padding:8px;border:1px solid #ddd;">Tecnologia</th>
+            <th style="padding:8px;border:1px solid #ddd;">Nivel</th>
+            <th style="padding:8px;border:1px solid #ddd;">Nro Certificado</th>
+            <th style="padding:8px;border:1px solid #ddd;">Emision</th>
+            <th style="padding:8px;border:1px solid #ddd;">Expiracion</th>
+            <th style="padding:8px;border:1px solid #ddd;">Estado</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rowsHtml}
+        </tbody>
+      </table>
+    </div>
+  `;
+
+  const textBody = `Hola ${payload.name},\n\n` +
+    `Tu usuario corporativo (${payload.companyEmail}) fue eliminado.\n` +
+    `Te enviamos tus certificaciones al correo personal como respaldo.\n\n` +
+    payload.certifications
+      .map(
+        (cert, index) =>
+          `${index + 1}. ${cert.title} | ${cert.provider} | ${cert.technology} | ${cert.level} | ` +
+          `Nro: ${cert.certificateNumber} | Emision: ${formatDate(cert.issueDate)} | ` +
+          `Expiracion: ${formatDate(cert.expirationDate)} | Estado: ${cert.status}`
+      )
+      .join('\n');
+
+  await mailer.transporter.sendMail({
+    from: mailer.from,
+    to: payload.to,
+    subject: 'Respaldo de certificaciones - CertiVault',
+    html: htmlBody,
+    text: textBody
   });
 };

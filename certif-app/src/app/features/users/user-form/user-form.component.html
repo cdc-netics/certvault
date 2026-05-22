@@ -77,7 +77,7 @@
 
               <div class="col-md-6 mb-3">
                 <label for="email" class="form-label">
-                  Email <span class="text-danger">*</span>
+                  Email Empresa <span class="text-danger">*</span>
                 </label>
                 <input
                   type="email"
@@ -89,6 +89,25 @@
                 <div class="invalid-feedback" *ngIf="email?.invalid && email?.touched">
                   <small *ngIf="email?.errors?.['required']">El email es requerido</small>
                   <small *ngIf="email?.errors?.['email']">Email invalido</small>
+                </div>
+              </div>
+            </div>
+
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                <label for="personalEmail" class="form-label">
+                  Correo Personal <span class="text-danger">*</span>
+                </label>
+                <input
+                  type="email"
+                  class="form-control"
+                  id="personalEmail"
+                  formControlName="personalEmail"
+                  [class.is-invalid]="personalEmail?.invalid && personalEmail?.touched"
+                  placeholder="persona@gmail.com">
+                <div class="invalid-feedback" *ngIf="personalEmail?.invalid && personalEmail?.touched">
+                  <small *ngIf="personalEmail?.errors?.['required']">El correo personal es requerido</small>
+                  <small *ngIf="personalEmail?.errors?.['email']">Correo personal invalido</small>
                 </div>
               </div>
             </div>

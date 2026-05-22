@@ -24,6 +24,9 @@ export interface Certification {
   updatedAt?: Date;
   createdBy?: string;
   updatedBy?: string;
+  userIsActive?: boolean;
+  userDepartment?: string;
+  userReferenceMissing?: boolean;
 }
 
 export enum CertificationType {

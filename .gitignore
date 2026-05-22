@@ -16,7 +16,7 @@ certif-app/dist/
 certif-app/.angular/
 
 # Environment and secrets
-backend/.env
+/.env
 backend/uploads/
 
 # IDE/system
@@ -25,3 +25,4 @@ backend/uploads/
 *.swo
 .DS_Store
 Thumbs.db
+node_modules

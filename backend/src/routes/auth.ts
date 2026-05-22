@@ -24,6 +24,7 @@ const registerValidation = [
     .matches(/^\w+$/)
     .withMessage('El nombre de usuario solo puede contener letras, numeros y guiones bajos'),
   body('email').isEmail().withMessage('Email invalido').normalizeEmail(),
+  body('personalEmail').isEmail().withMessage('Correo personal invalido').normalizeEmail(),
   body('password')
     .isLength({ min: 6 })
     .withMessage('La contraseña debe tener al menos 6 caracteres')

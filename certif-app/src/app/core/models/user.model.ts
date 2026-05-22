@@ -2,6 +2,7 @@ export interface User {
   _id?: string;
   username: string;
   email: string;
+  personalEmail: string;
   password?: string;
   firstName: string;
   lastName: string;
@@ -51,21 +52,21 @@ export enum Permission {
   UPDATE_USERS = 'update_users',
   DELETE_USERS = 'delete_users',
   MANAGE_ROLES = 'manage_roles',
-  
+
   // Gestion de certificaciones
   CREATE_CERTIFICATIONS = 'create_certifications',
   READ_CERTIFICATIONS = 'read_certifications',
   UPDATE_CERTIFICATIONS = 'update_certifications',
   DELETE_CERTIFICATIONS = 'delete_certifications',
-  
+
   // Gestion de departamentos
   MANAGE_DEPARTMENTS = 'manage_departments',
   MANAGE_OWN_DEPARTMENT = 'manage_own_department',
-  
+
   // Reportes y estadisticas
   VIEW_REPORTS = 'view_reports',
   EXPORT_DATA = 'export_data',
-  
+
   // Administracion del sistema
   SYSTEM_ADMIN = 'system_admin'
 }
@@ -84,6 +85,7 @@ export interface LoginResponse {
 export interface RegisterRequest {
   username: string;
   email: string;
+  personalEmail: string;
   password: string;
   firstName: string;
   lastName: string;

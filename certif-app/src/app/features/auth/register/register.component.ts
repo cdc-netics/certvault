@@ -91,6 +91,22 @@ import { BackButtonComponent } from '../../../shared/components/back-button/back
                   </div>
 
                   <div class="mb-3">
+                    <label for="personalEmail" class="form-label">Correo Personal</label>
+                    <input
+                      type="email"
+                      id="personalEmail"
+                      class="form-control"
+                      formControlName="personalEmail"
+                      [class.is-invalid]="personalEmail?.invalid && personalEmail?.touched"
+                      placeholder="tu.email.personal@gmail.com"
+                    />
+                    <div class="invalid-feedback" *ngIf="personalEmail?.invalid && personalEmail?.touched">
+                      <small *ngIf="personalEmail?.errors?.['required']">El correo personal es requerido</small>
+                      <small *ngIf="personalEmail?.errors?.['email']">Formato de correo invalido</small>
+                    </div>
+                  </div>
+
+                  <div class="mb-3">
                     <label for="password" class="form-label">Contraseña</label>
                     <input
                       type="password"
@@ -222,6 +238,7 @@ export class RegisterComponent implements OnInit {
       lastName: ['', Validators.required],
       username: ['', [Validators.required, Validators.minLength(3)]],
       email: ['', [Validators.required, Validators.email]],
+      personalEmail: ['', [Validators.required, Validators.email]],
       password: ['', [Validators.required, Validators.minLength(6)]],
       department: ['', Validators.required],
       position: ['', Validators.required],
@@ -264,6 +281,7 @@ export class RegisterComponent implements OnInit {
   get lastName() { return this.registerForm.get('lastName'); }
   get username() { return this.registerForm.get('username'); }
   get email() { return this.registerForm.get('email'); }
+  get personalEmail() { return this.registerForm.get('personalEmail'); }
   get password() { return this.registerForm.get('password'); }
   get department() { return this.registerForm.get('department'); }
   get position() { return this.registerForm.get('position'); }

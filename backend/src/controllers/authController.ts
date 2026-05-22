@@ -9,6 +9,7 @@ import { sendPasswordResetEmail, sendVerificationEmail } from '../services/email
 interface RegisterData {
   username: string;
   email: string;
+  personalEmail: string;
   password: string;
   firstName: string;
   lastName: string;
@@ -40,22 +41,31 @@ const generateRefreshToken = (id: string): string => {
   });
 };
 
+const getFrontendBaseUrl = (): string => {
+  const base = process.env.FRONTEND_URL?.trim();
+  if (!base) {
+    throw new Error('FRONTEND_URL no esta definido en variables de entorno');
+  }
+  return base.replace(/\/$/, '');
+};
+
 const buildResetLink = (token: string, email: string): string => {
-  const base = (process.env.FRONTEND_URL || 'http://localhost:4200').replace(/\/$/, '');
+  const base = getFrontendBaseUrl();
   return `${base}/reset-password?token=${token}&email=${encodeURIComponent(email)}`;
 };
 
 const buildVerifyLink = (token: string, email: string): string => {
-  const base = (process.env.FRONTEND_URL || 'http://localhost:4200').replace(/\/$/, '');
+  const base = getFrontendBaseUrl();
   return `${base}/verify-email?token=${token}&email=${encodeURIComponent(email)}`;
 };
 
 export const register = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { username, email, password, firstName, lastName, department, position, phone }: RegisterData =
+    const { username, email, personalEmail, password, firstName, lastName, department, position, phone }: RegisterData =
       req.body;
 
     const normalizedEmail = normalizeEmail(email);
+    const normalizedPersonalEmail = normalizeEmail(personalEmail);
 
     const userExists = await User.findOne({
       $or: [{ email: normalizedEmail }, { username }]
@@ -76,6 +86,7 @@ export const register = async (req: AuthRequest, res: Response): Promise<void> =
     const user = await User.create({
       username,
       email: normalizedEmail,
+      personalEmail: normalizedPersonalEmail,
       password,
       firstName,
       lastName,
@@ -117,7 +128,7 @@ export const login = async (req: AuthRequest, res: Response): Promise<void> => {
 
     const user = await User.findOne({ email: normalizeEmail(email) }).select('+password +refreshToken');
 
-    if (!user || !user.isActive) {
+    if (!user || user.isActive === false) {
       res.status(401).json({
         success: false,
         error: 'Correo o contraseña incorrectos, o la cuenta esta inactiva.',
@@ -146,8 +157,8 @@ export const login = async (req: AuthRequest, res: Response): Promise<void> => {
       return;
     }
 
-    const token = generateToken(user._id as string);
-    const refreshToken = generateRefreshToken(user._id as string);
+    const token = generateToken(String(user._id));
+    const refreshToken = generateRefreshToken(String(user._id));
 
     user.lastLogin = new Date();
     user.refreshToken = refreshToken;
@@ -203,7 +214,7 @@ export const refreshToken = async (req: AuthRequest, res: Response): Promise<voi
     const decoded = jwt.verify(clientRefreshToken, process.env.JWT_SECRET as string) as { id: string };
     const user = await User.findById(decoded.id).select('+refreshToken');
 
-    if (!user || user.refreshToken !== clientRefreshToken || !user.isActive) {
+    if (!user || user.refreshToken !== clientRefreshToken || user.isActive === false) {
       res.status(401).json({
         success: false,
         error: 'Refresh token invalido',
@@ -212,8 +223,8 @@ export const refreshToken = async (req: AuthRequest, res: Response): Promise<voi
       return;
     }
 
-    const newToken = generateToken(user._id as string);
-    const newRefreshToken = generateRefreshToken(user._id as string);
+    const newToken = generateToken(String(user._id));
+    const newRefreshToken = generateRefreshToken(String(user._id));
 
     user.refreshToken = newRefreshToken;
     await user.save();

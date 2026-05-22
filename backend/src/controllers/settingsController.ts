@@ -3,10 +3,13 @@ import { AuditAction, AuditLog } from '../models/AuditLog';
 import { BrandingSettings } from '../models/BrandingSettings';
 import { Certification } from '../models/Certification';
 import { SmtpProfile } from '../models/SmtpProfile';
+import { PublicApiClient } from '../models/PublicApiClient';
 import { User } from '../models/User';
 import { AuthRequest } from '../middleware/auth';
 import { recordAuditLog } from '../services/auditService';
 import { toSafeSmtpProfile } from '../services/smtpProfileService';
+import { clearApiKeyCache } from '../middleware/apiKey';
+import crypto from 'crypto';
 
 const getDateRange = (req: Request) => {
   const from = req.query.from ? new Date(req.query.from as string) : undefined;
@@ -22,6 +25,31 @@ const getBrandingDocument = async () => {
   if (existing) return existing;
   return BrandingSettings.create({});
 };
+
+const hashApiKey = (apiKey: string): string => {
+  return crypto.createHash('sha256').update(apiKey).digest('hex');
+};
+
+const generateApiKey = (): string => {
+  return crypto.randomBytes(24).toString('base64url');
+};
+
+const toSafePublicApiClient = (client: any) => ({
+  id: client._id?.toString() || client.id,
+  name: client.name,
+  description: client.description || '',
+  isActive: Boolean(client.isActive),
+  canReadCertifications: Boolean(client.canReadCertifications),
+  canDownloadFiles: Boolean(client.canDownloadFiles),
+  rateLimitPerMinute: Number(client.rateLimitPerMinute || 60),
+  maxPageSize: Number(client.maxPageSize || 50),
+  keyHint: client.keyHint || '',
+  lastUsedAt: client.lastUsedAt,
+  createdAt: client.createdAt,
+  updatedAt: client.updatedAt,
+  endpoint: '/api/certifications/public/external',
+  downloadEndpointPattern: '/api/certifications/public/external/:id/file'
+});
 
 const csvEscape = (value: unknown): string => {
   const text = value === undefined || value === null ? '' : String(value);
@@ -154,6 +182,221 @@ export const updateBranding = async (req: AuthRequest, res: Response): Promise<v
   } catch (error) {
     console.error('Error actualizando branding:', error);
     res.status(400).json({ success: false, error: 'Error al actualizar branding' });
+  }
+};
+
+export const getPublicApiClients = async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const clients = await PublicApiClient.find().sort({ createdAt: -1 }).lean();
+    res.json({
+      success: true,
+      data: clients.map(toSafePublicApiClient)
+    });
+  } catch (error) {
+    console.error('Error obteniendo clientes de API externa:', error);
+    res.status(500).json({ success: false, error: 'Error al obtener clientes de API externa' });
+  }
+};
+
+export const createPublicApiClient = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const providedKey = typeof req.body.apiKey === 'string' ? req.body.apiKey.trim() : '';
+    const apiKey = providedKey || generateApiKey();
+
+    if (apiKey.length < 12) {
+      res.status(400).json({ success: false, error: 'La API key debe tener al menos 12 caracteres' });
+      return;
+    }
+
+    const client = await PublicApiClient.create({
+      name: req.body.name,
+      description: req.body.description || '',
+      apiKeyHash: hashApiKey(apiKey),
+      keyHint: `***${apiKey.slice(-4)}`,
+      isActive: typeof req.body.isActive === 'boolean' ? req.body.isActive : true,
+      canReadCertifications: true,
+      canDownloadFiles: Boolean(req.body.canDownloadFiles),
+      rateLimitPerMinute: Number(req.body.rateLimitPerMinute || 60),
+      maxPageSize: Number(req.body.maxPageSize || 50),
+      createdBy: req.user?._id,
+      updatedBy: req.user?._id
+    });
+
+    clearApiKeyCache();
+
+    res.json({
+      success: true,
+      data: {
+        client: toSafePublicApiClient(client),
+        apiKey
+      },
+      message: 'Cliente API creado exitosamente'
+    });
+  } catch (error) {
+    console.error('Error creando cliente API externo:', error);
+    res.status(500).json({ success: false, error: 'Error al crear cliente de API externa' });
+  }
+};
+
+export const updatePublicApiClient = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const client = await PublicApiClient.findById(req.params.id).select('+apiKeyHash');
+    if (!client) {
+      res.status(404).json({ success: false, error: 'Cliente API no encontrado' });
+      return;
+    }
+
+    const fields = ['name', 'description', 'isActive', 'canDownloadFiles', 'rateLimitPerMinute', 'maxPageSize'] as const;
+    for (const field of fields) {
+      if (req.body[field] !== undefined) {
+        (client as any)[field] = req.body[field];
+      }
+    }
+
+    const newApiKey = typeof req.body.apiKey === 'string' ? req.body.apiKey.trim() : '';
+    let returnedApiKey: string | undefined;
+    if (newApiKey) {
+      if (newApiKey.length < 12) {
+        res.status(400).json({ success: false, error: 'La API key debe tener al menos 12 caracteres' });
+        return;
+      }
+      (client as any).apiKeyHash = hashApiKey(newApiKey);
+      client.keyHint = `***${newApiKey.slice(-4)}`;
+      returnedApiKey = newApiKey;
+    }
+
+    (client as any).updatedBy = req.user?._id;
+    await client.save();
+    clearApiKeyCache();
+
+    res.json({
+      success: true,
+      data: {
+        client: toSafePublicApiClient(client),
+        apiKey: returnedApiKey
+      },
+      message: 'Cliente API actualizado exitosamente'
+    });
+  } catch (error) {
+    console.error('Error actualizando cliente API externo:', error);
+    res.status(500).json({ success: false, error: 'Error al actualizar cliente de API externa' });
+  }
+};
+
+export const rotatePublicApiClientKey = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const client = await PublicApiClient.findById(req.params.id).select('+apiKeyHash');
+    if (!client) {
+      res.status(404).json({ success: false, error: 'Cliente API no encontrado' });
+      return;
+    }
+
+    const newApiKey = generateApiKey();
+    (client as any).apiKeyHash = hashApiKey(newApiKey);
+    client.keyHint = `***${newApiKey.slice(-4)}`;
+    (client as any).updatedBy = req.user?._id;
+
+    await client.save();
+    clearApiKeyCache();
+
+    res.json({
+      success: true,
+      data: {
+        client: toSafePublicApiClient(client),
+        apiKey: newApiKey
+      },
+      message: 'API key regenerada exitosamente'
+    });
+  } catch (error) {
+    console.error('Error regenerando API key de cliente externo:', error);
+    res.status(500).json({ success: false, error: 'Error al regenerar API key del cliente' });
+  }
+};
+
+export const deletePublicApiClient = async (_req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const deleted = await PublicApiClient.findByIdAndDelete(_req.params.id);
+    if (!deleted) {
+      res.status(404).json({ success: false, error: 'Cliente API no encontrado' });
+      return;
+    }
+
+    clearApiKeyCache();
+    res.json({ success: true, message: 'Cliente API eliminado exitosamente' });
+  } catch (error) {
+    console.error('Error eliminando cliente API externo:', error);
+    res.status(500).json({ success: false, error: 'Error al eliminar cliente de API externa' });
+  }
+};
+
+export const testPublicApiClient = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const client = await PublicApiClient.findById(req.params.id);
+    if (!client) {
+      res.status(404).json({ success: false, error: 'Cliente API no encontrado' });
+      return;
+    }
+
+    if (!client.isActive) {
+      res.status(400).json({ success: false, error: 'El cliente API esta inactivo' });
+      return;
+    }
+
+    if (!client.canReadCertifications) {
+      res.status(400).json({ success: false, error: 'El cliente API no tiene permiso de lectura' });
+      return;
+    }
+
+    const [totalVisible, sample] = await Promise.all([
+      Certification.aggregate([
+        {
+          $lookup: {
+            from: 'users',
+            localField: 'employeeId',
+            foreignField: '_id',
+            as: 'employee'
+          }
+        },
+        { $unwind: '$employee' },
+        { $match: { 'employee.isActive': true } },
+        { $count: 'count' }
+      ]),
+      Certification.aggregate([
+        {
+          $lookup: {
+            from: 'users',
+            localField: 'employeeId',
+            foreignField: '_id',
+            as: 'employee'
+          }
+        },
+        { $unwind: '$employee' },
+        { $match: { 'employee.isActive': true } },
+        { $sort: { createdAt: -1 } },
+        { $limit: 1 },
+        { $project: { _id: 1, title: 1, certificateUrl: 1 } }
+      ])
+    ]);
+
+    const total = totalVisible[0]?.count || 0;
+    const sampleItem = sample[0];
+
+    res.json({
+      success: true,
+      data: {
+        client: toSafePublicApiClient(client),
+        result: {
+          readEndpoint: '/api/certifications/public/external?page=1&limit=5',
+          downloadEndpoint: sampleItem && client.canDownloadFiles ? `/api/certifications/public/external/${sampleItem._id}/file` : null,
+          visibleCertifications: total,
+          sampleCertificationTitle: sampleItem?.title || null
+        }
+      },
+      message: 'Prueba de cliente API completada'
+    });
+  } catch (error) {
+    console.error('Error probando cliente API externo:', error);
+    res.status(500).json({ success: false, error: 'Error al probar cliente de API externa' });
   }
 };
 

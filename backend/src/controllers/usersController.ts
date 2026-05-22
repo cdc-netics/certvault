@@ -1,13 +1,15 @@
 import crypto from 'crypto';
 import { Response } from 'express';
 import { User, UserRole, Department, Permission } from '../models/User';
+import { Certification } from '../models/Certification';
 import { AuthRequest } from '../middleware/auth';
 import { saveBase64Avatar } from '../utils/avatar';
-import { sendVerificationEmail } from '../services/emailService';
+import { sendVerificationEmail, sendUserCertificationsArchiveEmail } from '../services/emailService';
 
 interface CreateUserRequest {
   username: string;
   email: string;
+  personalEmail: string;
   password: string;
   firstName: string;
   lastName: string;
@@ -25,6 +27,7 @@ interface CreateUserRequest {
 interface UpdateUserRequest {
   username?: string;
   email?: string;
+  personalEmail?: string;
   firstName?: string;
   lastName?: string;
   role?: UserRole;
@@ -52,8 +55,16 @@ interface UsersQuery {
 
 const VERIFY_TOKEN_EXP_MINUTES = Number(process.env.VERIFY_EMAIL_EXPIRE_MINUTES || 60);
 
+const getFrontendBaseUrl = (): string => {
+  const base = process.env.FRONTEND_URL?.trim();
+  if (!base) {
+    throw new Error('FRONTEND_URL no esta definido en variables de entorno');
+  }
+  return base.replace(/\/$/, '');
+};
+
 const buildVerifyLink = (token: string, email: string): string => {
-  const base = (process.env.FRONTEND_URL || 'http://localhost:4200').replace(/\/$/, '');
+  const base = getFrontendBaseUrl();
   return `${base}/verify-email?token=${token}&email=${encodeURIComponent(email)}`;
 };
 
@@ -230,6 +241,7 @@ export const createUser = async (req: AuthRequest, res: Response): Promise<void>
     const newUser = new User({
       ...userData,
       email: userData.email.toLowerCase(),
+      personalEmail: userData.personalEmail.toLowerCase(),
       isVerified: false,
       verificationToken: hashedVerificationToken,
       verificationExpires: new Date(Date.now() + VERIFY_TOKEN_EXP_MINUTES * 60 * 1000),
@@ -277,6 +289,7 @@ export const updateUser = async (req: AuthRequest, res: Response): Promise<void>
     const allowedFields: (keyof UpdateUserRequest)[] = [
       'username',
       'email',
+      'personalEmail',
       'firstName',
       'lastName',
       'role',
@@ -384,7 +397,8 @@ export const updateUser = async (req: AuthRequest, res: Response): Promise<void>
 
     userToUpdate.set({
       ...updateData,
-      email: updateData.email ? updateData.email.toLowerCase() : userToUpdate.email
+      email: updateData.email ? updateData.email.toLowerCase() : userToUpdate.email,
+      personalEmail: updateData.personalEmail ? updateData.personalEmail.toLowerCase() : userToUpdate.personalEmail
     });
 
     await userToUpdate.save();
@@ -460,16 +474,38 @@ export const deleteUser = async (req: AuthRequest, res: Response): Promise<void>
       }
     }
 
-    // Eliminar usuario
-    await User.findByIdAndDelete(id);
+    const certifications = await Certification.find({ employeeId: id }).sort({ issueDate: -1 });
 
-    // Eliminar certificaciones asociadas
-    const { Certification } = require('../models/Certification');
+    if (certifications.length > 0) {
+      try {
+        await sendUserCertificationsArchiveEmail({
+          to: userToDelete.personalEmail,
+          name: `${userToDelete.firstName} ${userToDelete.lastName}`,
+          companyEmail: userToDelete.email,
+          certifications: certifications.map((cert: any) => ({
+            title: cert.title,
+            provider: cert.provider,
+            technology: cert.technology,
+            level: cert.level,
+            certificateNumber: cert.certificateNumber,
+            issueDate: cert.issueDate,
+            expirationDate: cert.expirationDate,
+            status: cert.status
+          }))
+        });
+      } catch (emailError) {
+        console.error('No se pudo enviar archivo de certificaciones al correo personal:', emailError);
+      }
+    }
+
     await Certification.deleteMany({ employeeId: id });
+    await User.findByIdAndDelete(id);
 
     res.json({
       success: true,
-      message: 'Usuario y certificaciones asociadas eliminados exitosamente'
+      message: certifications.length > 0
+        ? 'Usuario eliminado y certificaciones enviadas al correo personal'
+        : 'Usuario eliminado exitosamente'
     });
   } catch (error) {
     console.error('Error eliminando usuario:', error);

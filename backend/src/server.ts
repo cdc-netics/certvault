@@ -7,6 +7,7 @@ import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import path from 'path';
+import fs from 'fs';
 // import rateLimit from 'express-rate-limit';
 
 // Importar configuracion de base de datos y seed
@@ -25,29 +26,31 @@ import { errorHandler } from './middleware/errorHandler';
 import { notFound } from './middleware/notFound';
 import { auditRequest } from './services/auditService';
 
-// Cargar variables de entorno sin depender del directorio desde el que se ejecute
-dotenv.config({
-  path: path.resolve(__dirname, '../.env'),
-  override: true
-});
+// Cargar variables de entorno desde la raiz del repositorio.
+const explicitEnvPath = process.env.ENV_FILE;
+const envCandidates = [
+  explicitEnvPath,
+  path.resolve(__dirname, '../../.env')
+].filter((candidate): candidate is string => Boolean(candidate));
+
+const discoveredEnvPath = envCandidates.find(candidate => fs.existsSync(candidate));
+if (discoveredEnvPath) {
+  dotenv.config({ path: discoveredEnvPath });
+}
 
 const app = express();
 app.disable('x-powered-by');
 app.set('trust proxy', 1);
 const PORT = process.env.PORT || 3000;
+const PUBLIC_API_BASE_URL = process.env.PUBLIC_API_BASE_URL || process.env.FRONTEND_URL || '';
 
 // Configuracion de CORS con multiples orígenes permitidos
 const normalizeOrigin = (value: string) => value.replace(/\/$/, '');
 const allowedOrigins = [
-  ...(process.env.FRONTEND_URL ? process.env.FRONTEND_URL.split(',').map(o => normalizeOrigin(o.trim())) : []),
-  'http://localhost:4200',
-  'http://127.0.0.1:4200',
-  'http://localhost:3000',
-  'http://127.0.0.1:3000',
-  'http://10.0.101.27',
-  'http://10.0.101.27:4200'
+  ...(process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',').map(o => normalizeOrigin(o.trim())) : []),
+  ...(process.env.FRONTEND_URL ? process.env.FRONTEND_URL.split(',').map(o => normalizeOrigin(o.trim())) : [])
 ].filter(Boolean);
-const allowAllOrigins = false; // En productivo solo se permiten los orígenes explícitos
+const allowAllOrigins = (process.env.CORS_ALLOW_ALL_ORIGINS || 'false').toLowerCase() === 'true';
 
 // Middlewares
 const corsOptions: cors.CorsOptions = {
@@ -141,6 +144,35 @@ const connectDB = async (): Promise<void> => {
 const createDefaultAdminAndSeed = async (): Promise<void> => {
   try {
     const { User, UserRole, Department, Permission } = await import('./models/User');
+
+    const backfillPersonalEmailResult = await User.updateMany(
+      {
+        $or: [
+          { personalEmail: { $exists: false } },
+          { personalEmail: null },
+          { personalEmail: '' }
+        ]
+      },
+      [
+        {
+          $set: {
+            personalEmail: '$email'
+          }
+        }
+      ]
+    );
+
+    const backfillIsActiveResult = await User.updateMany(
+      { isActive: { $exists: false } },
+      { $set: { isActive: true } }
+    );
+
+    if (backfillPersonalEmailResult.modifiedCount > 0 || backfillIsActiveResult.modifiedCount > 0) {
+      console.log(
+        `Backfill usuarios aplicado: personalEmail=${backfillPersonalEmailResult.modifiedCount}, isActive=${backfillIsActiveResult.modifiedCount}`
+      );
+    }
+
     const adminExists = await User.findOne({ role: UserRole.ADMIN });
 
     if (!adminExists) {
@@ -148,6 +180,7 @@ const createDefaultAdminAndSeed = async (): Promise<void> => {
       const adminUser = new User({
         username: process.env.ADMIN_USERNAME || 'admin',
         email: process.env.ADMIN_EMAIL || 'admin@empresa.com',
+        personalEmail: process.env.ADMIN_PERSONAL_EMAIL || process.env.ADMIN_EMAIL || 'admin@empresa.com',
         password: process.env.ADMIN_PASSWORD || 'Admin123!',
         firstName: 'Administrador',
         lastName: 'del Sistema',
@@ -197,7 +230,11 @@ const startServer = async (): Promise<void> => {
   app.listen(PORT, () => {
     console.log(`Servidor corriendo en puerto ${PORT}`);
     console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`Health: http://localhost:${PORT}/api/health`);
+    if (PUBLIC_API_BASE_URL) {
+      console.log(`Health: ${PUBLIC_API_BASE_URL.replace(/\/$/, '')}/api/health`);
+    } else {
+      console.log(`Health endpoint: /api/health`);
+    }
   });
 };
 

@@ -21,6 +21,7 @@
   ],
   "author": "Sistema de Certificaciones",
   "license": "MIT",
+  "packageManager": "pnpm@10.22.0",
   "dependencies": {
     "@types/bcryptjs": "^2.4.6",
     "@types/compression": "^1.8.1",

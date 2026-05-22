@@ -11,11 +11,17 @@ import {
 } from '../controllers/smtpProfilesController';
 import {
   exportBackup,
+  createPublicApiClient,
+  deletePublicApiClient,
   exportReport,
   getAuditLogs,
   getBackupSummary,
   getBranding,
+  getPublicApiClients,
   getReportsOverview,
+  rotatePublicApiClientKey,
+  testPublicApiClient,
+  updatePublicApiClient,
   updateBranding
 } from '../controllers/settingsController';
 import { adminOnly, authenticate } from '../middleware/auth';
@@ -69,6 +75,27 @@ const testValidation = [
   body('to').optional().isEmail().withMessage('Destinatario invalido').normalizeEmail()
 ];
 
+const publicApiClientCreateValidation = [
+  body('name').trim().notEmpty().withMessage('El nombre es requerido').isLength({ max: 80 }),
+  body('description').optional().isString().isLength({ max: 250 }),
+  body('apiKey').optional().isString().isLength({ min: 12 }).withMessage('apiKey debe tener al menos 12 caracteres'),
+  body('isActive').optional().isBoolean(),
+  body('canDownloadFiles').optional().isBoolean(),
+  body('rateLimitPerMinute').optional().isInt({ min: 1, max: 10000 }),
+  body('maxPageSize').optional().isInt({ min: 1, max: 500 })
+];
+
+const publicApiClientUpdateValidation = [
+  ...idValidation,
+  body('name').optional().trim().notEmpty().isLength({ max: 80 }),
+  body('description').optional().isString().isLength({ max: 250 }),
+  body('apiKey').optional().isString().isLength({ min: 12 }).withMessage('apiKey debe tener al menos 12 caracteres'),
+  body('isActive').optional().isBoolean(),
+  body('canDownloadFiles').optional().isBoolean(),
+  body('rateLimitPerMinute').optional().isInt({ min: 1, max: 10000 }),
+  body('maxPageSize').optional().isInt({ min: 1, max: 500 })
+];
+
 router.get('/smtp-profiles', getSmtpProfiles);
 router.post('/smtp-profiles', smtpProfileValidation, validateRequest, createSmtpProfile);
 router.put('/smtp-profiles/:id', smtpProfileUpdateValidation, validateRequest, updateSmtpProfile);
@@ -82,6 +109,12 @@ router.get('/backup/summary', getBackupSummary);
 router.get('/backup/export', exportBackup);
 router.get('/branding', getBranding);
 router.put('/branding', updateBranding);
+router.get('/public-api/clients', getPublicApiClients);
+router.post('/public-api/clients', publicApiClientCreateValidation, validateRequest, createPublicApiClient);
+router.put('/public-api/clients/:id', publicApiClientUpdateValidation, validateRequest, updatePublicApiClient);
+router.post('/public-api/clients/:id/rotate-key', idValidation, validateRequest, rotatePublicApiClientKey);
+router.delete('/public-api/clients/:id', idValidation, validateRequest, deletePublicApiClient);
+router.post('/public-api/clients/:id/test', idValidation, validateRequest, testPublicApiClient);
 router.get('/reports/overview', getReportsOverview);
 router.get('/reports/export', exportReport);
 

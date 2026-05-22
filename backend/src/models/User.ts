@@ -45,6 +45,7 @@ export enum Permission {
 export interface IUser extends Document {
   username: string;
   email: string;
+  personalEmail: string;
   password: string;
   firstName: string;
   lastName: string;
@@ -91,6 +92,13 @@ const userSchema = new Schema<IUser>(
       lowercase: true,
       trim: true,
       match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, 'Email invalido']
+    },
+    personalEmail: {
+      type: String,
+      required: [true, 'El correo personal es requerido'],
+      lowercase: true,
+      trim: true,
+      match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, 'Correo personal invalido']
     },
     password: {
       type: String,

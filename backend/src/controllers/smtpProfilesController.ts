@@ -143,7 +143,7 @@ export const deleteSmtpProfile = async (req: Request, res: Response): Promise<vo
 
 export const activateSmtpProfile = async (req: Request, res: Response): Promise<void> => {
   try {
-    const profileId = req.params.id;
+    const profileId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
     if (!profileId) {
       res.status(400).json({
         success: false,
@@ -161,7 +161,7 @@ export const activateSmtpProfile = async (req: Request, res: Response): Promise<
       return;
     }
 
-    const savedProfile = await SmtpProfile.findById(profile.id).select('+passwordEncrypted');
+    const savedProfile = await SmtpProfile.findById(profileId).select('+passwordEncrypted');
     res.json({
       success: true,
       data: savedProfile ? toSafeSmtpProfile(savedProfile) : toSafeSmtpProfile(profile),

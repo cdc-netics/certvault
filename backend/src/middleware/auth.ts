@@ -25,7 +25,7 @@ export const authenticate = async (
     const decoded = jwt.verify(token, process.env.JWT_SECRET as string) as { id: string };
     const user = await User.findById(decoded.id).select('+refreshToken');
 
-    if (!user || !user.isActive) {
+    if (!user || user.isActive === false) {
       res.status(401).json({
         success: false,
         error: 'Token inválido o usuario inactivo.'

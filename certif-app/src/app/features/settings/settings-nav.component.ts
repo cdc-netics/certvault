@@ -33,6 +33,11 @@ import { RouterModule } from '@angular/router';
           <i class="fas fa-chart-bar me-1"></i> Reportes
         </a>
       </li>
+      <li class="nav-item">
+        <a class="nav-link" routerLink="/settings/external-api" routerLinkActive="active">
+          <i class="fas fa-plug me-1"></i> API Externa
+        </a>
+      </li>
     </ul>
   `
 })
