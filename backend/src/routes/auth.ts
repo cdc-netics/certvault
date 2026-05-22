@@ -10,7 +10,8 @@ import {
   changePassword,
   forgotPassword,
   resetPassword,
-  verifyEmail
+  verifyEmail,
+  getMyActivity
 } from '../controllers/authController';
 import { authenticate } from '../middleware/auth';
 import { validateRequest } from '../middleware/validation';
@@ -65,6 +66,7 @@ router.post('/verify-email', verifyEmailValidation, validateRequest, verifyEmail
 
 router.post('/logout', authenticate, logout);
 router.get('/me', authenticate, getCurrentUser);
+router.get('/my-activity', authenticate, getMyActivity);
 router.put('/profile', authenticate, updateProfile);
 router.put('/change-password', authenticate, changePassword);
 

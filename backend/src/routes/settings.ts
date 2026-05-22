@@ -23,7 +23,8 @@ import {
   rotatePublicApiClientKey,
   testPublicApiClient,
   updatePublicApiClient,
-  updateBranding
+  updateBranding,
+  systemWipe
 } from '../controllers/settingsController';
 import { adminOnly, authenticate } from '../middleware/auth';
 import { validateRequest } from '../middleware/validation';
@@ -112,6 +113,7 @@ router.get('/audit-logs', getAuditLogs);
 router.get('/backup/summary', getBackupSummary);
 router.get('/backup/export', exportBackup);
 router.post('/backup/import', upload.single('file'), importBackup);
+router.post('/backup/system-wipe', systemWipe);
 router.get('/branding', getBranding);
 router.put('/branding', updateBranding);
 router.get('/public-api/clients', getPublicApiClients);

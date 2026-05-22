@@ -5,6 +5,7 @@ import { User, UserRole } from '../models/User';
 import { AuthRequest } from '../middleware/auth';
 import { saveBase64Avatar } from '../utils/avatar';
 import { sendPasswordResetEmail, sendVerificationEmail } from '../services/emailService';
+import { AuditLog } from '../models/AuditLog';
 
 interface RegisterData {
   username: string;
@@ -600,6 +601,48 @@ export const verifyEmail = async (req: AuthRequest, res: Response): Promise<void
       success: false,
       error: 'No pudimos verificar el correo. Intenta nuevamente.',
       message: 'No pudimos verificar el correo. Intenta nuevamente.'
+    });
+  }
+};
+
+export const getMyActivity = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({
+        success: false,
+        error: 'Usuario no autenticado',
+        message: 'Usuario no autenticado'
+      });
+      return;
+    }
+
+    const activity = await AuditLog.find({
+      $or: [
+        { userId: req.user._id },
+        { userEmail: req.user.email }
+      ]
+    })
+    .sort({ createdAt: -1 })
+    .limit(20)
+    .lean();
+
+    const formattedActivity = activity.map(log => ({
+      action: log.message || log.action,
+      timestamp: log.createdAt,
+      ip: log.ip || 'N/A',
+      device: log.userAgent || 'Desconocido'
+    }));
+
+    res.json({
+      success: true,
+      data: formattedActivity
+    });
+  } catch (error) {
+    console.error('Error obteniendo la actividad del usuario:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Error al obtener la actividad reciente',
+      message: 'Error al obtener la actividad reciente'
     });
   }
 };

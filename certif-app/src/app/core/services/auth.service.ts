@@ -225,6 +225,12 @@ export class AuthService {
       .pipe(catchError(this.handleError));
   }
 
+  // Obtener actividad reciente del usuario
+  getMyActivity(): Observable<ApiResponse<any>> {
+    return this.http.get<ApiResponse<any>>(`${this.API_URL}/my-activity`)
+      .pipe(catchError(this.handleError));
+  }
+
   setCurrentUser(user: User | null): void {
     if (user) {
       localStorage.setItem('user', JSON.stringify(user));

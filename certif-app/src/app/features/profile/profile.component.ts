@@ -135,27 +135,19 @@ export class ProfileComponent implements OnInit, OnDestroy {
   }
 
   private loadRecentActivity(): void {
-    // Datos de ejemplo - en produccion vendria del backend
-    this.recentActivity = [
-      {
-        action: 'Inicio de sesion',
-        timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000),
-        ip: '192.168.1.100',
-        device: 'Chrome - Windows'
-      },
-      {
-        action: 'Actualizacion de perfil',
-        timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000),
-        ip: '192.168.1.100',
-        device: 'Chrome - Windows'
-      },
-      {
-        action: 'Inicio de sesion',
-        timestamp: new Date(Date.now() - 48 * 60 * 60 * 1000),
-        ip: '192.168.1.105',
-        device: 'Firefox - Windows'
-      }
-    ];
+    this.authService.getMyActivity()
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (response) => {
+          if (response.success && response.data) {
+            this.recentActivity = response.data;
+          }
+        },
+        error: (error) => {
+          console.error('Error al cargar la actividad reciente:', error);
+          this.recentActivity = [];
+        }
+      });
   }
 
   onSubmitProfile(): void {

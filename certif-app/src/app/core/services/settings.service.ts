@@ -114,6 +114,11 @@ export class SettingsService {
       .pipe(catchError(this.handleError));
   }
 
+  systemWipe(): Observable<ApiResponse<any>> {
+    return this.http.post<ApiResponse<any>>(`${this.API_URL}/backup/system-wipe`, {})
+      .pipe(tap(() => this.clearCache()), catchError(this.handleError));
+  }
+
   getBranding(): Observable<ApiResponse<BrandingSettings>> {
     return this.cachedGet<BrandingSettings>('branding', `${this.API_URL}/branding`);
   }

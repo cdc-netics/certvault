@@ -6,6 +6,7 @@ import { Certification } from '../models/Certification';
 import { SmtpProfile } from '../models/SmtpProfile';
 import { BrandingSettings } from '../models/BrandingSettings';
 import { AuditLog } from '../models/AuditLog';
+import { PublicApiClient } from '../models/PublicApiClient';
 
 // Generar backup solo de configuraciones (Branding, SmtpProfiles)
 export const generateConfigBackup = async (): Promise<Buffer> => {
@@ -164,4 +165,19 @@ const restoreFullData = async (data: any) => {
     await AuditLog.deleteMany({});
     await AuditLog.insertMany(collections.auditLogs);
   }
+};
+
+// Borrar todo el sistema excepto el administrador por defecto
+export const systemWipe = async (): Promise<void> => {
+  const adminEmail = process.env.ADMIN_EMAIL || 'admin@empresa.com';
+
+  // 1. Eliminar todos los usuarios EXCEPTO el admin
+  await User.deleteMany({ email: { $ne: adminEmail } });
+
+  // 2. Limpiar otras colecciones
+  await Certification.deleteMany({});
+  await SmtpProfile.deleteMany({});
+  await BrandingSettings.deleteMany({});
+  await AuditLog.deleteMany({});
+  await PublicApiClient.deleteMany({});
 };

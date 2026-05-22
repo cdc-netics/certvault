@@ -71,14 +71,36 @@ import { SettingsNavComponent } from '../settings-nav.component';
               
               <div class="mt-auto">
                 <div class="input-group">
-                  <input type="file" class="form-control" accept=".zip" (change)="onFileSelected($event)" [disabled]="importing">
-                  <button class="btn btn-success" [disabled]="!selectedFile || importing" (click)="importBackup()">
+                  <input type="file" class="form-control" accept=".zip" (change)="onFileSelected($event)" [disabled]="importing || wiping">
+                  <button class="btn btn-success" [disabled]="!selectedFile || importing || wiping" (click)="importBackup()">
                     <i class="fas fa-upload me-1" *ngIf="!importing"></i>
                     <i class="fas fa-spinner fa-spin me-1" *ngIf="importing"></i>
                     {{ importing ? 'Importando...' : 'Restaurar ZIP' }}
                   </button>
                 </div>
                 <small class="text-muted mt-2 d-block">Acepta archivos .zip generados por este sistema.</small>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="row">
+        <!-- Wipe System -->
+        <div class="col-12 mb-4">
+          <div class="card shadow-sm border-danger">
+            <div class="card-header bg-white border-danger">
+              <h5 class="mb-0 text-danger"><i class="fas fa-exclamation-triangle me-2"></i>Borrar Sistema (Factory Reset)</h5>
+            </div>
+            <div class="card-body">
+              <p class="text-muted">¡Peligro! Esto eliminará todos los usuarios, certificaciones, configuraciones, perfiles SMTP y logs de auditoría. Solo se conservará el administrador configurado en el sistema.</p>
+              
+              <div class="mt-2">
+                <button class="btn btn-danger" [disabled]="wiping || importing" (click)="systemWipe()">
+                  <i class="fas fa-trash-alt me-1" *ngIf="!wiping"></i>
+                  <i class="fas fa-spinner fa-spin me-1" *ngIf="wiping"></i>
+                  {{ wiping ? 'Borrando...' : 'Borrar Todo el Sistema' }}
+                </button>
               </div>
             </div>
           </div>
@@ -92,6 +114,7 @@ export class BackupSettingsComponent implements OnInit {
   exportingConfig = false;
   exportingFull = false;
   importing = false;
+  wiping = false;
   successMessage = '';
   errorMessage = '';
   selectedFile: File | null = null;
@@ -175,6 +198,27 @@ export class BackupSettingsComponent implements OnInit {
         this.importing = false;
       }
     });
+  }
+
+  // Ejecuta el borrado total del sistema
+  systemWipe(): void {
+    if (confirm('¿ESTÁ SEGURO DE QUE DESEA BORRAR TODO EL SISTEMA?\nEsta acción es irreversible y eliminará todos los datos a excepción del administrador por defecto.')) {
+      this.wiping = true;
+      this.successMessage = '';
+      this.errorMessage = '';
+
+      this.settingsService.systemWipe().subscribe({
+        next: (res) => {
+          this.successMessage = res.message || 'Sistema borrado correctamente.';
+          this.wiping = false;
+          this.loadSummary();
+        },
+        error: (error) => {
+          this.errorMessage = error.message || 'Error al borrar el sistema.';
+          this.wiping = false;
+        }
+      });
+    }
   }
 
   private downloadBlob(blob: Blob, fileName: string): void {

@@ -11,7 +11,7 @@ import { toSafeSmtpProfile } from '../services/smtpProfileService';
 import { clearApiKeyCache } from '../middleware/apiKey';
 import crypto from 'crypto';
 import fs from 'fs';
-import { generateConfigBackup, generateFullBackup, restoreBackup } from '../services/backupService';
+import { generateConfigBackup, generateFullBackup, restoreBackup, systemWipe as performSystemWipe } from '../services/backupService';
 
 const getDateRange = (req: Request) => {
   const from = req.query.from ? new Date(req.query.from as string) : undefined;
@@ -183,6 +183,31 @@ export const getBackupSummary = async (_req: Request, res: Response): Promise<vo
     });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Error al obtener resumen de backup' });
+  }
+};
+
+export const systemWipe = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    await performSystemWipe();
+    
+    await recordAuditLog({
+      action: AuditAction.DELETE,
+      resource: 'system',
+      userId: req.user?._id,
+      userEmail: req.user?.email,
+      userRole: req.user?.role,
+      method: req.method,
+      path: req.originalUrl,
+      ip: req.ip,
+      userAgent: req.get('user-agent'),
+      statusCode: 200,
+      message: 'System wipe ejecutado'
+    });
+
+    res.json({ success: true, message: 'Sistema borrado exitosamente. Solo se conservó el administrador por defecto.' });
+  } catch (error) {
+    console.error('Error en system wipe:', error);
+    res.status(500).json({ success: false, error: 'Error al realizar el borrado del sistema' });
   }
 };
 
