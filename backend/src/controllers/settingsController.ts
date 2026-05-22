@@ -10,6 +10,8 @@ import { recordAuditLog } from '../services/auditService';
 import { toSafeSmtpProfile } from '../services/smtpProfileService';
 import { clearApiKeyCache } from '../middleware/apiKey';
 import crypto from 'crypto';
+import fs from 'fs';
+import { generateConfigBackup, generateFullBackup, restoreBackup } from '../services/backupService';
 
 const getDateRange = (req: Request) => {
   const from = req.query.from ? new Date(req.query.from as string) : undefined;
@@ -96,26 +98,12 @@ export const getAuditLogs = async (req: Request, res: Response): Promise<void> =
 
 export const exportBackup = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const [users, certifications, smtpProfiles, branding] = await Promise.all([
-      User.find().select('-password -refreshToken -passwordResetToken -verificationToken').lean(),
-      Certification.find().lean(),
-      SmtpProfile.find().select('+passwordEncrypted').lean(),
-      BrandingSettings.findOne().sort({ updatedAt: -1 }).lean()
-    ]);
-
-    const backup = {
-      exportedAt: new Date().toISOString(),
-      version: '1.0',
-      collections: {
-        users,
-        certifications,
-        smtpProfiles: smtpProfiles.map(profile => ({
-          ...profile,
-          passwordEncrypted: profile.passwordEncrypted ? '[encrypted-secret-exported]' : undefined
-        })),
-        branding
-      }
-    };
+    const backupType = req.query.type as string || 'full';
+    
+    // Generar el ZIP correspondiente según el tipo solicitado
+    const zipBuffer = backupType === 'config' 
+      ? await generateConfigBackup() 
+      : await generateFullBackup();
 
     await recordAuditLog({
       action: AuditAction.EXPORT,
@@ -128,15 +116,55 @@ export const exportBackup = async (req: AuthRequest, res: Response): Promise<voi
       ip: req.ip,
       userAgent: req.get('user-agent'),
       statusCode: 200,
-      message: 'Backup exportado'
+      message: `Backup ${backupType} exportado`
     });
 
-    res.setHeader('Content-Type', 'application/json');
-    res.setHeader('Content-Disposition', `attachment; filename="certivault-backup-${Date.now()}.json"`);
-    res.status(200).send(JSON.stringify(backup, null, 2));
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="certivault-backup-${backupType}-${Date.now()}.zip"`);
+    res.status(200).send(zipBuffer);
   } catch (error) {
     console.error('Error exportando backup:', error);
     res.status(500).json({ success: false, error: 'Error al exportar backup' });
+  }
+};
+
+export const importBackup = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.file) {
+      res.status(400).json({ success: false, error: 'No se ha proporcionado ningún archivo ZIP' });
+      return;
+    }
+
+    // Leer el buffer del archivo subido
+    const fileBuffer = req.file.buffer || fs.readFileSync(req.file.path);
+
+    // Restaurar los datos desde el ZIP
+    await restoreBackup(fileBuffer);
+
+    // Registrar en auditoría
+    await recordAuditLog({
+      action: AuditAction.CREATE,
+      resource: 'backup',
+      userId: req.user?._id,
+      userEmail: req.user?.email,
+      userRole: req.user?.role,
+      method: req.method,
+      path: req.originalUrl,
+      ip: req.ip,
+      userAgent: req.get('user-agent'),
+      statusCode: 200,
+      message: 'Backup importado y restaurado exitosamente'
+    });
+
+    // Limpiar el archivo subido si existe en disco temporal
+    if (req.file.path && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
+
+    res.json({ success: true, message: 'Respaldo importado exitosamente' });
+  } catch (error: any) {
+    console.error('Error importando backup:', error);
+    res.status(500).json({ success: false, error: error.message || 'Error al importar backup' });
   }
 };
 

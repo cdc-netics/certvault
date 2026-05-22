@@ -102,8 +102,15 @@ export class SettingsService {
     return this.cachedGet<any>('backup-summary', `${this.API_URL}/backup/summary`);
   }
 
-  exportBackup(): Observable<Blob> {
-    return this.http.get(`${this.API_URL}/backup/export`, { responseType: 'blob' })
+  exportBackup(type: 'config' | 'full' = 'full'): Observable<Blob> {
+    return this.http.get(`${this.API_URL}/backup/export?type=${type}`, { responseType: 'blob' })
+      .pipe(catchError(this.handleError));
+  }
+
+  importBackup(file: File): Observable<ApiResponse<any>> {
+    const formData = new FormData();
+    formData.append('file', file);
+    return this.http.post<ApiResponse<any>>(`${this.API_URL}/backup/import`, formData)
       .pipe(catchError(this.handleError));
   }
 

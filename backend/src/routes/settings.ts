@@ -11,6 +11,7 @@ import {
 } from '../controllers/smtpProfilesController';
 import {
   exportBackup,
+  importBackup,
   createPublicApiClient,
   deletePublicApiClient,
   exportReport,
@@ -26,6 +27,9 @@ import {
 } from '../controllers/settingsController';
 import { adminOnly, authenticate } from '../middleware/auth';
 import { validateRequest } from '../middleware/validation';
+import multer from 'multer';
+
+const upload = multer({ storage: multer.memoryStorage() });
 
 const router = Router();
 
@@ -107,6 +111,7 @@ router.post('/smtp-profiles/:id/test', testValidation, validateRequest, testSmtp
 router.get('/audit-logs', getAuditLogs);
 router.get('/backup/summary', getBackupSummary);
 router.get('/backup/export', exportBackup);
+router.post('/backup/import', upload.single('file'), importBackup);
 router.get('/branding', getBranding);
 router.put('/branding', updateBranding);
 router.get('/public-api/clients', getPublicApiClients);
