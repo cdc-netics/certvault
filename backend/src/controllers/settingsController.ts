@@ -1,4 +1,6 @@
 import { Request, Response } from 'express';
+import archiver from 'archiver';
+import path from 'path';
 import { AuditAction, AuditLog } from '../models/AuditLog';
 import { BrandingSettings } from '../models/BrandingSettings';
 import { Certification } from '../models/Certification';
@@ -109,6 +111,70 @@ export const exportBackup = async (req: AuthRequest, res: Response): Promise<voi
   } catch (error) {
     console.error('Error exportando backup:', error);
     res.status(500).json({ success: false, error: 'Error al exportar backup' });
+  }
+};
+
+export const exportFullBackup = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const [users, certifications, smtpProfiles, branding] = await Promise.all([
+      User.find().select('-password -refreshToken -passwordResetToken -verificationToken').lean(),
+      Certification.find().lean(),
+      SmtpProfile.find().select('+passwordEncrypted').lean(),
+      BrandingSettings.findOne().sort({ updatedAt: -1 }).lean()
+    ]);
+
+    const backupData = {
+      exportedAt: new Date().toISOString(),
+      version: '1.0',
+      collections: {
+        users,
+        certifications,
+        smtpProfiles: smtpProfiles.map(profile => ({
+          ...profile,
+          passwordEncrypted: profile.passwordEncrypted ? '[encrypted-secret-exported]' : undefined
+        })),
+        branding
+      }
+    };
+
+    await recordAuditLog({
+      action: AuditAction.EXPORT,
+      resource: 'backup_full',
+      userId: req.user?._id,
+      userEmail: req.user?.email,
+      userRole: req.user?.role,
+      method: req.method,
+      path: req.originalUrl,
+      ip: req.ip,
+      userAgent: req.get('user-agent'),
+      statusCode: 200,
+      message: 'Backup completo (ZIP) exportado'
+    });
+
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="certivault-full-backup-${Date.now()}.zip"`);
+
+    const archive = archiver('zip', {
+      zlib: { level: 9 }
+    });
+
+    archive.on('error', (err) => {
+      throw err;
+    });
+
+    archive.pipe(res);
+
+    archive.append(JSON.stringify(backupData, null, 2), { name: 'backup.json' });
+
+    const uploadsPath = path.join(__dirname, '../../uploads');
+    archive.directory(uploadsPath, 'uploads');
+
+    await archive.finalize();
+  } catch (error) {
+    console.error('Error exportando backup completo:', error);
+    if (!res.headersSent) {
+      res.status(500).json({ success: false, error: 'Error al exportar backup completo' });
+    }
   }
 };
 

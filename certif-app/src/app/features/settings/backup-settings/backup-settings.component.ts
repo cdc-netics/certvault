@@ -34,15 +34,29 @@ import { SettingsNavComponent } from '../settings-nav.component';
         </div>
       </div>
 
-      <div class="card">
+      <div class="card mb-4">
         <div class="card-header">
-          <h5 class="mb-0">Exportacion completa</h5>
+          <h5 class="mb-0">Exportacion de Configuracion</h5>
         </div>
         <div class="card-body">
           <p class="text-muted">El archivo JSON incluye datos operacionales y configuraciones. Las contraseñas SMTP no se exponen en texto plano.</p>
-          <button class="btn btn-primary" (click)="downloadBackup()" [disabled]="exporting">
-            <i class="fas fa-download me-1"></i>
+          <button class="btn btn-outline-primary" (click)="downloadBackup()" [disabled]="exporting || exportingFull">
+            <i class="fas fa-file-code me-1"></i>
             {{ exporting ? 'Exportando...' : 'Exportar Backup JSON' }}
+          </button>
+        </div>
+      </div>
+
+      <div class="card border-primary">
+        <div class="card-header bg-primary text-white">
+          <h5 class="mb-0">Exportacion Completa del Sistema (ZIP)</h5>
+        </div>
+        <div class="card-body">
+          <p class="text-muted">Descarga un archivo ZIP que contiene la configuracion JSON más todos los archivos subidos al sistema (certificados, avatares de usuarios, imagenes de branding).</p>
+          <p class="text-warning small"><i class="fas fa-exclamation-triangle me-1"></i> Esta operacion puede tardar dependiendo de la cantidad de archivos almacenados.</p>
+          <button class="btn btn-primary" (click)="downloadFullBackup()" [disabled]="exporting || exportingFull">
+            <i class="fas fa-file-archive me-1"></i>
+            {{ exportingFull ? 'Generando ZIP...' : 'Exportar Todo en ZIP' }}
           </button>
         </div>
       </div>
@@ -52,6 +66,7 @@ import { SettingsNavComponent } from '../settings-nav.component';
 export class BackupSettingsComponent implements OnInit {
   summary: any = {};
   exporting = false;
+  exportingFull = false;
   successMessage = '';
   errorMessage = '';
 
@@ -84,12 +99,29 @@ export class BackupSettingsComponent implements OnInit {
     this.settingsService.exportBackup().subscribe({
       next: (blob) => {
         this.downloadBlob(blob, `certivault-backup-${Date.now()}.json`);
-        this.successMessage = 'Backup exportado correctamente.';
+        this.successMessage = 'Backup JSON exportado correctamente.';
         this.exporting = false;
       },
       error: (error) => {
         this.errorMessage = error.message;
         this.exporting = false;
+      }
+    });
+  }
+
+  downloadFullBackup(): void {
+    this.exportingFull = true;
+    this.successMessage = '';
+    this.errorMessage = '';
+    this.settingsService.exportFullBackup().subscribe({
+      next: (blob) => {
+        this.downloadBlob(blob, `certivault-full-backup-${Date.now()}.zip`);
+        this.successMessage = 'Backup completo ZIP exportado correctamente.';
+        this.exportingFull = false;
+      },
+      error: (error) => {
+        this.errorMessage = error.message;
+        this.exportingFull = false;
       }
     });
   }

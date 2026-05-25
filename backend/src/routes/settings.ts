@@ -11,6 +11,7 @@ import {
 } from '../controllers/smtpProfilesController';
 import {
   exportBackup,
+  exportFullBackup,
   exportReport,
   getAuditLogs,
   getBackupSummary,
@@ -80,6 +81,7 @@ router.post('/smtp-profiles/:id/test', testValidation, validateRequest, testSmtp
 router.get('/audit-logs', getAuditLogs);
 router.get('/backup/summary', getBackupSummary);
 router.get('/backup/export', exportBackup);
+router.get('/backup/export/full', exportFullBackup);
 router.get('/branding', getBranding);
 router.put('/branding', updateBranding);
 router.get('/reports/overview', getReportsOverview);

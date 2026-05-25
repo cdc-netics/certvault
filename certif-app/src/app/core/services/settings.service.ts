@@ -90,6 +90,11 @@ export class SettingsService {
       .pipe(catchError(this.handleError));
   }
 
+  exportFullBackup(): Observable<Blob> {
+    return this.http.get(`${this.API_URL}/backup/export/full`, { responseType: 'blob' })
+      .pipe(catchError(this.handleError));
+  }
+
   getBranding(): Observable<ApiResponse<BrandingSettings>> {
     return this.cachedGet<BrandingSettings>('branding', `${this.API_URL}/branding`);
   }
