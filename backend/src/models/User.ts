@@ -104,7 +104,16 @@ const userSchema = new Schema<IUser>(
       type: String,
       required: [true, 'La contrasena es requerida'],
       minlength: [6, 'La contrasena debe tener al menos 6 caracteres'],
-      match: [/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$/, 'La contrasena debe contener al menos una mayuscula, una minuscula y un numero'],
+      validate: {
+        validator: function(this: any, v: string) {
+          // Si la contraseña no ha sido modificada, es un hash de bcrypt y se omite la validacion de complejidad
+          if (this && typeof this.isModified === 'function' && !this.isModified('password')) {
+            return true;
+          }
+          return /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$/.test(v);
+        },
+        message: 'La contrasena debe contener al menos una mayuscula, una minuscula y un numero'
+      },
       select: false
     },
     firstName: {
