@@ -239,13 +239,9 @@ export class UsersListComponent implements OnInit, OnDestroy {
 
   deleteUser(user: User): void {
     if (!this.canDeleteUser(user)) return;
-    console.log('Intentando eliminar usuario:', user);
-    // if (!confirm(`¿Estás seguro de que deseas eliminar al usuario ${user.firstName} ${user.lastName}?`)) {
-    //   console.log('Eliminación de usuario cancelada por el usuario.');  
-    //   return;
-    //   console.log('Eliminación de usuario confirmada. Procediendo...');
-    // }
-    console.log('Eliminación de usuario confirmada. Procediendo...');
+    if (!confirm(`¿Estás seguro de que deseas eliminar al usuario ${user.firstName} ${user.lastName}? Esta acción enviará un respaldo con sus certificados a su correo personal y los borrará de forma permanente.`)) {
+      return;
+    }
     this.loading = true;
     this.errorMessage = '';
 

@@ -123,9 +123,15 @@ export const sendUserCertificationsArchiveEmail = async (
   const mailer = await getActiveMailer();
   await mailer.transporter.verify();
 
-  const formatDate = (date?: Date): string => {
+  const formatDate = (date?: Date | string | null): string => {
     if (!date) return 'N/A';
-    return new Date(date).toISOString().slice(0, 10);
+    const d = new Date(date);
+    if (isNaN(d.getTime())) return 'N/A';
+    try {
+      return d.toISOString().slice(0, 10);
+    } catch {
+      return 'N/A';
+    }
   };
 
   const rowsHtml = payload.certifications
