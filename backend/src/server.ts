@@ -26,6 +26,9 @@ import { errorHandler } from './middleware/errorHandler';
 import { notFound } from './middleware/notFound';
 import { auditRequest } from './services/auditService';
 
+// Importar servicio de cron para expiración de contraseñas
+import { startPasswordExpirationCron } from './services/cronService';
+
 // Cargar variables de entorno desde la raiz del repositorio.
 const explicitEnvPath = process.env.ENV_FILE;
 const envCandidates = [
@@ -186,9 +189,15 @@ const createDefaultAdminAndSeed = async (): Promise<void> => {
       { $set: { isActive: true } }
     );
 
-    if (backfillPersonalEmailResult.modifiedCount > 0 || backfillIsActiveResult.modifiedCount > 0) {
+    // Inicializar el campo de aceptación de términos en usuarios preexistentes
+    const backfillTermsResult = await User.updateMany(
+      { termsAccepted: { $exists: false } },
+      { $set: { termsAccepted: false } }
+    );
+
+    if (backfillPersonalEmailResult.modifiedCount > 0 || backfillIsActiveResult.modifiedCount > 0 || backfillTermsResult.modifiedCount > 0) {
       console.log(
-        `Backfill usuarios aplicado: personalEmail=${backfillPersonalEmailResult.modifiedCount}, isActive=${backfillIsActiveResult.modifiedCount}`
+        `Backfill usuarios aplicado: personalEmail=${backfillPersonalEmailResult.modifiedCount}, isActive=${backfillIsActiveResult.modifiedCount}, termsAccepted=${backfillTermsResult.modifiedCount}`
       );
     }
 
@@ -207,6 +216,7 @@ const createDefaultAdminAndSeed = async (): Promise<void> => {
         department: Department.TI,
         position: 'Administrador del Sistema',
         isActive: true,
+        termsAccepted: false, // Requerir aceptación de términos al ingresar por primera vez
         permissions: Object.values(Permission)
       });
       await adminUser.save();
@@ -255,6 +265,10 @@ process.on('SIGINT', async () => {
 // Iniciar servidor
 const startServer = async (): Promise<void> => {
   await connectDB();
+  
+  // Inicialización del servicio cron para control periódico de expiración de claves
+  startPasswordExpirationCron();
+
   app.listen(PORT, () => {
     console.log(`Servidor corriendo en puerto ${PORT}`);
     console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);

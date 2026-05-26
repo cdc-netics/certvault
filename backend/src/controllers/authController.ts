@@ -1,11 +1,12 @@
 import crypto from 'crypto';
-import { Response } from 'express';
+import { Response, Request } from 'express';
 import jwt from 'jsonwebtoken';
 import { User, UserRole } from '../models/User';
 import { AuthRequest } from '../middleware/auth';
 import { saveBase64Avatar } from '../utils/avatar';
 import { sendPasswordResetEmail, sendVerificationEmail } from '../services/emailService';
 import { AuditLog } from '../models/AuditLog';
+import { SecuritySettings } from '../models/SecuritySettings';
 
 interface RegisterData {
   username: string;
@@ -158,6 +159,25 @@ export const login = async (req: AuthRequest, res: Response): Promise<void> => {
       return;
     }
 
+    // Verificar si la contraseña expiró según las políticas de seguridad globales
+    const settings = await SecuritySettings.findOne();
+    const expirationEnabled = settings?.passwordExpirationEnabled || false;
+    let isExpired = false;
+    if (expirationEnabled) {
+      const expirationDate = new Date(user.passwordChangedAt || user.createdAt);
+      expirationDate.setMonth(expirationDate.getMonth() + (settings?.passwordExpirationMonths || 3));
+      isExpired = new Date() > expirationDate;
+    }
+
+    // Verificar si le falta el correo personal o es idéntico al corporativo
+    const isPersonalEmailMissingOrEqual = !user.personalEmail || 
+      user.personalEmail.toLowerCase().trim() === user.email.toLowerCase().trim();
+
+    // Si expiró o le falta el correo personal, forzar el cambio
+    if (isExpired || isPersonalEmailMissingOrEqual) {
+      user.mustChangePassword = true;
+    }
+
     const token = generateToken(String(user._id));
     const refreshToken = generateRefreshToken(String(user._id));
 
@@ -174,6 +194,7 @@ export const login = async (req: AuthRequest, res: Response): Promise<void> => {
           _id: user._id,
           username: user.username,
           email: user.email,
+          personalEmail: user.personalEmail,
           firstName: user.firstName,
           lastName: user.lastName,
           role: user.role,
@@ -183,7 +204,11 @@ export const login = async (req: AuthRequest, res: Response): Promise<void> => {
           avatarUrl: user.avatarUrl,
           avatar: user.avatar,
           isActive: user.isActive,
-          lastLogin: user.lastLogin
+          lastLogin: user.lastLogin,
+          mustChangePassword: user.mustChangePassword,
+          termsAccepted: user.termsAccepted,
+          termsAcceptedAt: user.termsAcceptedAt,
+          requiresPersonalEmailUpdate: isPersonalEmailMissingOrEqual
         },
         expiresIn: 7 * 24 * 60 * 60
       },
@@ -310,6 +335,9 @@ export const getCurrentUser = async (req: AuthRequest, res: Response): Promise<v
         avatar: req.user.avatar,
         isActive: req.user.isActive,
         lastLogin: req.user.lastLogin,
+        mustChangePassword: req.user.mustChangePassword,
+        termsAccepted: req.user.termsAccepted,
+        termsAcceptedAt: req.user.termsAcceptedAt,
         createdAt: req.user.createdAt
       }
     });
@@ -400,7 +428,7 @@ export const changePassword = async (req: AuthRequest, res: Response): Promise<v
       return;
     }
 
-    const { currentPassword, newPassword } = req.body;
+    const { currentPassword, newPassword, personalEmail } = req.body;
 
     if (!currentPassword || !newPassword) {
       res.status(400).json({
@@ -431,16 +459,47 @@ export const changePassword = async (req: AuthRequest, res: Response): Promise<v
       return;
     }
 
-    if (newPassword.length < 6) {
-      res.status(400).json({
-        success: false,
-        error: 'La nueva contraseña debe tener al menos 6 caracteres',
-        message: 'La nueva contraseña debe tener al menos 6 caracteres'
-      });
-      return;
+    // Verificar si al usuario le falta configurar el correo personal o si es igual al corporativo
+    const isPersonalEmailMissingOrEqual = !user.personalEmail || 
+      user.personalEmail.toLowerCase().trim() === user.email.toLowerCase().trim();
+
+    if (isPersonalEmailMissingOrEqual) {
+      const emailToUse = personalEmail || req.body.email; // Soporte a campos alternativos
+      if (!emailToUse || !emailToUse.trim()) {
+        res.status(400).json({
+          success: false,
+          error: 'Debe ingresar un correo personal válido diferente al corporativo.',
+          message: 'Debe ingresar un correo personal válido diferente al corporativo.'
+        });
+        return;
+      }
+
+      const normalizedPersonal = emailToUse.toLowerCase().trim();
+      if (normalizedPersonal === user.email.toLowerCase().trim()) {
+        res.status(400).json({
+          success: false,
+          error: 'El correo personal no puede ser igual al correo de la empresa.',
+          message: 'El correo personal no puede ser igual al correo de la empresa.'
+        });
+        return;
+      }
+      user.personalEmail = normalizedPersonal;
+    } else if (personalEmail) {
+      // Si decide actualizar el correo personal al mismo tiempo
+      const normalizedPersonal = personalEmail.toLowerCase().trim();
+      if (normalizedPersonal === user.email.toLowerCase().trim()) {
+        res.status(400).json({
+          success: false,
+          error: 'El correo personal no puede ser igual al correo de la empresa.',
+          message: 'El correo personal no puede ser igual al correo de la empresa.'
+        });
+        return;
+      }
+      user.personalEmail = normalizedPersonal;
     }
 
     user.password = newPassword;
+    user.mustChangePassword = false; // Desmarcar el forzado ya que se cambió con éxito
     await user.save();
 
     res.json({
@@ -504,7 +563,7 @@ export const forgotPassword = async (req: AuthRequest, res: Response): Promise<v
 
 export const resetPassword = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { token, newPassword, email } = req.body as { token: string; newPassword: string; email?: string };
+    const { token, newPassword, email, personalEmail } = req.body as { token: string; newPassword: string; email?: string; personalEmail?: string };
 
     if (!token || !newPassword) {
       res.status(400).json({
@@ -540,7 +599,34 @@ export const resetPassword = async (req: AuthRequest, res: Response): Promise<vo
       return;
     }
 
+    // Verificar si al usuario le falta configurar el correo personal o si es igual al corporativo
+    const isPersonalEmailMissingOrEqual = !user.personalEmail || 
+      user.personalEmail.toLowerCase().trim() === user.email.toLowerCase().trim();
+
+    if (isPersonalEmailMissingOrEqual) {
+      if (!personalEmail || !personalEmail.trim()) {
+        res.status(400).json({
+          success: false,
+          error: 'Debe ingresar un correo personal válido diferente al corporativo para restablecer la contraseña.',
+          message: 'Debe ingresar un correo personal válido diferente al corporativo para restablecer la contraseña.'
+        });
+        return;
+      }
+
+      const normalizedPersonal = personalEmail.toLowerCase().trim();
+      if (normalizedPersonal === user.email.toLowerCase().trim()) {
+        res.status(400).json({
+          success: false,
+          error: 'El correo personal no puede ser igual al correo de la empresa.',
+          message: 'El correo personal no puede ser igual al correo de la empresa.'
+        });
+        return;
+      }
+      user.personalEmail = normalizedPersonal;
+    }
+
     user.password = newPassword;
+    user.mustChangePassword = false; // Desmarcar el forzado ya que se cambió con éxito
     user.passwordResetToken = undefined;
     user.passwordResetExpires = undefined;
     user.refreshToken = undefined;
@@ -646,6 +732,98 @@ export const getMyActivity = async (req: AuthRequest, res: Response): Promise<vo
       success: false,
       error: 'Error al obtener la actividad reciente',
       message: 'Error al obtener la actividad reciente'
+    });
+  }
+};
+
+export const verifyResetToken = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { token, email } = req.body as { token: string; email?: string };
+
+    if (!token) {
+      res.status(400).json({
+        success: false,
+        error: 'Token de restablecimiento requerido'
+      });
+      return;
+    }
+
+    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+    const user = await User.findOne({
+      passwordResetToken: hashedToken,
+      passwordResetExpires: { $gt: new Date() },
+      ...(email ? { email: normalizeEmail(email) } : {})
+    });
+
+    if (!user) {
+      res.status(400).json({
+        success: false,
+        error: 'El enlace de restablecimiento es inválido o ya expiró'
+      });
+      return;
+    }
+
+    const requiresPersonalEmail = !user.personalEmail || 
+      user.personalEmail.toLowerCase().trim() === user.email.toLowerCase().trim();
+
+    res.json({
+      success: true,
+      data: {
+        valid: true,
+        email: user.email,
+        requiresPersonalEmail
+      }
+    });
+  } catch (error) {
+    console.error('Error verificando token de reset:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Error interno del servidor'
+    });
+  }
+};
+
+// Registra la aceptación del documento de términos y condiciones para el usuario autenticado
+export const acceptTerms = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({
+        success: false,
+        error: 'Usuario no autenticado',
+        message: 'Usuario no autenticado'
+      });
+      return;
+    }
+
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      res.status(404).json({
+        success: false,
+        error: 'Usuario no encontrado',
+        message: 'Usuario no encontrado'
+      });
+      return;
+    }
+
+    // Registrar la firma/aceptación
+    user.termsAccepted = true;
+    user.termsAcceptedAt = new Date();
+    await user.save();
+
+    res.json({
+      success: true,
+      message: 'Términos y condiciones aceptados correctamente',
+      data: {
+        termsAccepted: user.termsAccepted,
+        termsAcceptedAt: user.termsAcceptedAt
+      }
+    });
+  } catch (error) {
+    console.error('Error al aceptar términos:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Error al procesar la aceptación de los términos y condiciones',
+      message: 'Error al procesar la aceptación de los términos y condiciones'
     });
   }
 };

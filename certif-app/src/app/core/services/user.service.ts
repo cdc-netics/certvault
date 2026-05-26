@@ -65,7 +65,7 @@ export class UserService {
 
   constructor(private readonly http: HttpClient) {}
 
-  // Obtener lista de usuarios con filtros y paginación
+  // Obtener lista de usuarios con filtros y paginaciï¿½n
   getUsers(query: UsersQuery = {}): Observable<ApiResponse<UsersResponse>> {
     let params = new HttpParams();
     
@@ -105,7 +105,13 @@ export class UserService {
       .pipe(catchError(this.handleError));
   }
 
-  // Obtener estadísticas de usuarios
+  // Forzar cambio de contraseÃ±a de forma masiva
+  forcePasswordChange(userIds: string[]): Observable<ApiResponse<void>> {
+    return this.http.post<ApiResponse<void>>(`${this.API_URL}/force-password-change`, { userIds })
+      .pipe(catchError(this.handleError));
+  }
+
+  // Obtener estadï¿½sticas de usuarios
   getUserStats(): Observable<ApiResponse<UserStats>> {
     return this.http.get<ApiResponse<UserStats>>(`${this.API_URL}/stats`)
       .pipe(catchError(this.handleError));
@@ -125,8 +131,8 @@ export class UserService {
 
   // Helper: Obtener permisos de usuario
   getUserPermissions(user: User): UserPermissions {
-    // Simulación de verificación de permisos basada en rol
-    // En un sistema real, esto vendría del backend
+    // Simulaciï¿½n de verificaciï¿½n de permisos basada en rol
+    // En un sistema real, esto vendrï¿½a del backend
     const permissions: UserPermissions = {
       canCreateUsers: this.hasPermission(user, Permission.CREATE_USERS),
       canUpdateUsers: this.hasPermission(user, Permission.UPDATE_USERS),
@@ -145,14 +151,14 @@ export class UserService {
     return permissions;
   }
 
-  // Helper: Verificar si el usuario tiene un permiso específico
+  // Helper: Verificar si el usuario tiene un permiso especï¿½fico
   private hasPermission(user: User, permission: Permission): boolean {
     // El admin tiene todos los permisos
     if (user.role === UserRole.ADMIN) {
       return true;
     }
 
-    // Verificar permisos específicos asignados
+    // Verificar permisos especï¿½ficos asignados
     if (user.permissions?.includes(permission)) {
       return true;
     }
@@ -206,7 +212,7 @@ export class UserService {
       return true;
     }
 
-    // Los líderes pueden gestionar su propio departamento
+    // Los lï¿½deres pueden gestionar su propio departamento
     if (user.role === UserRole.LIDER) {
       // Puede gestionar su departamento principal
       if (user.department === department) {

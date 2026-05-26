@@ -11,7 +11,9 @@ import {
   forgotPassword,
   resetPassword,
   verifyEmail,
-  getMyActivity
+  getMyActivity,
+  verifyResetToken,
+  acceptTerms
 } from '../controllers/authController';
 import { authenticate } from '../middleware/auth';
 import { validateRequest } from '../middleware/validation';
@@ -62,6 +64,7 @@ router.post('/login', loginValidation, validateRequest, login);
 router.post('/refresh', refreshToken);
 router.post('/forgot-password', forgotPasswordValidation, validateRequest, forgotPassword);
 router.post('/reset-password', resetPasswordValidation, validateRequest, resetPassword);
+router.post('/verify-reset-token', verifyResetToken);
 router.post('/verify-email', verifyEmailValidation, validateRequest, verifyEmail);
 
 router.post('/logout', authenticate, logout);
@@ -69,5 +72,6 @@ router.get('/me', authenticate, getCurrentUser);
 router.get('/my-activity', authenticate, getMyActivity);
 router.put('/profile', authenticate, updateProfile);
 router.put('/change-password', authenticate, changePassword);
+router.post('/accept-terms', authenticate, acceptTerms);
 
 export default router;

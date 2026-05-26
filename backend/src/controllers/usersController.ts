@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import { Response } from 'express';
 import fs from 'fs';
 import path from 'path';
+import mongoose from 'mongoose';
 import { User, UserRole, Department, Permission } from '../models/User';
 import { Certification } from '../models/Certification';
 import { AuthRequest } from '../middleware/auth';
@@ -712,6 +713,56 @@ export const getRoles = async (req: AuthRequest, res: Response): Promise<void> =
     });
   } catch (error) {
     console.error('Error obteniendo roles:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Error interno del servidor'
+    });
+  }
+};
+
+export const forcePasswordChange = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const currentUser = req.user!;
+    const { userIds, all } = req.body as { userIds?: string[]; all?: boolean };
+
+    if (!currentUser.hasPermission(Permission.SYSTEM_ADMIN)) {
+      res.status(403).json({
+        success: false,
+        error: 'No tienes permisos para forzar el cambio de contraseña'
+      });
+      return;
+    }
+
+    if (all) {
+      // Forzar cambio a todos los usuarios excepto al administrador actual
+      const result = await User.updateMany(
+        { _id: { $ne: currentUser._id }, role: { $ne: UserRole.ADMIN } },
+        { $set: { mustChangePassword: true } }
+      );
+
+      res.json({
+        success: true,
+        message: `Se forzó el cambio de contraseña para ${result.modifiedCount} usuarios.`
+      });
+    } else if (userIds && Array.isArray(userIds) && userIds.length > 0) {
+      // Forzar cambio a la lista de usuarios seleccionados
+      const result = await User.updateMany(
+        { _id: { $in: userIds.map(id => new mongoose.Types.ObjectId(id)) } },
+        { $set: { mustChangePassword: true } }
+      );
+
+      res.json({
+        success: true,
+        message: `Se forzó el cambio de contraseña para ${result.modifiedCount} usuarios.`
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        error: 'Debe especificar usuarios o marcar la opción para todos.'
+      });
+    }
+  } catch (error) {
+    console.error('Error forzando cambio masivo de contraseñas:', error);
     res.status(500).json({
       success: false,
       error: 'Error interno del servidor'

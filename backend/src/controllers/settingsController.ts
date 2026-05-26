@@ -6,6 +6,7 @@ import { SmtpProfile } from '../models/SmtpProfile';
 import { PublicApiClient } from '../models/PublicApiClient';
 import { User } from '../models/User';
 import { AuthRequest } from '../middleware/auth';
+import { SecuritySettings } from '../models/SecuritySettings';
 import { recordAuditLog } from '../services/auditService';
 import { toSafeSmtpProfile } from '../services/smtpProfileService';
 import { clearApiKeyCache } from '../middleware/apiKey';
@@ -532,5 +533,51 @@ export const exportReport = async (req: AuthRequest, res: Response): Promise<voi
     res.status(200).send(csv);
   } catch (error) {
     res.status(500).json({ success: false, error: 'Error al exportar reporte' });
+  }
+};
+
+export const getSecuritySettings = async (_req: Request, res: Response): Promise<void> => {
+  try {
+    let settings = await SecuritySettings.findOne().sort({ updatedAt: -1 });
+    if (!settings) {
+      settings = await SecuritySettings.create({
+        passwordExpirationEnabled: false,
+        passwordExpirationMonths: 3
+      });
+    }
+    res.json({ success: true, data: settings });
+  } catch (error) {
+    console.error('Error obteniendo configuracion de seguridad:', error);
+    res.status(500).json({ success: false, error: 'Error al obtener configuracion de seguridad' });
+  }
+};
+
+export const updateSecuritySettings = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    let settings = await SecuritySettings.findOne().sort({ updatedAt: -1 });
+    if (!settings) {
+      settings = new SecuritySettings();
+    }
+
+    const { passwordExpirationEnabled, passwordExpirationMonths } = req.body;
+
+    if (passwordExpirationEnabled !== undefined) {
+      settings.passwordExpirationEnabled = Boolean(passwordExpirationEnabled);
+    }
+    if (passwordExpirationMonths !== undefined) {
+      settings.passwordExpirationMonths = Number(passwordExpirationMonths);
+    }
+
+    settings.updatedBy = req.user?._id;
+    await settings.save();
+
+    res.json({
+      success: true,
+      data: settings,
+      message: 'Configuracion de seguridad actualizada exitosamente'
+    });
+  } catch (error) {
+    console.error('Error actualizando configuracion de seguridad:', error);
+    res.status(400).json({ success: false, error: 'Error al actualizar configuracion de seguridad' });
   }
 };

@@ -106,8 +106,9 @@
                   [class.is-invalid]="personalEmail?.invalid && personalEmail?.touched"
                   placeholder="persona@gmail.com">
                 <div class="invalid-feedback" *ngIf="personalEmail?.invalid && personalEmail?.touched">
-                  <small *ngIf="personalEmail?.errors?.['required']">El correo personal es requerido</small>
-                  <small *ngIf="personalEmail?.errors?.['email']">Correo personal invalido</small>
+                  <small *ngIf="personalEmail?.errors?.['required']" class="d-block">El correo personal es requerido</small>
+                  <small *ngIf="personalEmail?.errors?.['email']" class="d-block">Correo personal invalido</small>
+                  <small *ngIf="personalEmail?.errors?.['emailsIdentical']" class="d-block">El correo personal no puede ser igual al de la empresa</small>
                 </div>
               </div>
             </div>

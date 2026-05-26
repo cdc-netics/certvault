@@ -20,6 +20,9 @@ export interface User {
   createdBy?: string;
   createdAt?: Date;
   updatedAt?: Date;
+  mustChangePassword?: boolean;
+  termsAccepted?: boolean;
+  termsAcceptedAt?: Date;
 }
 
 export enum UserRole {

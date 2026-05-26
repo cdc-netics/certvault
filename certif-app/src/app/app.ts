@@ -3,10 +3,11 @@ import { CommonModule } from '@angular/common';
 import { RouterOutlet, Router, RouterModule, NavigationEnd } from '@angular/router';
 import { filter, Subscription } from 'rxjs';
 import { AuthService } from './core/services/auth.service';
+import { TermsModalComponent } from './shared/components/terms-modal/terms-modal.component';
 
 @Component({
   selector: 'app-root',
-  imports: [CommonModule, RouterModule, RouterOutlet],
+  imports: [CommonModule, RouterModule, RouterOutlet, TermsModalComponent],
   templateUrl: './app.component.html',
   styleUrl: './app.scss'
 })
@@ -48,6 +49,15 @@ export class App implements OnInit, OnDestroy {
   isLoginPage(): boolean {
     const current = this.router.url;
     return this.publicRoutes.some(route => current.startsWith(route));
+  }
+
+  // Comprueba si se debe desplegar el modal de términos y condiciones de uso
+  get showTermsModal(): boolean {
+    if (this.isLoginPage()) return false;
+    const user = this.authService.getCurrentUser();
+    
+    // Solo mostrar si está logueado, no ha aceptado y no se encuentra en el flujo de cambio obligatorio de clave
+    return this.authService.isLoggedIn() && !!user && !user.termsAccepted && !user.mustChangePassword;
   }
 
   private setSidebarByRoute(url: string): void {

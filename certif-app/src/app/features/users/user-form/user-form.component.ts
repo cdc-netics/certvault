@@ -55,6 +55,11 @@ export class UserFormComponent implements OnInit, OnDestroy {
     this.userForm.get('password')?.valueChanges
       .pipe(takeUntil(this.destroy$))
       .subscribe(() => this.userForm.get('confirmPassword')?.updateValueAndValidity({ onlySelf: true }));
+    
+    // Suscripción para revalidar el correo personal al cambiar el correo corporativo
+    this.userForm.get('email')?.valueChanges
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(() => this.userForm.get('personalEmail')?.updateValueAndValidity({ onlySelf: true }));
 
     this.loadRoles();
     this.loadDepartments();
@@ -125,7 +130,7 @@ export class UserFormComponent implements OnInit, OnDestroy {
     this.userForm = this.fb.group({
       username: ['', [Validators.required, Validators.minLength(3), Validators.maxLength(20)]],
       email: ['', [Validators.required, Validators.email]],
-      personalEmail: ['', [Validators.required, Validators.email]],
+      personalEmail: ['', [Validators.required, Validators.email, this.emailsDifferentValidator.bind(this)]],
       password: [''],
       confirmPassword: [''],
       firstName: ['', [Validators.required, Validators.maxLength(50)]],
@@ -165,6 +170,20 @@ export class UserFormComponent implements OnInit, OnDestroy {
       return null;
     }
     return password === confirmPassword ? null : { passwordMismatch: true };
+  }
+
+  /**
+   * Validador que comprueba que el email corporativo y el email personal no sean iguales.
+   * Retorna un error 'emailsIdentical' si coinciden.
+   */
+  private emailsDifferentValidator(control: any) {
+    if (!this.userForm) return null;
+    const email = this.userForm.get('email')?.value;
+    const personalEmail = control.value;
+    if (!email || !personalEmail) {
+      return null;
+    }
+    return email.toLowerCase() !== personalEmail.toLowerCase() ? null : { emailsIdentical: true };
   }
 
   private loadUser(id: string): void {

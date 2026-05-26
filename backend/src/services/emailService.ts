@@ -222,3 +222,41 @@ export const sendUserCertificationsArchiveEmail = async (
     attachments
   });
 };
+
+interface PasswordExpirationPayload {
+  to: string;
+  name: string;
+  daysRemaining: number;
+}
+
+export const sendPasswordExpirationWarningEmail = async (
+  payload: PasswordExpirationPayload
+): Promise<void> => {
+  const mailer = await getActiveMailer();
+  await mailer.transporter.verify();
+
+  const htmlBody = `
+    <div style="font-family: Arial, sans-serif; color: #222;">
+      <h2>Tu contraseña de CertiVault va a expirar</h2>
+      <p>Hola ${payload.name},</p>
+      <p>
+        Te informamos que tu contraseña del sistema expirará en <strong>${payload.daysRemaining}</strong> ${payload.daysRemaining === 1 ? 'día' : 'días'}.
+      </p>
+      <p>
+        Por favor, ingresa al sistema y actualiza tu contraseña desde tu menú de perfil para evitar perder el acceso.
+      </p>
+      <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;" />
+      <p style="font-size: 0.8rem; color: #666;">
+        Este es un aviso automático de seguridad, por favor no respondas a este correo.
+      </p>
+    </div>
+  `;
+
+  await mailer.transporter.sendMail({
+    from: mailer.from,
+    to: payload.to,
+    subject: `Aviso: Tu contraseña expira en ${payload.daysRemaining} ${payload.daysRemaining === 1 ? 'día' : 'días'} - CertiVault`,
+    html: htmlBody,
+    text: `Hola ${payload.name},\n\nTe informamos que tu contraseña del sistema expirará en ${payload.daysRemaining} ${payload.daysRemaining === 1 ? 'día' : 'días'}.\n\nPor favor, ingresa al sistema y actualízala desde tu perfil.`
+  });
+};

@@ -38,6 +38,11 @@ import { RouterModule } from '@angular/router';
           <i class="fas fa-plug me-1"></i> API Externa
         </a>
       </li>
+      <li class="nav-item">
+        <a class="nav-link" routerLink="/settings/security" routerLinkActive="active">
+          <i class="fas fa-shield-alt me-1"></i> Seguridad
+        </a>
+      </li>
     </ul>
   `
 })

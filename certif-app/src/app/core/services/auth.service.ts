@@ -219,8 +219,8 @@ export class AuthService {
   //     );
   // }
 
-  // Cambiar contraseña
-  changePassword(passwordData: { currentPassword: string; newPassword: string }): Observable<ApiResponse<any>> {
+  // Cambiar contraseña del usuario actual
+  changePassword(passwordData: { currentPassword: string; newPassword: string; personalEmail?: string }): Observable<ApiResponse<any>> {
     return this.http.put<ApiResponse<any>>(`${this.API_URL}/change-password`, passwordData)
       .pipe(catchError(this.handleError));
   }
@@ -229,6 +229,23 @@ export class AuthService {
   getMyActivity(): Observable<ApiResponse<any>> {
     return this.http.get<ApiResponse<any>>(`${this.API_URL}/my-activity`)
       .pipe(catchError(this.handleError));
+  }
+
+  // Registrar la aceptación de los términos y condiciones del sistema
+  acceptTerms(): Observable<ApiResponse<any>> {
+    return this.http.post<ApiResponse<any>>(`${this.API_URL}/accept-terms`, {}).pipe(
+      tap(response => {
+        if (response.success) {
+          const user = this.getCurrentUser();
+          if (user) {
+            user.termsAccepted = true;
+            user.termsAcceptedAt = new Date();
+            this.setCurrentUser(user);
+          }
+        }
+      }),
+      catchError(this.handleError)
+    );
   }
 
   setCurrentUser(user: User | null): void {

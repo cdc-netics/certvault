@@ -34,6 +34,22 @@ export const authenticate = async (
     }
 
     req.user = user;
+
+    // Rutas permitidas para usuarios obligados a cambiar clave
+    const allowedPath = req.originalUrl.endsWith('/change-password') || 
+                        req.originalUrl.endsWith('/profile') || 
+                        req.originalUrl.endsWith('/logout');
+
+    if (user.mustChangePassword && !allowedPath) {
+      res.status(403).json({
+        success: false,
+        error: 'Cambio de contraseña obligatorio.',
+        code: 'PASSWORD_CHANGE_REQUIRED',
+        message: 'Cambio de contraseña obligatorio.'
+      });
+      return;
+    }
+
     next();
   } catch (error) {
     res.status(401).json({

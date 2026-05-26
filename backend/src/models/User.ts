@@ -69,6 +69,10 @@ export interface IUser extends Document {
   createdBy?: mongoose.Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
+  passwordChangedAt: Date;
+  mustChangePassword: boolean;
+  termsAccepted: boolean;
+  termsAcceptedAt?: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;
   fullName: string;
   hasPermission(permission: Permission): boolean;
@@ -98,7 +102,14 @@ const userSchema = new Schema<IUser>(
       required: [true, 'El correo personal es requerido'],
       lowercase: true,
       trim: true,
-      match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, 'Correo personal invalido']
+      match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, 'Correo personal invalido'],
+      validate: {
+        validator: function(this: any, val: string) {
+          // El correo personal no puede ser igual al corporativo
+          return this.email ? this.email.toLowerCase().trim() !== val.toLowerCase().trim() : true;
+        },
+        message: 'El correo personal no puede ser igual al correo de la empresa'
+      }
     },
     password: {
       type: String,
@@ -196,6 +207,26 @@ const userSchema = new Schema<IUser>(
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User'
+    },
+    passwordChangedAt: {
+      type: Date,
+      default: Date.now,
+      required: true
+    },
+    mustChangePassword: {
+      type: Boolean,
+      default: false,
+      required: true
+    },
+    // Estado de aceptación de términos y condiciones del sistema
+    termsAccepted: {
+      type: Boolean,
+      default: false,
+      required: true
+    },
+    // Fecha y hora en la que se aceptaron los términos
+    termsAcceptedAt: {
+      type: Date
     }
   },
   {
@@ -212,6 +243,8 @@ userSchema.pre('save', async function (next) {
   if (!this.isModified('password')) return next();
 
   try {
+    // Si se modifica la contraseña, actualizar la fecha de cambio automáticamente
+    this.passwordChangedAt = new Date();
     const salt = await bcrypt.genSalt(12);
     this.password = await bcrypt.hash(this.password, salt);
     next();

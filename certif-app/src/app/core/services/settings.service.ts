@@ -27,6 +27,11 @@ export interface BrandingSettings {
   reportFooter?: string;
 }
 
+export interface SecuritySettingsData {
+  passwordExpirationEnabled: boolean;
+  passwordExpirationMonths: number;
+}
+
 export interface PublicApiClient {
   id: string;
   name: string;
@@ -193,6 +198,17 @@ export class SettingsService {
   exportReport(): Observable<Blob> {
     return this.http.get(`${this.API_URL}/reports/export`, { responseType: 'blob' })
       .pipe(catchError(this.handleError));
+  }
+
+  // Obtener la configuración actual de seguridad de contraseñas
+  getSecuritySettings(): Observable<ApiResponse<SecuritySettingsData>> {
+    return this.cachedGet<SecuritySettingsData>('security-settings', `${this.API_URL}/security`);
+  }
+
+  // Actualizar la configuración de seguridad de contraseñas
+  updateSecuritySettings(payload: SecuritySettingsData): Observable<ApiResponse<SecuritySettingsData>> {
+    return this.http.put<ApiResponse<SecuritySettingsData>>(`${this.API_URL}/security`, payload)
+      .pipe(tap(() => this.clearCache()), catchError(this.handleError));
   }
 
   private handleError(error: HttpErrorResponse): Observable<never> {

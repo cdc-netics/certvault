@@ -24,7 +24,9 @@ import {
   testPublicApiClient,
   updatePublicApiClient,
   updateBranding,
-  systemWipe
+  systemWipe,
+  getSecuritySettings,
+  updateSecuritySettings
 } from '../controllers/settingsController';
 import { adminOnly, authenticate } from '../middleware/auth';
 import { validateRequest } from '../middleware/validation';
@@ -116,6 +118,8 @@ router.post('/backup/import', upload.single('file'), importBackup);
 router.post('/backup/system-wipe', systemWipe);
 router.get('/branding', getBranding);
 router.put('/branding', updateBranding);
+router.get('/security', getSecuritySettings);
+router.put('/security', updateSecuritySettings);
 router.get('/public-api/clients', getPublicApiClients);
 router.post('/public-api/clients', publicApiClientCreateValidation, validateRequest, createPublicApiClient);
 router.put('/public-api/clients/:id', publicApiClientUpdateValidation, validateRequest, updatePublicApiClient);
