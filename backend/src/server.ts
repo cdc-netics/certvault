@@ -213,21 +213,25 @@ const createDefaultAdminAndSeed = async (): Promise<void> => {
       console.log('Usuario administrador creado exitosamente');
       console.log(`Email: ${adminUser.email}`);
       console.log(`Contrasena: ${process.env.ADMIN_PASSWORD || 'Admin123!'}`);
-      console.log('Primera instalacion detectada, creando datos de ejemplo...');
-      await seedDatabase();
+      if (process.env.SEED_DATABASE === 'true') {
+        console.log('Primera instalacion detectada. Creando datos de ejemplo...');
+        await seedDatabase();
+      } else {
+        console.log('Primera instalacion detectada. Saltando datos de ejemplo (SEED_DATABASE != true).');
+      }
     } else {
       console.log('Usuario administrador ya existe. Sincronizando contraseña con el .env actual...');
       const envPassword = process.env.ADMIN_PASSWORD || 'Admin123!';
       adminExists.password = envPassword;
       await adminExists.save();
       console.log('Contraseña del administrador sincronizada con éxito');
-
+ 
       const userCount = await User.countDocuments();
-      if (userCount === 1) {
+      if (userCount === 1 && process.env.SEED_DATABASE === 'true') {
         console.log('Ejecutando seed de datos de ejemplo...');
         await seedDatabase();
       } else {
-        console.log('Base de datos ya contiene datos');
+        console.log('Base de datos limpia o con datos de usuario existentes.');
       }
     }
   } catch (error) {
