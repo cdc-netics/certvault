@@ -132,7 +132,7 @@ const restoreConfigData = async (data: any) => {
   }
 };
 
-const restoreFullData = async (data: any) => {
+export const restoreFullData = async (data: any) => {
   const collections = data.collections;
   if (!collections) return;
 
@@ -191,8 +191,12 @@ const restoreFullData = async (data: any) => {
     if (collections.certifications.length > 0) {
       const docs = collections.certifications.map((doc: any) => {
         const newDoc = { ...doc };
+        // Convertir IDs principales y de auditoría de texto a ObjectId nativo
         if (newDoc._id && typeof newDoc._id === 'string') {
           newDoc._id = new mongoose.Types.ObjectId(newDoc._id);
+        }
+        if (newDoc.employeeId && typeof newDoc.employeeId === 'string') {
+          newDoc.employeeId = new mongoose.Types.ObjectId(newDoc.employeeId);
         }
         if (newDoc.userId && typeof newDoc.userId === 'string') {
           newDoc.userId = new mongoose.Types.ObjectId(newDoc.userId);
@@ -200,6 +204,12 @@ const restoreFullData = async (data: any) => {
         if (newDoc.createdBy && typeof newDoc.createdBy === 'string') {
           newDoc.createdBy = new mongoose.Types.ObjectId(newDoc.createdBy);
         }
+        if (newDoc.updatedBy && typeof newDoc.updatedBy === 'string') {
+          newDoc.updatedBy = new mongoose.Types.ObjectId(newDoc.updatedBy);
+        }
+        // Convertir fechas de texto ISO a tipo Date de MongoDB
+        if (newDoc.issueDate) newDoc.issueDate = new Date(newDoc.issueDate);
+        if (newDoc.expirationDate) newDoc.expirationDate = new Date(newDoc.expirationDate);
         if (newDoc.issuedDate) newDoc.issuedDate = new Date(newDoc.issuedDate);
         if (newDoc.expiryDate) newDoc.expiryDate = new Date(newDoc.expiryDate);
         if (newDoc.createdAt) newDoc.createdAt = new Date(newDoc.createdAt);
