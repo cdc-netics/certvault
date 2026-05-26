@@ -1,5 +1,7 @@
 import crypto from 'crypto';
 import { Response } from 'express';
+import fs from 'fs';
+import path from 'path';
 import { User, UserRole, Department, Permission } from '../models/User';
 import { Certification } from '../models/Certification';
 import { AuthRequest } from '../middleware/auth';
@@ -490,11 +492,23 @@ export const deleteUser = async (req: AuthRequest, res: Response): Promise<void>
             certificateNumber: cert.certificateNumber,
             issueDate: cert.issueDate,
             expirationDate: cert.expirationDate,
-            status: cert.status
+            status: cert.status,
+            certificateUrl: cert.certificateUrl
           }))
         });
-      } catch (emailError) {
-        console.error('No se pudo enviar archivo de certificaciones al correo personal:', emailError);
+
+        // Eliminar archivos físicos de certificados del disco
+        for (const cert of certifications) {
+          if (cert.certificateUrl && cert.certificateUrl.startsWith('/uploads/certificates/')) {
+            const fileName = path.basename(cert.certificateUrl);
+            const filePath = path.resolve(__dirname, '../../uploads/certificates', fileName);
+            if (fs.existsSync(filePath)) {
+              fs.unlinkSync(filePath);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error procesando el respaldo de certificados del usuario:', error);
       }
     }
 

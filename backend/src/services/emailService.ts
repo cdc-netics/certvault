@@ -1,4 +1,5 @@
 import { readFile } from 'fs/promises';
+import fs from 'fs';
 import path from 'path';
 import '../config/mailer';
 import { getActiveMailer } from './smtpProfileService';
@@ -74,6 +75,7 @@ interface CertificationSummaryPayload {
     issueDate: Date;
     expirationDate?: Date;
     status: string;
+    certificateUrl?: string;
   }>;
 }
 
@@ -183,11 +185,27 @@ export const sendUserCertificationsArchiveEmail = async (
       )
       .join('\n');
 
+  // Recolectar y adjuntar los archivos físicos de certificados
+  const attachments: any[] = [];
+  payload.certifications.forEach(cert => {
+    if (cert.certificateUrl && cert.certificateUrl.startsWith('/uploads/certificates/')) {
+      const fileName = path.basename(cert.certificateUrl);
+      const filePath = path.resolve(__dirname, '../../uploads/certificates', fileName);
+      if (fs.existsSync(filePath)) {
+        attachments.push({
+          filename: `${cert.title.replace(/[^a-zA-Z0-9]/g, '_')}${path.extname(fileName)}`,
+          path: filePath
+        });
+      }
+    }
+  });
+
   await mailer.transporter.sendMail({
     from: mailer.from,
     to: payload.to,
     subject: 'Respaldo de certificaciones - CertiVault',
     html: htmlBody,
-    text: textBody
+    text: textBody,
+    attachments
   });
 };
