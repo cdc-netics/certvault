@@ -7,6 +7,8 @@ import { Certification } from '../models/Certification';
 import { AuthRequest } from '../middleware/auth';
 import { saveBase64Avatar } from '../utils/avatar';
 import { sendVerificationEmail, sendUserCertificationsArchiveEmail } from '../services/emailService';
+import { recordAuditLog } from '../services/auditService';
+import { AuditAction } from '../models/AuditLog';
 
 interface CreateUserRequest {
   username: string;
@@ -497,11 +499,32 @@ export const deleteUser = async (req: AuthRequest, res: Response): Promise<void>
           }))
         });
 
-        // Eliminar archivos físicos de certificados del disco
+        // Registrar en auditoría el éxito del envío del correo de respaldo
+        await recordAuditLog({
+          action: AuditAction.DELETE,
+          resource: 'users',
+          resourceId: id as string,
+          userId: currentUser._id,
+          userEmail: currentUser.email,
+          userRole: currentUser.role,
+          method: req.method,
+          path: req.originalUrl,
+          ip: req.ip,
+          userAgent: req.get('user-agent'),
+          statusCode: 200,
+          message: `Respaldo de certificaciones enviado exitosamente a ${userToDelete.personalEmail || userToDelete.email} al eliminar el usuario.`,
+          metadata: {
+            recipient: userToDelete.personalEmail || userToDelete.email,
+            certificationsCount: certifications.length,
+            titles: certifications.map(c => c.title)
+          }
+        });
+
+        // Eliminar archivos físicos de certificados del disco usando process.cwd() para entornos dist/
         for (const cert of certifications) {
           if (cert.certificateUrl && cert.certificateUrl.startsWith('/uploads/certificates/')) {
             const fileName = path.basename(cert.certificateUrl);
-            const filePath = path.resolve(__dirname, '../../uploads/certificates', fileName);
+            const filePath = path.resolve(process.cwd(), 'uploads/certificates', fileName);
             if (fs.existsSync(filePath)) {
               fs.unlinkSync(filePath);
             }
@@ -509,6 +532,26 @@ export const deleteUser = async (req: AuthRequest, res: Response): Promise<void>
         }
       } catch (error) {
         console.error('Error procesando el respaldo de certificados del usuario:', error);
+        // Registrar en auditoría el fallo detallado para que sea visible en la interfaz web de logs
+        await recordAuditLog({
+          action: AuditAction.DELETE,
+          resource: 'users',
+          resourceId: id as string,
+          userId: currentUser._id,
+          userEmail: currentUser.email,
+          userRole: currentUser.role,
+          method: req.method,
+          path: req.originalUrl,
+          ip: req.ip,
+          userAgent: req.get('user-agent'),
+          statusCode: 500,
+          message: `Fallo al enviar correo de respaldo al eliminar usuario ${userToDelete.email}. Error: ${(error as Error).message}`,
+          metadata: {
+            error: (error as Error).message,
+            stack: (error as Error).stack,
+            recipient: userToDelete.personalEmail || userToDelete.email
+          }
+        });
       }
     }
 
