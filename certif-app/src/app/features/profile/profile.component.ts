@@ -71,6 +71,7 @@ export class ProfileComponent implements OnInit, OnDestroy {
       firstName: ['', [Validators.required, Validators.maxLength(50)]],
       lastName: ['', [Validators.required, Validators.maxLength(50)]],
       email: ['', [Validators.required, Validators.email]],
+      personalEmail: ['', [Validators.required, Validators.email]],
       phone: ['', [Validators.pattern(/^[\+]?[1-9][\d]{0,15}$/)]],
       position: ['', [Validators.maxLength(100)]],
       department: [{ value: '', disabled: true }, Validators.required],
@@ -98,6 +99,7 @@ export class ProfileComponent implements OnInit, OnDestroy {
         firstName: this.currentUser.firstName,
         lastName: this.currentUser.lastName,
         email: this.currentUser.email,
+        personalEmail: this.currentUser.personalEmail || '',
         phone: this.currentUser.phone || '',
         position: this.currentUser.position || '',
       department: this.currentUser.department,
@@ -250,6 +252,7 @@ export class ProfileComponent implements OnInit, OnDestroy {
   get firstName() { return this.profileForm.get('firstName'); }
   get lastName() { return this.profileForm.get('lastName'); }
   get email() { return this.profileForm.get('email'); }
+  get personalEmail() { return this.profileForm.get('personalEmail'); }
   get phone() { return this.profileForm.get('phone'); }
   get position() { return this.profileForm.get('position'); }
   get department() { return this.profileForm.get('department'); }

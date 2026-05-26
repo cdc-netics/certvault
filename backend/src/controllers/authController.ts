@@ -299,6 +299,7 @@ export const getCurrentUser = async (req: AuthRequest, res: Response): Promise<v
         _id: req.user._id,
         username: req.user.username,
         email: req.user.email,
+        personalEmail: req.user.personalEmail,
         firstName: req.user.firstName,
         lastName: req.user.lastName,
         role: req.user.role,
@@ -333,11 +334,12 @@ export const updateProfile = async (req: AuthRequest, res: Response): Promise<vo
       return;
     }
 
-    const { firstName, lastName, phone, avatarUrl, avatar } = req.body;
+    const { firstName, lastName, phone, personalEmail, avatarUrl, avatar } = req.body;
 
     if (firstName) req.user.firstName = firstName;
     if (lastName) req.user.lastName = lastName;
     if (phone !== undefined) req.user.phone = phone;
+    if (personalEmail !== undefined) req.user.personalEmail = personalEmail.trim().toLowerCase();
 
     const avatarProvided = avatarUrl !== undefined || avatar !== undefined;
     if (avatarProvided) {
@@ -364,6 +366,7 @@ export const updateProfile = async (req: AuthRequest, res: Response): Promise<vo
         _id: req.user._id,
         username: req.user.username,
         email: req.user.email,
+        personalEmail: req.user.personalEmail,
         firstName: req.user.firstName,
         lastName: req.user.lastName,
         role: req.user.role,

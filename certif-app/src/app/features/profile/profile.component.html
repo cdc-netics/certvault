@@ -200,7 +200,7 @@
                 <!-- Email -->
                 <div class="col-md-6 mb-3">
                   <label for="email" class="form-label">
-                    Email <span class="text-danger">*</span>
+                    Email Corporativo <span class="text-danger">*</span>
                   </label>
                   <input 
                     type="email" 
@@ -213,11 +213,32 @@
                     <small *ngIf="email?.errors?.['email']">Email invalido</small>
                   </div>
                   <small class="form-text text-muted">
-                    <i class="fas fa-info-circle me-1"></i>
-                    El email es usado para iniciar sesion
+                    El email corporativo es usado para iniciar sesion.
                   </small>
                 </div>
 
+                <!-- Correo Personal -->
+                <div class="col-md-6 mb-3">
+                  <label for="personalEmail" class="form-label">
+                    Correo Personal <span class="text-danger">*</span>
+                  </label>
+                  <input 
+                    type="email" 
+                    class="form-control"
+                    id="personalEmail"
+                    formControlName="personalEmail"
+                    [class.is-invalid]="personalEmail?.invalid && personalEmail?.touched">
+                  <div class="invalid-feedback" *ngIf="personalEmail?.invalid && personalEmail?.touched">
+                    <small *ngIf="personalEmail?.errors?.['required']">El correo personal es requerido</small>
+                    <small *ngIf="personalEmail?.errors?.['email']">Correo personal invalido</small>
+                  </div>
+                  <small class="form-text text-muted">
+                    Usado para respaldos y notificaciones del sistema.
+                  </small>
+                </div>
+              </div>
+
+              <div class="row">
                 <!-- Telefono -->
                 <div class="col-md-6 mb-3">
                   <label for="phone" class="form-label">Telefono</label>
@@ -232,11 +253,9 @@
                     <small>Formato de telefono invalido</small>
                   </div>
                 </div>
-              </div>
 
-              <div class="row">
                 <!-- Cargo/Posicion -->
-                <div class="col-12 mb-3">
+                <div class="col-md-6 mb-3">
                   <label for="position" class="form-label">Cargo/Posicion</label>
                   <input 
                     type="text" 
