@@ -68,7 +68,7 @@ const allowedOrigins = [
   ...(process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',').map(o => normalizeOrigin(o.trim())) : []),
   ...(process.env.FRONTEND_URL ? process.env.FRONTEND_URL.split(',').map(o => normalizeOrigin(o.trim())) : [])
 ].filter(Boolean);
-const allowAllOrigins = (process.env.CORS_ALLOW_ALL_ORIGINS || 'false').toLowerCase() === 'true';
+const allowAllOrigins = (process.env.CORS_ALLOW_ALL_ORIGINS || 'true').toLowerCase() === 'true';
 
 // Middlewares
 const corsOptions: cors.CorsOptions = {
@@ -79,7 +79,8 @@ const corsOptions: cors.CorsOptions = {
     if (allowedOrigins.includes(normalized)) {
       return callback(null, true);
     }
-    return callback(new Error('Not allowed by CORS'));
+    console.warn(`[CORS] Origen rechazado: ${origin}. Orígenes permitidos:`, allowedOrigins);
+    return callback(new Error(`Not allowed by CORS: ${origin}`));
   },
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
