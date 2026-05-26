@@ -553,6 +553,37 @@ export const deleteUser = async (req: AuthRequest, res: Response): Promise<void>
           }
         });
       }
+    } else {
+      // Si no se encontraron certificaciones, verificamos si existen registros asociados
+      // con employeeId como string en lugar de ObjectId (causado por el importador antiguo)
+      const rawCertsCount = await Certification.collection.countDocuments({
+        employeeId: id // Consulta directa a MongoDB sin casteo de Mongoose
+      });
+
+      const totalCertsInDb = await Certification.countDocuments({});
+
+      // Registrar en la auditoría el porqué no se envió el correo de respaldo
+      await recordAuditLog({
+        action: AuditAction.DELETE,
+        resource: 'users',
+        resourceId: id as string,
+        userId: currentUser._id,
+        userEmail: currentUser.email,
+        userRole: currentUser.role,
+        method: req.method,
+        path: req.originalUrl,
+        ip: req.ip,
+        userAgent: req.get('user-agent'),
+        statusCode: 200,
+        message: rawCertsCount > 0
+          ? `Omitido correo de respaldo al eliminar usuario ${userToDelete.email}: se detectaron ${rawCertsCount} certificados guardados incorrectamente como texto (strings) en la BD. Re-importe el backup con el sistema corregido.`
+          : `Omitido correo de respaldo al eliminar usuario ${userToDelete.email}: no tiene ninguna certificación asociada en la base de datos (total certificaciones en la plataforma: ${totalCertsInDb}).`,
+        metadata: {
+          rawCertificationsFound: rawCertsCount,
+          totalCertificationsInDb: totalCertsInDb,
+          searchedEmployeeId: id
+        }
+      });
     }
 
     await Certification.deleteMany({ employeeId: id });
