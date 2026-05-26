@@ -100,16 +100,20 @@ export const restoreBackup = async (zipBuffer: Buffer): Promise<void> => {
 
     // Restaurar carpeta de uploads
     const uploadsDir = path.join(__dirname, '../../uploads');
-    // Extraer todo lo que esté bajo "uploads/" en el ZIP hacia el directorio local
+    // Extraer todo lo que esté bajo "uploads/" en el ZIP hacia el directorio local sin duplicar directorios
     zipEntries.forEach((entry: any) => {
       if (entry.entryName.startsWith('uploads/')) {
         // Remover 'uploads/' de la ruta para extraer correctamente
         const targetPath = entry.entryName.replace(/^uploads\//, '');
-        // Si es un directorio y targetPath está vacío, ignorar
         if (!targetPath) return;
         
-        // AdmZip extractEntryTo (entryName, targetPath, maintainEntryPath, overwrite)
-        zip.extractEntryTo(entry, uploadsDir, true, true);
+        const destPath = path.join(uploadsDir, targetPath);
+        if (entry.isDirectory) {
+          fs.mkdirSync(destPath, { recursive: true });
+        } else {
+          fs.mkdirSync(path.dirname(destPath), { recursive: true });
+          fs.writeFileSync(destPath, entry.getData());
+        }
       }
     });
   }
