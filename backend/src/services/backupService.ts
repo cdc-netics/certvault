@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import AdmZip from 'adm-zip';
+import mongoose from 'mongoose';
 import { User } from '../models/User';
 import { Certification } from '../models/Certification';
 import { SmtpProfile } from '../models/SmtpProfile';
@@ -128,42 +129,99 @@ const restoreConfigData = async (data: any) => {
 };
 
 const restoreFullData = async (data: any) => {
-  // Opcional: limpiar colecciones antes de importar o hacer upsert
   const collections = data.collections;
   if (!collections) return;
 
   if (collections.branding) {
     await BrandingSettings.deleteMany({});
-    await BrandingSettings.create(collections.branding);
+    const brandingDoc = { ...collections.branding };
+    if (brandingDoc._id && typeof brandingDoc._id === 'string') {
+      brandingDoc._id = new mongoose.Types.ObjectId(brandingDoc._id);
+    }
+    if (brandingDoc.createdAt) brandingDoc.createdAt = new Date(brandingDoc.createdAt);
+    if (brandingDoc.updatedAt) brandingDoc.updatedAt = new Date(brandingDoc.updatedAt);
+    
+    await BrandingSettings.collection.insertOne(brandingDoc);
   }
 
   if (collections.smtpProfiles && Array.isArray(collections.smtpProfiles)) {
     await SmtpProfile.deleteMany({});
-    await SmtpProfile.insertMany(collections.smtpProfiles);
+    if (collections.smtpProfiles.length > 0) {
+      const docs = collections.smtpProfiles.map((doc: any) => {
+        const newDoc = { ...doc };
+        if (newDoc._id && typeof newDoc._id === 'string') {
+          newDoc._id = new mongoose.Types.ObjectId(newDoc._id);
+        }
+        if (newDoc.createdAt) newDoc.createdAt = new Date(newDoc.createdAt);
+        if (newDoc.updatedAt) newDoc.updatedAt = new Date(newDoc.updatedAt);
+        return newDoc;
+      });
+      await SmtpProfile.collection.insertMany(docs);
+    }
   }
 
   if (collections.users && Array.isArray(collections.users)) {
-    // Upsert Users by email to preserve passwords if existing
+    // Restaurar usuarios directamente a nivel de base de datos nativa para preservar contraseñas
     for (const u of collections.users) {
-      const existing = await User.findOne({ email: u.email });
-      if (existing) {
-        await User.updateOne({ email: u.email }, { $set: u });
-      } else {
-        await User.create(u);
+      const userDoc = { ...u };
+      if (userDoc._id && typeof userDoc._id === 'string') {
+        userDoc._id = new mongoose.Types.ObjectId(userDoc._id);
       }
+      if (userDoc.createdBy && typeof userDoc.createdBy === 'string') {
+        userDoc.createdBy = new mongoose.Types.ObjectId(userDoc.createdBy);
+      }
+      if (userDoc.createdAt) userDoc.createdAt = new Date(userDoc.createdAt);
+      if (userDoc.updatedAt) userDoc.updatedAt = new Date(userDoc.updatedAt);
+      if (userDoc.lastLogin) userDoc.lastLogin = new Date(userDoc.lastLogin);
+
+      await User.collection.updateOne(
+        { email: u.email },
+        { $set: userDoc },
+        { upsert: true }
+      );
     }
   }
 
   if (collections.certifications && Array.isArray(collections.certifications)) {
-    // Reemplazar todas las certificaciones para que coincidan con el backup exactamente
     await Certification.deleteMany({});
-    await Certification.insertMany(collections.certifications);
+    if (collections.certifications.length > 0) {
+      const docs = collections.certifications.map((doc: any) => {
+        const newDoc = { ...doc };
+        if (newDoc._id && typeof newDoc._id === 'string') {
+          newDoc._id = new mongoose.Types.ObjectId(newDoc._id);
+        }
+        if (newDoc.userId && typeof newDoc.userId === 'string') {
+          newDoc.userId = new mongoose.Types.ObjectId(newDoc.userId);
+        }
+        if (newDoc.createdBy && typeof newDoc.createdBy === 'string') {
+          newDoc.createdBy = new mongoose.Types.ObjectId(newDoc.createdBy);
+        }
+        if (newDoc.issuedDate) newDoc.issuedDate = new Date(newDoc.issuedDate);
+        if (newDoc.expiryDate) newDoc.expiryDate = new Date(newDoc.expiryDate);
+        if (newDoc.createdAt) newDoc.createdAt = new Date(newDoc.createdAt);
+        if (newDoc.updatedAt) newDoc.updatedAt = new Date(newDoc.updatedAt);
+        return newDoc;
+      });
+      await Certification.collection.insertMany(docs);
+    }
   }
 
   if (collections.auditLogs && Array.isArray(collections.auditLogs)) {
-    // Opcional: restaurar logs de auditoría (podría crecer mucho, lo reemplazamos todo)
     await AuditLog.deleteMany({});
-    await AuditLog.insertMany(collections.auditLogs);
+    if (collections.auditLogs.length > 0) {
+      const docs = collections.auditLogs.map((doc: any) => {
+        const newDoc = { ...doc };
+        if (newDoc._id && typeof newDoc._id === 'string') {
+          newDoc._id = new mongoose.Types.ObjectId(newDoc._id);
+        }
+        if (newDoc.userId && typeof newDoc.userId === 'string') {
+          newDoc.userId = new mongoose.Types.ObjectId(newDoc.userId);
+        }
+        if (newDoc.createdAt) newDoc.createdAt = new Date(newDoc.createdAt);
+        return newDoc;
+      });
+      await AuditLog.collection.insertMany(docs);
+    }
   }
 };
 
