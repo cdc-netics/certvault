@@ -18,7 +18,7 @@ export const seedDatabase = async (): Promise<void> => {
     const userCount = await User.countDocuments();
     const certCount = await Certification.countDocuments();
     
-    if (userCount > 0 && certCount > 0) {
+    if (userCount > 1 || certCount > 0) {
       console.log('📄 Base de datos ya contiene datos, omitiendo seed');
       console.log(`👥 Usuarios existentes: ${userCount}`);
       console.log(`📜 Certificaciones existentes: ${certCount}`);

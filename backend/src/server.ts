@@ -38,6 +38,24 @@ if (discoveredEnvPath) {
   dotenv.config({ path: discoveredEnvPath });
 }
 
+// Expandir variables de entorno de forma iterativa para soportar interpolación compleja (ej. ${PORT})
+// Se realizan múltiples pasadas (máximo 3) para garantizar que las dependencias anidadas se resuelvan correctamente.
+for (let pass = 0; pass < 3; pass++) {
+  let changed = false;
+  for (const key in process.env) {
+    const val = process.env[key];
+    if (val && typeof val === 'string' && val.includes('${')) {
+      const newVal = val.replace(/\${(\w+)}/g, (_, name) => process.env[name] || '');
+      if (newVal !== val) {
+        process.env[key] = newVal;
+        changed = true;
+      }
+    }
+  }
+  if (!changed) break;
+}
+
+
 const app = express();
 app.disable('x-powered-by');
 app.set('trust proxy', 1);
@@ -173,7 +191,7 @@ const createDefaultAdminAndSeed = async (): Promise<void> => {
       );
     }
 
-    const adminExists = await User.findOne({ role: UserRole.ADMIN });
+    const adminExists = await User.findOne({ role: UserRole.ADMIN }).select('+password');
 
     if (!adminExists) {
       console.log('Creando usuario administrador por defecto...');
@@ -197,7 +215,12 @@ const createDefaultAdminAndSeed = async (): Promise<void> => {
       console.log('Primera instalacion detectada, creando datos de ejemplo...');
       await seedDatabase();
     } else {
-      console.log('Usuario administrador ya existe');
+      console.log('Usuario administrador ya existe. Sincronizando contraseña con el .env actual...');
+      const envPassword = process.env.ADMIN_PASSWORD || 'Admin123!';
+      adminExists.password = envPassword;
+      await adminExists.save();
+      console.log('Contraseña del administrador sincronizada con éxito');
+
       const userCount = await User.countDocuments();
       if (userCount === 1) {
         console.log('Ejecutando seed de datos de ejemplo...');
