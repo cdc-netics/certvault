@@ -5,6 +5,24 @@ El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1
 
 ---
 
+## [1.9.0-beta] - 2026-05-26 23:45
+
+### Añadido
+- **Resiliencia en Registro de Usuarios:** Tolerancia a fallos SMTP en el registro (`/api/auth/register`); si el servidor de correo no está disponible, se completa la creación del usuario (código `201`) y se registra el enlace de activación en la consola para facilitar el testing.
+- **Acceso para Rol Lector (`READER`):** Habilitada la visualización y descarga de certificados del mismo departamento para usuarios con rol `READER`, manteniendo el bloqueo a las opciones de edición y eliminación.
+- **Diseño Mejorado en Plantillas de Correo:** Rediseño de las plantillas de correo (`reset-password.html` y `verify-email.html`) con estilo responsivo, botón principal de acción y enlace alternativo en texto plano para copiar y pegar.
+- **Exclusión de Seguridad para Administrador de Semilla:** Excepción automática para el usuario configurado en `ADMIN_EMAIL` (`.env`) que omite la obligatoriedad del cambio de contraseña (`mustChangePassword`) y la aceptación de términos (`termsAccepted`) para evitar bloqueos en el usuario de prueba.
+
+### Corregido
+- **Visualización de Errores de Validación:** Propagación en el frontend de los mensajes de error detallados del backend en el registro, incluyendo feedback sobre la fortaleza de contraseña (mayúsculas, minúsculas, números).
+- **Generación de Enlaces de Correo Dinámicos:** Modificación en la resolución de URLs en el backend para obtener dinámicamente el protocolo (`http` o `https`) y el host desde la petición (`req`), resolviendo problemas de conexión al usar múltiples URLs en `FRONTEND_URL`.
+- **Control de Modal de Términos:** Ajuste en el frontend para forzar la visualización del modal de términos y condiciones en usuarios cuya firma no se ha registrado, exceptuando páginas críticas como inicio de sesión o cambio forzado de contraseña.
+- **Prevención de Error 500 en Login (Cuentas Heredadas):** Uso de `validateBeforeSave: false` en los autoguardados del inicio de sesión del backend, previniendo fallos en cuentas antiguas por campos obligatorios añadidos posteriormente (como `personalEmail`).
+- **Eliminación y Respaldo Completo de Certificaciones:** Corrección en el borrado de usuarios donde la búsqueda de certificaciones ahora consulta por coincidencia de nombre y departamento (`employeeName` y `department`), asegurando la exportación de todos los registros asociados en el respaldo.
+- **Inicialización del Servicio de Correo:** Remoción del método bloqueante `transporter.verify()` al instanciar el servicio SMTP para evitar demoras y bloqueos de red en el arranque del servidor.
+
+---
+
 ## [1.8.0-beta] - 2026-05-26 20:15
 
 ### Añadido
