@@ -5,6 +5,23 @@ El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1
 
 ---
 
+## [2.0.0-beta] - 2026-05-27 18:00
+
+### Añadido
+- **Proxy Inverso para HTTPS/SSL:** Incorporación de un contenedor Nginx (`reverse-proxy`) en `docker-compose.yml` que actúa como proxy inverso en el puerto seguro estándar `443` y redirige el tráfico HTTP (puerto `80`) a HTTPS.
+- **Directorio de Certificados (`certs/`):** Creación del directorio local `certs/` en la raíz del proyecto para el almacenamiento seguro de los certificados TLS corporativos (`certvault-fullchain.pem` y `certvault.key`).
+- **Control de Issues y Mejoras (`issues.md`):** Creación del archivo `issues.md` en la raíz para el seguimiento formal de vulnerabilidades, auditorías y mejoras de código pendientes.
+
+### Modificado
+- **Puertos de Producción por Defecto:** Configuración de `FRONTEND_PORT=443` para HTTPS y `MONGO_PORT=27017` para MongoDB en el archivo `.env` y `.env.example`, eliminando puertos no estándar de las URLs públicas (`FRONTEND_URL`, `PUBLIC_API_BASE_URL` y `ALLOWED_ORIGINS`).
+- **Aislamiento de Red del Frontend:** Remoción de la exposición directa de puertos al host para el contenedor `certvault-frontend`, configurándolo con `expose` interno en el puerto `80` para forzar todo el tráfico a través del proxy seguro.
+
+### Corregido
+- **Propagación del Protocolo SSL (QA Fix):** Implementación de una directiva `map` en la plantilla de Nginx del frontend (`certif-app/nginx.conf.template`) para propagar correctamente el header `X-Forwarded-Proto` (HTTPS) desde el proxy externo hacia el backend en Express, evitando fallos con cookies de sesión y tokens JWT.
+- **Resolución de Nombres en el Arranque (DevOps Hotfix):** Configuración del resolvedor DNS interno de Docker (`127.0.0.11`) y uso de variables en el `proxy_pass` del proxy inverso Nginx para evitar caídas en el inicio (`host not found in upstream`) si el contenedor del frontend tarda en inicializarse.
+
+---
+
 ## [1.9.0-beta] - 2026-05-26 23:45
 
 ### Añadido
