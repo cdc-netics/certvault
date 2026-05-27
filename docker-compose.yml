@@ -40,8 +40,25 @@ services:
       BACKEND_UPSTREAM_PORT: ${BACKEND_PORT}
     depends_on:
       - backend
+    # El puerto del frontend se maneja de manera interna en la red docker para que solo el proxy inverso acceda a él
+    expose:
+      - "80"
+
+  # Proxy Inverso Nginx que actúa como intermediario para habilitar SSL/HTTPS
+  reverse-proxy:
+    image: nginx:1.27-alpine
+    container_name: certvault-proxy
+    restart: unless-stopped
+    # Exposición pública de los puertos estándar HTTP y HTTPS en el host
     ports:
-      - "${FRONTEND_PORT}:80"
+      - "80:80"
+      - "443:443"
+    # Montaje de la configuración personalizada de Nginx y del directorio de certificados SSL
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./certs:/etc/nginx/certs:ro
+    depends_on:
+      - frontend
 
 volumes:
   mongo_data:
