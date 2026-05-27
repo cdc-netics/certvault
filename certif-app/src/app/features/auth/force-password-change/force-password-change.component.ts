@@ -264,19 +264,22 @@ export class ForcePasswordChangeComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (response) => {
-          if (response.success) {
-            alert('Tus datos y contraseña se han actualizado exitosamente.');
-            
-            // Actualizar el estado del usuario local (desmarcar mustChangePassword)
-            if (this.currentUser) {
-              this.currentUser.mustChangePassword = false;
-              if (personalEmail) {
-                this.currentUser.personalEmail = personalEmail;
-              }
-              this.authService.setCurrentUser(this.currentUser);
+          // Actualizar el estado del usuario local (desmarcar mustChangePassword)
+          if (this.currentUser) {
+            this.currentUser.mustChangePassword = false;
+            if (personalEmail) {
+              this.currentUser.personalEmail = personalEmail;
             }
+            this.authService.setCurrentUser(this.currentUser);
             
-            // Redirigir al dashboard
+            if (!this.currentUser.termsAccepted) {
+              // Si nunca ha firmado los términos, disparar el modal
+              this.authService.triggerTermsModal();
+            } else {
+              // Si ya los firmó anteriormente, redirigir directamente
+              this.router.navigate(['/dashboard']);
+            }
+          } else {
             this.router.navigate(['/dashboard']);
           }
           this.loading = false;

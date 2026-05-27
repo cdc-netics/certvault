@@ -805,17 +805,23 @@ export const acceptTerms = async (req: AuthRequest, res: Response): Promise<void
       return;
     }
 
-    // Registrar la firma/aceptación
-    user.termsAccepted = true;
-    user.termsAcceptedAt = new Date();
-    await user.save();
+    // Registrar la firma/aceptación omitiendo validaciones de campos no modificados
+    await User.updateOne(
+      { _id: user._id },
+      {
+        $set: {
+          termsAccepted: true,
+          termsAcceptedAt: new Date()
+        }
+      }
+    );
 
     res.json({
       success: true,
       message: 'Términos y condiciones aceptados correctamente',
       data: {
-        termsAccepted: user.termsAccepted,
-        termsAcceptedAt: user.termsAcceptedAt
+        termsAccepted: true,
+        termsAcceptedAt: new Date()
       }
     });
   } catch (error) {

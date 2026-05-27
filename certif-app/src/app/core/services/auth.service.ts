@@ -13,9 +13,11 @@ export class AuthService {
   private readonly API_URL = '/api/auth';
   private readonly currentUserSubject = new BehaviorSubject<User | null>(null);
   private readonly tokenSubject = new BehaviorSubject<string | null>(null);
+  private readonly termsModalTriggeredSubject = new BehaviorSubject<boolean>(false);
 
   public currentUser$ = this.currentUserSubject.asObservable();
   public token$ = this.tokenSubject.asObservable();
+  public termsModalTriggered$ = this.termsModalTriggeredSubject.asObservable();
 
   constructor(private readonly http: HttpClient) {
     this.restoreSessionFromStorage();
@@ -242,10 +244,23 @@ export class AuthService {
             user.termsAcceptedAt = new Date();
             this.setCurrentUser(user);
           }
+          this.hideTermsModal();
         }
       }),
       catchError(this.handleError)
     );
+  }
+
+  triggerTermsModal(): void {
+    this.termsModalTriggeredSubject.next(true);
+  }
+
+  hideTermsModal(): void {
+    this.termsModalTriggeredSubject.next(false);
+  }
+
+  isTermsModalTriggered(): boolean {
+    return this.termsModalTriggeredSubject.value;
   }
 
   setCurrentUser(user: User | null): void {

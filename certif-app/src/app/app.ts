@@ -54,10 +54,9 @@ export class App implements OnInit, OnDestroy {
   // Comprueba si se debe desplegar el modal de términos y condiciones de uso
   get showTermsModal(): boolean {
     if (this.isLoginPage()) return false;
-    const user = this.authService.getCurrentUser();
     
-    // Solo mostrar si está logueado, no ha aceptado y no se encuentra en el flujo de cambio obligatorio de clave
-    return this.authService.isLoggedIn() && !!user && !user.termsAccepted && !user.mustChangePassword;
+    // Solo mostrar si está logueado y se ha activado explícitamente el disparador (tras cambio de clave)
+    return this.authService.isLoggedIn() && this.authService.isTermsModalTriggered();
   }
 
   private setSidebarByRoute(url: string): void {

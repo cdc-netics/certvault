@@ -222,6 +222,12 @@ export class ProfileComponent implements OnInit, OnDestroy {
             this.passwordSuccess = 'Contrasena actualizada exitosamente';
             this.passwordForm.reset();
             setTimeout(() => this.passwordSuccess = '', 5000);
+
+            // Si el usuario cambia la contraseña y nunca ha firmado los términos, disparar el modal
+            const user = this.authService.getCurrentUser();
+            if (user && !user.termsAccepted) {
+              this.authService.triggerTermsModal();
+            }
           }
           this.loadingPassword = false;
         },

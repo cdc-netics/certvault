@@ -182,7 +182,9 @@ export class TermsModalComponent implements OnInit {
       .subscribe({
         next: (response) => {
           this.loading = false;
-          if (!response.success) {
+          if (response.success) {
+            this.router.navigate(['/dashboard']);
+          } else {
             this.errorMessage = response.message || 'No se pudieron aceptar los términos. Intenta de nuevo.';
           }
         },
