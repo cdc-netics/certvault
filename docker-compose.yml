@@ -49,9 +49,8 @@ services:
     image: nginx:1.27-alpine
     container_name: certvault-proxy
     restart: unless-stopped
-    # Exposición pública de los puertos HTTP y HTTPS (mapeando 8080 del host a 443 del contenedor)
+    # Exposición pública únicamente del puerto seguro HTTPS (mapeando 8080 en el host hacia el 443 interno)
     ports:
-      - "80:80"
       - "8080:443"
     # Montaje de la configuración personalizada de Nginx y del directorio de certificados SSL
     volumes:
