@@ -174,8 +174,34 @@ export const register = async (req: AuthRequest, res: Response): Promise<void> =
         ? 'Registro exitoso. Revisa tu correo para confirmar la cuenta antes de iniciar sesión.'
         : 'Registro exitoso. Sin embargo, no pudimos enviar el correo de verificación. Por favor contacta al administrador para activar tu cuenta.'
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error en registro:', error);
+    
+    // Manejo de errores de validacion del esquema de Mongoose para evitar codigos 500 genericos
+    if (error.name === 'ValidationError') {
+      const messages = Object.values(error.errors || {})
+        .map((val: any) => val.message)
+        .join(', ');
+      res.status(400).json({
+        success: false,
+        error: messages || 'Datos de entrada invalidos',
+        message: messages || 'Datos de entrada invalidos'
+      });
+      return;
+    }
+
+    // Manejo de errores por duplicado en indices unicos de Mongoose (ej: E11000)
+    if (error.code === 11000) {
+      const field = Object.keys(error.keyValue || {})[0];
+      const message = `Ya existe un registro con ese ${field}`;
+      res.status(400).json({
+        success: false,
+        error: message,
+        message: message
+      });
+      return;
+    }
+
     res.status(500).json({
       success: false,
       error: 'No pudimos completar el registro. Intenta nuevamente.',
