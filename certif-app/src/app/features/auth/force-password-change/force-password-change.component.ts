@@ -24,10 +24,15 @@ import { User } from '../../../core/models/user.model';
             </div>
             
             <div class="card-body p-4">
-              <!-- Mensaje informativo -->
+              <!-- Mensaje informativo adaptado al motivo de la actualizacion -->
               <div class="alert alert-warning border-0 shadow-sm mb-4 small">
                 <i class="fas fa-exclamation-triangle me-2"></i>
-                Tu contraseña ha expirado o un administrador ha solicitado que la renueves antes de continuar.
+                <span *ngIf="requiresPersonalEmail">
+                  Es necesario registrar un correo personal de respaldo (diferente al corporativo) y actualizar tu contraseña para continuar.
+                </span>
+                <span *ngIf="!requiresPersonalEmail">
+                  Tu contraseña ha expirado o un administrador ha solicitado que la renueves antes de continuar.
+                </span>
               </div>
 
               <form [formGroup]="changeForm" (ngSubmit)="onSubmit()" novalidate>

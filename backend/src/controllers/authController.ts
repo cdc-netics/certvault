@@ -217,12 +217,17 @@ export const login = async (req: AuthRequest, res: Response): Promise<void> => {
       isExpired = new Date() > expirationDate;
     }
 
+    // Se comprueba si el usuario actual coincide con el correo del administrador semilla del archivo .env
+    const envAdminEmail = process.env.ADMIN_EMAIL ? process.env.ADMIN_EMAIL.toLowerCase().trim() : 'admin@empresa.com';
+    const isSeedAdmin = user.email.toLowerCase().trim() === envAdminEmail;
+
     // Verificar si le falta el correo personal o es idéntico al corporativo
     const isPersonalEmailMissingOrEqual = !user.personalEmail || 
       user.personalEmail.toLowerCase().trim() === user.email.toLowerCase().trim();
 
-    // Si expiró o le falta el correo personal, forzar el cambio
-    if (isExpired || isPersonalEmailMissingOrEqual) {
+    // Si la contraseña expiro o falta el correo de respaldo, se exige su cambio obligatorio.
+    // Se establece una excepcion para el administrador de semilla para facilitar las pruebas y administracion inicial.
+    if (!isSeedAdmin && (isExpired || isPersonalEmailMissingOrEqual)) {
       user.mustChangePassword = true;
     }
 
