@@ -117,8 +117,9 @@ import { BackButtonComponent } from '../../../shared/components/back-button/back
                       placeholder="Tu contraseña"
                     />
                     <div class="invalid-feedback" *ngIf="password?.invalid && password?.touched">
-                      <small *ngIf="password?.errors?.['required']">La contraseña es requerida</small>
-                      <small *ngIf="password?.errors?.['minlength']">Debe tener al menos 6 caracteres</small>
+                      <small *ngIf="password?.errors?.['required']" class="d-block">La contraseña es requerida</small>
+                      <small *ngIf="password?.errors?.['minlength']" class="d-block">Debe tener al menos 6 caracteres</small>
+                      <small *ngIf="password?.errors?.['pattern']" class="d-block">Debe contener al menos una mayúscula, una minúscula y un número</small>
                     </div>
                   </div>
 
@@ -233,13 +234,19 @@ export class RegisterComponent implements OnInit {
     private readonly authService: AuthService,
     private readonly router: Router
   ) {
+    // Se define el formulario con las validaciones de negocio requeridas.
+    // Para la contrasena, se exige una longitud minima y un patron con al menos una mayuscula, una minuscula y un numero.
     this.registerForm = this.fb.group({
       firstName: ['', Validators.required],
       lastName: ['', Validators.required],
       username: ['', [Validators.required, Validators.minLength(3)]],
       email: ['', [Validators.required, Validators.email]],
       personalEmail: ['', [Validators.required, Validators.email]],
-      password: ['', [Validators.required, Validators.minLength(6)]],
+      password: ['', [
+        Validators.required, 
+        Validators.minLength(6), 
+        Validators.pattern(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/)
+      ]],
       department: ['', Validators.required],
       position: ['', Validators.required],
       phone: ['']

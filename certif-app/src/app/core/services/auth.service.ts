@@ -171,6 +171,7 @@ export class AuthService {
   }
 
   private handleError(error: HttpErrorResponse): Observable<never> {
+    // Se extrae el mensaje principal provisto por la API
     const apiMessage = error.error?.message || error.error?.error;
     const status = error.status;
 
@@ -179,7 +180,14 @@ export class AuthService {
     if (status === 0) {
       friendlyMessage = 'No pudimos conectarnos con el servidor. Verifica tu conexion o intenta mas tarde.';
     } else if (status === 400) {
-      friendlyMessage = apiMessage || 'Revisa los datos ingresados e intenta nuevamente.';
+      // Si el backend retorna una lista detallada de errores de validacion (p. ej., express-validator)
+      // se formatean dichos mensajes para brindar feedback claro al usuario sobre que campos fallaron.
+      if (error.error?.details && Array.isArray(error.error.details)) {
+        const detailsMsg = error.error.details.map((d: any) => d.msg).join(', ');
+        friendlyMessage = `${apiMessage || 'Datos de entrada invalidos'}: ${detailsMsg}`;
+      } else {
+        friendlyMessage = apiMessage || 'Revisa los datos ingresados e intenta nuevamente.';
+      }
     } else if (status === 401) {
       friendlyMessage = apiMessage || 'Tu sesion expiro o las credenciales no son validas.';
     } else if (status >= 500) {
