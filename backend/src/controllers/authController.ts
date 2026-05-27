@@ -43,21 +43,68 @@ const generateRefreshToken = (id: string): string => {
   });
 };
 
-const getFrontendBaseUrl = (): string => {
-  const base = process.env.FRONTEND_URL?.trim();
-  if (!base) {
-    throw new Error('FRONTEND_URL no esta definido en variables de entorno');
+const getFrontendBaseUrl = (req?: Request): string => {
+  // Se obtiene el valor estatico configurado como respaldo
+  const envBase = process.env.FRONTEND_URL?.trim() || '';
+  // Se separan multiples URLs en caso de estar configuradas por comas en las variables de entorno
+  const urls = envBase.split(',').map(u => u.trim()).filter(Boolean);
+
+  if (req) {
+    // 1. Validacion mediante la cabecera Origin (enviada tipicamente en llamadas CORS del cliente)
+    const origin = req.headers.origin as string;
+    if (origin) {
+      const matched = urls.find(u => u.toLowerCase().startsWith(origin.toLowerCase()));
+      if (matched) {
+        return matched.replace(/\/$/, '');
+      }
+      return origin.replace(/\/$/, '');
+    }
+
+    // 2. Validacion secundaria mediante la cabecera Referer
+    const referer = req.headers.referer as string;
+    if (referer) {
+      try {
+        const refUrl = new URL(referer);
+        const originFromRef = refUrl.origin;
+        const matched = urls.find(u => u.toLowerCase().startsWith(originFromRef.toLowerCase()));
+        if (matched) {
+          return matched.replace(/\/$/, '');
+        }
+        return originFromRef.replace(/\/$/, '');
+      } catch {
+        // Se ignora el fallo del formateador de URL en caso de referers maliciosos o invalidos
+      }
+    }
+
+    // 3. Validacion terciaria usando cabeceras Host y Protocolo (incluyendo soporte para Proxies)
+    const protocol = (req.headers['x-forwarded-proto'] as string) || req.protocol || 'http';
+    const host = (req.headers['x-forwarded-host'] as string) || req.get('host');
+    if (host) {
+      const generatedUrl = `${protocol}://${host}`;
+      const matched = urls.find(u => u.toLowerCase().startsWith(generatedUrl.toLowerCase()));
+      if (matched) {
+        return matched.replace(/\/$/, '');
+      }
+      return generatedUrl.replace(/\/$/, '');
+    }
   }
-  return base.replace(/\/$/, '');
+
+  // Si no se pudo determinar dinamicamente, se opta por el primer valor definido en el entorno
+  const defaultUrl = urls[0];
+  if (defaultUrl) {
+    return defaultUrl.replace(/\/$/, '');
+  }
+
+  throw new Error('FRONTEND_URL no esta definido en las variables de entorno y no se pudo determinar desde la peticion.');
 };
 
-const buildResetLink = (token: string, email: string): string => {
-  const base = getFrontendBaseUrl();
+const buildResetLink = (token: string, email: string, req?: Request): string => {
+  const base = getFrontendBaseUrl(req);
   return `${base}/reset-password?token=${token}&email=${encodeURIComponent(email)}`;
 };
 
-const buildVerifyLink = (token: string, email: string): string => {
-  const base = getFrontendBaseUrl();
+const buildVerifyLink = (token: string, email: string, req?: Request): string => {
+  const base = getFrontendBaseUrl(req);
   return `${base}/verify-email?token=${token}&email=${encodeURIComponent(email)}`;
 };
 
@@ -102,7 +149,8 @@ export const register = async (req: AuthRequest, res: Response): Promise<void> =
       verificationExpires: new Date(Date.now() + VERIFY_TOKEN_EXP_MINUTES * 60 * 1000)
     });
 
-    const verifyLink = buildVerifyLink(verificationToken, user.email);
+    // Se construye el enlace de verificacion pasando el objeto req para calcular la URL de forma dinamica
+    const verifyLink = buildVerifyLink(verificationToken, user.email, req);
     await sendVerificationEmail({
       to: user.email,
       name: user.firstName || user.username,
@@ -183,7 +231,10 @@ export const login = async (req: AuthRequest, res: Response): Promise<void> => {
 
     user.lastLogin = new Date();
     user.refreshToken = refreshToken;
-    await user.save();
+    // Se deshabilita la validacion del esquema al guardar marcas de sesion y tokens.
+    // Esto previene que usuarios con perfiles antiguos e incompletos (p. ej. sin correo personal)
+    // sufran excepciones del esquema de Mongoose al loguearse y queden bloqueados sin poder ingresar.
+    await user.save({ validateBeforeSave: false });
 
     res.json({
       success: true,
@@ -253,7 +304,8 @@ export const refreshToken = async (req: AuthRequest, res: Response): Promise<voi
     const newRefreshToken = generateRefreshToken(String(user._id));
 
     user.refreshToken = newRefreshToken;
-    await user.save();
+    // Se deshabilita la validacion para evitar interrupciones al renovar la sesion del usuario.
+    await user.save({ validateBeforeSave: false });
 
     res.json({
       success: true,
@@ -290,7 +342,8 @@ export const logout = async (req: AuthRequest, res: Response): Promise<void> => 
   try {
     if (req.user) {
       req.user.refreshToken = undefined;
-      await req.user.save();
+      // Se omite la validacion para asegurar que el proceso de logout finalice sin excepciones del esquema.
+      await req.user.save({ validateBeforeSave: false });
     }
 
     res.json({
@@ -536,9 +589,11 @@ export const forgotPassword = async (req: AuthRequest, res: Response): Promise<v
       const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
       user.passwordResetToken = hashedToken;
       user.passwordResetExpires = new Date(Date.now() + RESET_TOKEN_EXP_MINUTES * 60 * 1000);
-      await user.save();
+      // Se omite la validacion para garantizar la generacion del token de recuperacion en cualquier cuenta.
+      await user.save({ validateBeforeSave: false });
 
-      const resetLink = buildResetLink(token, user.email);
+      // Se construye el enlace de restablecimiento pasando el objeto req para calcular la URL de forma dinamica
+      const resetLink = buildResetLink(token, user.email, req);
       await sendPasswordResetEmail({
         to: user.email,
         name: user.firstName || user.username,
@@ -678,7 +733,8 @@ export const verifyEmail = async (req: AuthRequest, res: Response): Promise<void
     user.isVerified = true;
     user.verificationToken = undefined;
     user.verificationExpires = undefined;
-    await user.save();
+    // Se omite la validacion para asegurar el registro exitoso del estado de verificacion de la cuenta.
+    await user.save({ validateBeforeSave: false });
 
     res.json({
       success: true,

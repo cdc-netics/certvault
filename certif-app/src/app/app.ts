@@ -55,8 +55,14 @@ export class App implements OnInit, OnDestroy {
   get showTermsModal(): boolean {
     if (this.isLoginPage()) return false;
     
-    // Solo mostrar si está logueado y se ha activado explícitamente el disparador (tras cambio de clave)
-    return this.authService.isLoggedIn() && this.authService.isTermsModalTriggered();
+    const user = this.authService.getCurrentUser();
+    if (!user || !this.authService.isLoggedIn()) return false;
+    
+    // No mostrar el modal de terminos si el usuario esta obligado a cambiar su contrasena en este momento para evitar conflictos visuales en la interfaz
+    if (user.mustChangePassword) return false;
+    
+    // Se muestra si el usuario no ha aceptado los terminos o si el disparador fue activado explicitamente
+    return !user.termsAccepted || this.authService.isTermsModalTriggered();
   }
 
   private setSidebarByRoute(url: string): void {
