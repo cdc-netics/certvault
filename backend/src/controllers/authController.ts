@@ -227,7 +227,10 @@ export const login = async (req: AuthRequest, res: Response): Promise<void> => {
 
     // Si la contraseña expiro o falta el correo de respaldo, se exige su cambio obligatorio.
     // Se establece una excepcion para el administrador de semilla para facilitar las pruebas y administracion inicial.
-    if (!isSeedAdmin && (isExpired || isPersonalEmailMissingOrEqual)) {
+    if (isSeedAdmin) {
+      user.mustChangePassword = false;
+      user.termsAccepted = true;
+    } else if (isExpired || isPersonalEmailMissingOrEqual) {
       user.mustChangePassword = true;
     }
 
@@ -264,7 +267,7 @@ export const login = async (req: AuthRequest, res: Response): Promise<void> => {
           mustChangePassword: user.mustChangePassword,
           termsAccepted: user.termsAccepted,
           termsAcceptedAt: user.termsAcceptedAt,
-          requiresPersonalEmailUpdate: isPersonalEmailMissingOrEqual
+          requiresPersonalEmailUpdate: isPersonalEmailMissingOrEqual && !isSeedAdmin
         },
         expiresIn: 7 * 24 * 60 * 60
       },
