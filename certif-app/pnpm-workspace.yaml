@@ -1,6 +1,7 @@
-# Configuración de pnpm v11: declara dependencias con permiso para ejecutar scripts de compilación nativos
-onlyBuiltDependencies:
-  - "@parcel/watcher"
-  - esbuild
-  - lmdb
-  - msgpackr-extract
+# Configuración de pnpm v11: aprobación explícita de dependencias con scripts de compilación nativos
+# allowBuilds es el campo correcto para pnpm v11 (reemplaza a onlyBuiltDependencies de versiones anteriores)
+allowBuilds:
+  '@parcel/watcher': true
+  esbuild: true
+  lmdb: true
+  msgpackr-extract: true
