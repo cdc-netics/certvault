@@ -71,7 +71,6 @@ import { Subscription } from 'rxjs';
                 <div class="col mr-2">
                   <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">Por Expirar</div>
                   <div class="h5 mb-0 font-weight-bold text-gray-800">{{ stats.expiringSoon }}</div>
-                  <div class="h5 mb-0 font-weight-bold text-gray-800">0</div>
                 </div>
                 <div class="col-auto">
                   <i class="fas fa-exclamation-triangle fa-2x text-gray-300"></i>
@@ -191,11 +190,21 @@ export class DashboardComponent implements OnInit, OnDestroy {
       next: (response) => {
         if (response.success && response.data) {
           const data: any = response.data;
+          const getStatusCount = (statusName: string, fallbackArr?: any[]): number => {
+            if (data.byStatus && data.byStatus[statusName] !== undefined) {
+              return data.byStatus[statusName];
+            }
+            if (fallbackArr && Array.isArray(fallbackArr)) {
+              return fallbackArr.length;
+            }
+            return 0;
+          };
+
           this.stats = {
             total: data.total || 0,
-            active: data.byStatus?.active || data.active || 0,
-            expiringSoon: data.byStatus?.expiring_soon || data.expiringSoon || 0,
-            expired: data.byStatus?.expired || data.expired || 0
+            active: getStatusCount('active'),
+            expiringSoon: getStatusCount('expiring_soon', data.expiringSoon),
+            expired: getStatusCount('expired')
           };
           this.recentCertifications = data.recent || [];
           this.expiringSoon = data.expiringSoon || [];
