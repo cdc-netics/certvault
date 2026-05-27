@@ -30,7 +30,7 @@ const getResetTemplate = async (): Promise<string> => {
 
 export const sendPasswordResetEmail = async (payload: PasswordResetPayload): Promise<void> => {
   const mailer = await getActiveMailer();
-  await mailer.transporter.verify();
+  // Se remueve verify() redundante para optimizar el rendimiento y evitar esperas de conexion duplicadas antes de enviar.
   const template = await getResetTemplate();
   const htmlBody = template
     ? template
@@ -94,7 +94,7 @@ const getVerifyTemplate = async (): Promise<string> => {
 
 export const sendVerificationEmail = async (payload: VerifyEmailPayload): Promise<void> => {
   const mailer = await getActiveMailer();
-  await mailer.transporter.verify();
+  // Se remueve verify() redundante para evitar duplicar el handshake TCP y agilizar el registro del usuario.
   const template = await getVerifyTemplate();
   const htmlBody = template
     ? template
@@ -121,7 +121,7 @@ export const sendUserCertificationsArchiveEmail = async (
   payload: CertificationSummaryPayload
 ): Promise<void> => {
   const mailer = await getActiveMailer();
-  await mailer.transporter.verify();
+  // Se remueve verify() para acelerar la generacion y envio del respaldo de certificaciones.
 
   // Si no se especifica el correo personal de destino, se utiliza el corporativo como fallback
   const recipient = payload.to || payload.companyEmail;
@@ -233,7 +233,7 @@ export const sendPasswordExpirationWarningEmail = async (
   payload: PasswordExpirationPayload
 ): Promise<void> => {
   const mailer = await getActiveMailer();
-  await mailer.transporter.verify();
+  // Se remueve verify() redundante para optimizar la ejecucion del cron de expiraciones.
 
   const htmlBody = `
     <div style="font-family: Arial, sans-serif; color: #222;">

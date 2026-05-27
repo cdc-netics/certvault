@@ -151,16 +151,28 @@ export const register = async (req: AuthRequest, res: Response): Promise<void> =
 
     // Se construye el enlace de verificacion pasando el objeto req para calcular la URL de forma dinamica
     const verifyLink = buildVerifyLink(verificationToken, user.email, req);
-    await sendVerificationEmail({
-      to: user.email,
-      name: user.firstName || user.username,
-      verifyLink,
-      expiresInMinutes: VERIFY_TOKEN_EXP_MINUTES
-    });
+    
+    let emailSent = true;
+    try {
+      await sendVerificationEmail({
+        to: user.email,
+        name: user.firstName || user.username,
+        verifyLink,
+        expiresInMinutes: VERIFY_TOKEN_EXP_MINUTES
+      });
+    } catch (emailError) {
+      // Se registra el fallo del SMTP pero se permite que el registro en BD prosiga para evitar bloquear la creacion de cuentas.
+      // Adicionalmente se imprime en los logs de la consola del servidor el enlace de activacion para permitir la activacion manual por parte de administradores.
+      console.error('❌ Registro exitoso, pero fallo el envio del correo de activacion:', emailError);
+      console.log(`🔗 [ACTIVACION MANUAL] Enlace de activacion para ${user.email}: ${verifyLink}`);
+      emailSent = false;
+    }
 
     res.status(201).json({
       success: true,
-      message: 'Registro exitoso. Revisa tu correo para confirmar la cuenta antes de iniciar sesión.'
+      message: emailSent
+        ? 'Registro exitoso. Revisa tu correo para confirmar la cuenta antes de iniciar sesión.'
+        : 'Registro exitoso. Sin embargo, no pudimos enviar el correo de verificación. Por favor contacta al administrador para activar tu cuenta.'
     });
   } catch (error) {
     console.error('Error en registro:', error);
