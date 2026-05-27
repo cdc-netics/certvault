@@ -479,7 +479,15 @@ export const deleteUser = async (req: AuthRequest, res: Response): Promise<void>
       }
     }
 
-    const certifications = await Certification.find({ employeeId: id }).sort({ issueDate: -1 });
+    const fullName = `${userToDelete.firstName} ${userToDelete.lastName}`;
+    // Se buscan las certificaciones del usuario actual por su ID y tambien de forma complementaria por su nombre completo y departamento
+    // para recuperar certificaciones huerfanas en caso de que la cuenta haya sido eliminada y recreada con anterioridad.
+    const certifications = await Certification.find({
+      $or: [
+        { employeeId: id },
+        { employeeName: fullName, department: userToDelete.department }
+      ]
+    }).sort({ issueDate: -1 });
 
     if (certifications.length > 0) {
       try {

@@ -1,4 +1,4 @@
-﻿import { Request, Response } from 'express';
+import { Request, Response } from 'express';
 import path from 'path';
 import fs from 'fs';
 import {
@@ -19,11 +19,18 @@ const canAccessCertification = (certification: ICertification, user: any): boole
 
   if (isOwner) return true;
 
-  return (
+  // Un lider puede acceder a las certificaciones de su departamento o departamentos gestionados
+  const isLeaderWithAccess =
     user.role === UserRole.LIDER &&
     (certification.department === user.department ||
-      (user.managedDepartments || []).includes(certification.department as any))
-  );
+      (user.managedDepartments || []).includes(certification.department as any));
+
+  // Un usuario con rol de Solo Lectura (reader) puede acceder a leer las certificaciones de su mismo departamento
+  const isReaderOfSameDepartment =
+    user.role === UserRole.READER &&
+    certification.department === user.department;
+
+  return isLeaderWithAccess || isReaderOfSameDepartment;
 };
 
 const normalizeTags = (tags?: unknown): string[] => {
@@ -411,6 +418,20 @@ export const updateCertification = async (req: AuthRequest, res: Response): Prom
     const certification = await Certification.findById(req.params.id);
     if (!certification) {
       res.status(404).json({ success: false, error: 'Certificación no encontrada' });
+      return;
+    }
+
+    const isOwner =
+      certification.employeeId?.toString() === req.user?._id?.toString() ||
+      certification.createdBy?.toString() === req.user?._id?.toString();
+
+    // Se restringe a los usuarios Solo Lectura (reader) de actualizar certificaciones ajenas de su departamento
+    const isReader = req.user?.role === UserRole.READER;
+    if (isReader && !isOwner) {
+      res.status(403).json({
+        success: false,
+        error: 'Un usuario con rol de solo lectura no tiene permisos para actualizar certificaciones de otros colaboradores'
+      });
       return;
     }
 
