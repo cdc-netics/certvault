@@ -10,7 +10,12 @@ export enum AuditAction {
   UPDATE = 'update',
   DELETE = 'delete',
   EXPORT = 'export',
-  TEST = 'test'
+  TEST = 'test',
+  DOWNLOAD = 'download',
+  DOWNLOAD_FAILED = 'download_failed',
+  VIEW = 'view',
+  VIEW_FAILED = 'view_failed',
+  ERROR = 'error'
 }
 
 export interface IAuditLog extends Document {

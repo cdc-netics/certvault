@@ -1,4 +1,4 @@
-﻿import { Request, Response } from 'express';
+import { Request, Response } from 'express';
 import path from 'path';
 import fs from 'fs';
 import {
@@ -19,11 +19,18 @@ const canAccessCertification = (certification: ICertification, user: any): boole
 
   if (isOwner) return true;
 
-  return (
+  // Un lider puede acceder a las certificaciones de su departamento o departamentos gestionados
+  const isLeaderWithAccess =
     user.role === UserRole.LIDER &&
     (certification.department === user.department ||
-      (user.managedDepartments || []).includes(certification.department as any))
-  );
+      (user.managedDepartments || []).includes(certification.department as any));
+
+  // Un usuario con rol de Solo Lectura (reader) puede acceder a leer las certificaciones de su mismo departamento
+  const isReaderOfSameDepartment =
+    user.role === UserRole.READER &&
+    certification.department === user.department;
+
+  return isLeaderWithAccess || isReaderOfSameDepartment;
 };
 
 const normalizeTags = (tags?: unknown): string[] => {
@@ -148,14 +155,27 @@ export const getCertifications = async (req: Request, res: Response): Promise<vo
     const users = await User.find({ _id: { $in: userIds } }, { _id: 1, isActive: 1, department: 1 }).lean();
     const userMap = Object.fromEntries(users.map((u: any) => [u._id.toString(), u]));
 
+    let missingUserReferences = 0;
+
     const certifications = certificationsRaw.map(cert => {
       const user = userMap[cert.employeeId?.toString()];
+      if (!user) {
+        missingUserReferences += 1;
+      }
+
       return {
         ...cert,
-        userIsActive: user ? user.isActive : false,
-        userDepartment: user ? user.department : undefined
+        // Solo marcar inactivo cuando existe usuario y esta explicitamente desactivado.
+        // Si falta el usuario, reportar inconsistencia sin bloquear la certificacion como "No disponible".
+        userIsActive: user ? user.isActive : undefined,
+        userDepartment: user ? user.department : undefined,
+        userReferenceMissing: !user
       };
     });
+
+    if (missingUserReferences > 0) {
+      console.warn(`Certificaciones con referencia de usuario faltante: ${missingUserReferences}`);
+    }
 
     res.json({
       success: true,
@@ -175,6 +195,104 @@ export const getCertifications = async (req: Request, res: Response): Promise<vo
     res.status(500).json({
       success: false,
       error: 'Error al obtener certificaciones'
+    });
+  }
+};
+
+export const getPublicCertifications = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const apiClient = (req as any).publicApiClient;
+    const page = Math.max(parseInt((req.query.page as string) || '1', 10), 1);
+    const requestedLimit = Math.max(parseInt((req.query.limit as string) || '20', 10), 1);
+    const maxPageSize = Number(apiClient?.maxPageSize || 100);
+    const limit = Math.min(requestedLimit, maxPageSize);
+    const search = (req.query.search as string)?.trim();
+
+    const certificationFilter: Record<string, unknown> = {};
+    if (req.query.type) certificationFilter.type = req.query.type;
+    if (req.query.level) certificationFilter.level = req.query.level;
+    if (req.query.provider) certificationFilter.provider = req.query.provider;
+    if (req.query.department) certificationFilter.department = req.query.department;
+    if (req.query.status) certificationFilter.status = req.query.status;
+    if (req.query.certificateNumber) certificationFilter.certificateNumber = req.query.certificateNumber;
+
+    if (search) {
+      certificationFilter.$or = [
+        { title: { $regex: search, $options: 'i' } },
+        { employeeName: { $regex: search, $options: 'i' } },
+        { technology: { $regex: search, $options: 'i' } },
+        { provider: { $regex: search, $options: 'i' } },
+        { certificateNumber: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    const pipeline: any[] = [
+      { $match: certificationFilter },
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'employeeId',
+          foreignField: '_id',
+          as: 'employee'
+        }
+      },
+      { $unwind: '$employee' },
+      { $match: { 'employee.isActive': true } },
+      {
+        $project: {
+          _id: 1,
+          title: 1,
+          type: 1,
+          technology: 1,
+          provider: 1,
+          level: 1,
+          employeeName: 1,
+          department: 1,
+          issueDate: 1,
+          expirationDate: 1,
+          certificateNumber: 1,
+          status: 1,
+          validationUrl: 1,
+          hasCertificate: {
+            $cond: [{ $ifNull: ['$certificateUrl', false] }, true, false]
+          }
+        }
+      },
+      {
+        $facet: {
+          data: [
+            { $sort: { createdAt: -1 } },
+            { $skip: (page - 1) * limit },
+            { $limit: limit }
+          ],
+          total: [{ $count: 'count' }]
+        }
+      }
+    ];
+
+    const [result] = await Certification.aggregate(pipeline);
+    const data = result?.data || [];
+    const total = result?.total?.[0]?.count || 0;
+
+    res.json({
+      success: true,
+      data: {
+        certifications: data,
+        pagination: {
+          currentPage: page,
+          totalPages: Math.max(1, Math.ceil(total / limit)),
+          totalItems: total,
+          limit,
+          hasNextPage: page * limit < total,
+          hasPrevPage: page > 1
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Error getting public certifications:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Error al obtener certificaciones publicas'
     });
   }
 };
@@ -244,6 +362,52 @@ export const getCertificationFile = async (req: AuthRequest, res: Response): Pro
   }
 };
 
+export const getPublicCertificationFile = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const apiClient = (req as any).publicApiClient;
+    if (!apiClient?.canDownloadFiles) {
+      res.status(403).json({ success: false, error: 'La API key no tiene permiso de descarga' });
+      return;
+    }
+
+    const certification = await Certification.findById(req.params.id).lean();
+    if (!certification) {
+      res.status(404).json({ success: false, error: 'Certificacion no encontrada' });
+      return;
+    }
+
+    const ownerUser = await User.findById(certification.employeeId, { _id: 1, isActive: 1 }).lean();
+    if (!ownerUser || ownerUser.isActive === false) {
+      res.status(404).json({ success: false, error: 'Archivo no disponible para esta certificacion' });
+      return;
+    }
+
+    const certificateUrl = certification.certificateUrl || '';
+    if (!certificateUrl.startsWith('/uploads/certificates/')) {
+      res.status(404).json({ success: false, error: 'Archivo de certificado no disponible' });
+      return;
+    }
+
+    const fileName = path.basename(certificateUrl);
+    const filePath = path.resolve(__dirname, '../../uploads/certificates', fileName);
+    const uploadsRoot = path.resolve(__dirname, '../../uploads/certificates');
+    const relativePath = path.relative(uploadsRoot, filePath);
+
+    if (relativePath.startsWith('..') || path.isAbsolute(relativePath) || !fs.existsSync(filePath)) {
+      res.status(404).json({ success: false, error: 'Archivo de certificado no encontrado' });
+      return;
+    }
+
+    const downloadName = `${certification.certificateNumber || certification.title || 'certificado'}${path.extname(fileName)}`;
+    const disposition = req.query.download === '1' ? 'attachment' : 'inline';
+    res.setHeader('Content-Disposition', `${disposition}; filename="${downloadName.replace(/"/g, '')}"`);
+    res.sendFile(filePath);
+  } catch (error) {
+    console.error('Error getting public certification file:', error);
+    res.status(500).json({ success: false, error: 'Error al obtener el archivo de certificacion' });
+  }
+};
+
 export const updateCertification = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     if (!req.user) {
@@ -254,6 +418,20 @@ export const updateCertification = async (req: AuthRequest, res: Response): Prom
     const certification = await Certification.findById(req.params.id);
     if (!certification) {
       res.status(404).json({ success: false, error: 'Certificación no encontrada' });
+      return;
+    }
+
+    const isOwner =
+      certification.employeeId?.toString() === req.user?._id?.toString() ||
+      certification.createdBy?.toString() === req.user?._id?.toString();
+
+    // Se restringe a los usuarios Solo Lectura (reader) de actualizar certificaciones ajenas de su departamento
+    const isReader = req.user?.role === UserRole.READER;
+    if (isReader && !isOwner) {
+      res.status(403).json({
+        success: false,
+        error: 'Un usuario con rol de solo lectura no tiene permisos para actualizar certificaciones de otros colaboradores'
+      });
       return;
     }
 

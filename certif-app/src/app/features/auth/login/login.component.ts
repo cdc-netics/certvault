@@ -87,7 +87,7 @@ import { AuthService } from '../../../core/services/auth.service';
                   </button>
 
                   <div class="small-info text-center">
-                    <p class="text-muted mb-0">Version 1.7</p>
+                    <p class="text-muted mb-0">Version 1.8-beta</p>
                     <p class="mb-0 mt-2">
                       <small class="text-muted">¿Aun no tienes cuenta? <a routerLink="/register" class="text-primary text-decoration-none">Regístrate</a></small>
                     </p>

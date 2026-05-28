@@ -55,6 +55,11 @@ export class UserFormComponent implements OnInit, OnDestroy {
     this.userForm.get('password')?.valueChanges
       .pipe(takeUntil(this.destroy$))
       .subscribe(() => this.userForm.get('confirmPassword')?.updateValueAndValidity({ onlySelf: true }));
+    
+    // Suscripción para revalidar el correo personal al cambiar el correo corporativo
+    this.userForm.get('email')?.valueChanges
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(() => this.userForm.get('personalEmail')?.updateValueAndValidity({ onlySelf: true }));
 
     this.loadRoles();
     this.loadDepartments();
@@ -125,6 +130,7 @@ export class UserFormComponent implements OnInit, OnDestroy {
     this.userForm = this.fb.group({
       username: ['', [Validators.required, Validators.minLength(3), Validators.maxLength(20)]],
       email: ['', [Validators.required, Validators.email]],
+      personalEmail: ['', [Validators.required, Validators.email, this.emailsDifferentValidator.bind(this)]],
       password: [''],
       confirmPassword: [''],
       firstName: ['', [Validators.required, Validators.maxLength(50)]],
@@ -166,6 +172,20 @@ export class UserFormComponent implements OnInit, OnDestroy {
     return password === confirmPassword ? null : { passwordMismatch: true };
   }
 
+  /**
+   * Validador que comprueba que el email corporativo y el email personal no sean iguales.
+   * Retorna un error 'emailsIdentical' si coinciden.
+   */
+  private emailsDifferentValidator(control: any) {
+    if (!this.userForm) return null;
+    const email = this.userForm.get('email')?.value;
+    const personalEmail = control.value;
+    if (!email || !personalEmail) {
+      return null;
+    }
+    return email.toLowerCase() !== personalEmail.toLowerCase() ? null : { emailsIdentical: true };
+  }
+
   private loadUser(id: string): void {
     this.loading = true;
 
@@ -179,6 +199,7 @@ export class UserFormComponent implements OnInit, OnDestroy {
             this.userForm.patchValue({
               username: target.username,
               email: target.email,
+              personalEmail: target.personalEmail,
               firstName: target.firstName,
               lastName: target.lastName,
               role: target.role,
@@ -308,6 +329,7 @@ export class UserFormComponent implements OnInit, OnDestroy {
 
   get username() { return this.userForm.get('username'); }
   get email() { return this.userForm.get('email'); }
+  get personalEmail() { return this.userForm.get('personalEmail'); }
   get password() { return this.userForm.get('password'); }
   get confirmPassword() { return this.userForm.get('confirmPassword'); }
   get firstName() { return this.userForm.get('firstName'); }

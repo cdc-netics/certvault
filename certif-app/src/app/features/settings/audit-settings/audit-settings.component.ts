@@ -38,6 +38,11 @@ import { SettingsNavComponent } from '../settings-nav.component';
                 <option value="delete">Eliminar</option>
                 <option value="export">Exportar</option>
                 <option value="test">Test</option>
+                <option value="view">Visualizar</option>
+                <option value="view_failed">Visualización fallida</option>
+                <option value="download">Descargar</option>
+                <option value="download_failed">Descarga fallida</option>
+                <option value="error">Error de sistema</option>
               </select>
             </div>
             <div class="col-md-2">
@@ -76,7 +81,7 @@ import { SettingsNavComponent } from '../settings-nav.component';
                 <th>Accion</th>
                 <th>Recurso</th>
                 <th>Usuario</th>
-                <th>Ruta</th>
+                <th>Detalle / Evento</th>
                 <th>Estado</th>
                 <th>IP</th>
               </tr>
@@ -84,11 +89,47 @@ import { SettingsNavComponent } from '../settings-nav.component';
             <tbody>
               <tr *ngFor="let log of logs">
                 <td>{{ log.createdAt | date:'yyyy-MM-dd HH:mm' }}</td>
-                <td><span class="badge bg-secondary">{{ log.action }}</span></td>
+                <td>
+                  <!-- Badge con color contextual según la acción de auditoría -->
+                  <span class="badge" [ngClass]="{
+                    'bg-danger': ['access_denied', 'login_failed', 'download_failed', 'view_failed', 'error'].includes(log.action),
+                    'bg-success': ['login_success'].includes(log.action),
+                    'bg-warning text-dark': ['update', 'delete'].includes(log.action),
+                    'bg-info text-dark': ['create', 'test', 'export', 'download', 'view'].includes(log.action),
+                    'bg-secondary': !['access_denied', 'login_failed', 'login_success', 'update', 'delete', 'create', 'test', 'export', 'download', 'view', 'download_failed', 'view_failed', 'error'].includes(log.action)
+                  }">{{ log.action }}</span>
+                </td>
                 <td>{{ log.resource }}</td>
                 <td>{{ log.userEmail || 'Sistema' }}</td>
-                <td><small>{{ log.method }} {{ log.path }}</small></td>
-                <td>{{ log.statusCode }}</td>
+                <td>
+                  <div>
+                    <!-- Visualización de ruta técnica superior -->
+                    <span class="d-block font-monospace text-secondary mb-1" style="font-size: 0.8rem;">
+                      {{ log.method }} {{ log.path }}
+                    </span>
+                    <!-- Mensaje amigable del evento de auditoría -->
+                    <span class="fw-semibold">{{ log.message }}</span>
+                    
+                    <!-- Desglose de metadatos clave (correo de destino, certificaciones, fallas) -->
+                    <div *ngIf="log.metadata" class="mt-1 small border-start border-3 ps-2 py-1 text-muted bg-light rounded" style="font-size: 0.75rem; max-width: 400px; word-break: break-all;">
+                      <div *ngIf="log.metadata['recipient']">
+                        <strong class="text-primary">Destinatario:</strong> {{ log.metadata['recipient'] }}
+                      </div>
+                      <div *ngIf="log.metadata['certificationsCount']">
+                        <strong>Certificaciones:</strong> {{ log.metadata['certificationsCount'] }} respaldadas
+                      </div>
+                      <div *ngIf="log.metadata['error']" class="text-danger mt-1">
+                        <strong>Fallo:</strong> {{ log.metadata['error'] }}
+                      </div>
+                    </div>
+                  </div>
+                </td>
+                <td>
+                  <!-- Badge sutil de estado HTTP -->
+                  <span class="badge" [ngClass]="log.statusCode < 400 ? 'bg-success-subtle text-success border border-success-subtle' : 'bg-danger-subtle text-danger border border-danger-subtle'">
+                    {{ log.statusCode }}
+                  </span>
+                </td>
                 <td>{{ log.ip }}</td>
               </tr>
             </tbody>

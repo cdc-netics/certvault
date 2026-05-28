@@ -3,10 +3,16 @@ import { AuditAction, AuditLog } from '../models/AuditLog';
 import { BrandingSettings } from '../models/BrandingSettings';
 import { Certification } from '../models/Certification';
 import { SmtpProfile } from '../models/SmtpProfile';
+import { PublicApiClient } from '../models/PublicApiClient';
 import { User } from '../models/User';
 import { AuthRequest } from '../middleware/auth';
+import { SecuritySettings } from '../models/SecuritySettings';
 import { recordAuditLog } from '../services/auditService';
 import { toSafeSmtpProfile } from '../services/smtpProfileService';
+import { clearApiKeyCache } from '../middleware/apiKey';
+import crypto from 'crypto';
+import fs from 'fs';
+import { generateConfigBackup, generateFullBackup, restoreBackup, systemWipe as performSystemWipe } from '../services/backupService';
 
 const getDateRange = (req: Request) => {
   const from = req.query.from ? new Date(req.query.from as string) : undefined;
@@ -22,6 +28,31 @@ const getBrandingDocument = async () => {
   if (existing) return existing;
   return BrandingSettings.create({});
 };
+
+const hashApiKey = (apiKey: string): string => {
+  return crypto.createHash('sha256').update(apiKey).digest('hex');
+};
+
+const generateApiKey = (): string => {
+  return crypto.randomBytes(24).toString('base64url');
+};
+
+const toSafePublicApiClient = (client: any) => ({
+  id: client._id?.toString() || client.id,
+  name: client.name,
+  description: client.description || '',
+  isActive: Boolean(client.isActive),
+  canReadCertifications: Boolean(client.canReadCertifications),
+  canDownloadFiles: Boolean(client.canDownloadFiles),
+  rateLimitPerMinute: Number(client.rateLimitPerMinute || 60),
+  maxPageSize: Number(client.maxPageSize || 50),
+  keyHint: client.keyHint || '',
+  lastUsedAt: client.lastUsedAt,
+  createdAt: client.createdAt,
+  updatedAt: client.updatedAt,
+  endpoint: '/api/certifications/public/external',
+  downloadEndpointPattern: '/api/certifications/public/external/:id/file'
+});
 
 const csvEscape = (value: unknown): string => {
   const text = value === undefined || value === null ? '' : String(value);
@@ -68,26 +99,12 @@ export const getAuditLogs = async (req: Request, res: Response): Promise<void> =
 
 export const exportBackup = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const [users, certifications, smtpProfiles, branding] = await Promise.all([
-      User.find().select('-password -refreshToken -passwordResetToken -verificationToken').lean(),
-      Certification.find().lean(),
-      SmtpProfile.find().select('+passwordEncrypted').lean(),
-      BrandingSettings.findOne().sort({ updatedAt: -1 }).lean()
-    ]);
-
-    const backup = {
-      exportedAt: new Date().toISOString(),
-      version: '1.0',
-      collections: {
-        users,
-        certifications,
-        smtpProfiles: smtpProfiles.map(profile => ({
-          ...profile,
-          passwordEncrypted: profile.passwordEncrypted ? '[encrypted-secret-exported]' : undefined
-        })),
-        branding
-      }
-    };
+    const backupType = req.query.type as string || 'full';
+    
+    // Generar el ZIP correspondiente según el tipo solicitado
+    const zipBuffer = backupType === 'config' 
+      ? await generateConfigBackup() 
+      : await generateFullBackup();
 
     await recordAuditLog({
       action: AuditAction.EXPORT,
@@ -100,15 +117,55 @@ export const exportBackup = async (req: AuthRequest, res: Response): Promise<voi
       ip: req.ip,
       userAgent: req.get('user-agent'),
       statusCode: 200,
-      message: 'Backup exportado'
+      message: `Backup ${backupType} exportado`
     });
 
-    res.setHeader('Content-Type', 'application/json');
-    res.setHeader('Content-Disposition', `attachment; filename="certivault-backup-${Date.now()}.json"`);
-    res.status(200).send(JSON.stringify(backup, null, 2));
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="certivault-backup-${backupType}-${Date.now()}.zip"`);
+    res.status(200).send(zipBuffer);
   } catch (error) {
     console.error('Error exportando backup:', error);
     res.status(500).json({ success: false, error: 'Error al exportar backup' });
+  }
+};
+
+export const importBackup = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.file) {
+      res.status(400).json({ success: false, error: 'No se ha proporcionado ningún archivo ZIP' });
+      return;
+    }
+
+    // Leer el buffer del archivo subido
+    const fileBuffer = req.file.buffer || fs.readFileSync(req.file.path);
+
+    // Restaurar los datos desde el ZIP
+    await restoreBackup(fileBuffer);
+
+    // Registrar en auditoría
+    await recordAuditLog({
+      action: AuditAction.CREATE,
+      resource: 'backup',
+      userId: req.user?._id,
+      userEmail: req.user?.email,
+      userRole: req.user?.role,
+      method: req.method,
+      path: req.originalUrl,
+      ip: req.ip,
+      userAgent: req.get('user-agent'),
+      statusCode: 200,
+      message: 'Backup importado y restaurado exitosamente'
+    });
+
+    // Limpiar el archivo subido si existe en disco temporal
+    if (req.file.path && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
+
+    res.json({ success: true, message: 'Respaldo importado exitosamente' });
+  } catch (error: any) {
+    console.error('Error importando backup:', error);
+    res.status(500).json({ success: false, error: error.message || 'Error al importar backup' });
   }
 };
 
@@ -127,6 +184,31 @@ export const getBackupSummary = async (_req: Request, res: Response): Promise<vo
     });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Error al obtener resumen de backup' });
+  }
+};
+
+export const systemWipe = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    await performSystemWipe();
+    
+    await recordAuditLog({
+      action: AuditAction.DELETE,
+      resource: 'system',
+      userId: req.user?._id,
+      userEmail: req.user?.email,
+      userRole: req.user?.role,
+      method: req.method,
+      path: req.originalUrl,
+      ip: req.ip,
+      userAgent: req.get('user-agent'),
+      statusCode: 200,
+      message: 'System wipe ejecutado'
+    });
+
+    res.json({ success: true, message: 'Sistema borrado exitosamente. Solo se conservó el administrador por defecto.' });
+  } catch (error) {
+    console.error('Error en system wipe:', error);
+    res.status(500).json({ success: false, error: 'Error al realizar el borrado del sistema' });
   }
 };
 
@@ -154,6 +236,221 @@ export const updateBranding = async (req: AuthRequest, res: Response): Promise<v
   } catch (error) {
     console.error('Error actualizando branding:', error);
     res.status(400).json({ success: false, error: 'Error al actualizar branding' });
+  }
+};
+
+export const getPublicApiClients = async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const clients = await PublicApiClient.find().sort({ createdAt: -1 }).lean();
+    res.json({
+      success: true,
+      data: clients.map(toSafePublicApiClient)
+    });
+  } catch (error) {
+    console.error('Error obteniendo clientes de API externa:', error);
+    res.status(500).json({ success: false, error: 'Error al obtener clientes de API externa' });
+  }
+};
+
+export const createPublicApiClient = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const providedKey = typeof req.body.apiKey === 'string' ? req.body.apiKey.trim() : '';
+    const apiKey = providedKey || generateApiKey();
+
+    if (apiKey.length < 12) {
+      res.status(400).json({ success: false, error: 'La API key debe tener al menos 12 caracteres' });
+      return;
+    }
+
+    const client = await PublicApiClient.create({
+      name: req.body.name,
+      description: req.body.description || '',
+      apiKeyHash: hashApiKey(apiKey),
+      keyHint: `***${apiKey.slice(-4)}`,
+      isActive: typeof req.body.isActive === 'boolean' ? req.body.isActive : true,
+      canReadCertifications: true,
+      canDownloadFiles: Boolean(req.body.canDownloadFiles),
+      rateLimitPerMinute: Number(req.body.rateLimitPerMinute || 60),
+      maxPageSize: Number(req.body.maxPageSize || 50),
+      createdBy: req.user?._id,
+      updatedBy: req.user?._id
+    });
+
+    clearApiKeyCache();
+
+    res.json({
+      success: true,
+      data: {
+        client: toSafePublicApiClient(client),
+        apiKey
+      },
+      message: 'Cliente API creado exitosamente'
+    });
+  } catch (error) {
+    console.error('Error creando cliente API externo:', error);
+    res.status(500).json({ success: false, error: 'Error al crear cliente de API externa' });
+  }
+};
+
+export const updatePublicApiClient = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const client = await PublicApiClient.findById(req.params.id).select('+apiKeyHash');
+    if (!client) {
+      res.status(404).json({ success: false, error: 'Cliente API no encontrado' });
+      return;
+    }
+
+    const fields = ['name', 'description', 'isActive', 'canDownloadFiles', 'rateLimitPerMinute', 'maxPageSize'] as const;
+    for (const field of fields) {
+      if (req.body[field] !== undefined) {
+        (client as any)[field] = req.body[field];
+      }
+    }
+
+    const newApiKey = typeof req.body.apiKey === 'string' ? req.body.apiKey.trim() : '';
+    let returnedApiKey: string | undefined;
+    if (newApiKey) {
+      if (newApiKey.length < 12) {
+        res.status(400).json({ success: false, error: 'La API key debe tener al menos 12 caracteres' });
+        return;
+      }
+      (client as any).apiKeyHash = hashApiKey(newApiKey);
+      client.keyHint = `***${newApiKey.slice(-4)}`;
+      returnedApiKey = newApiKey;
+    }
+
+    (client as any).updatedBy = req.user?._id;
+    await client.save();
+    clearApiKeyCache();
+
+    res.json({
+      success: true,
+      data: {
+        client: toSafePublicApiClient(client),
+        apiKey: returnedApiKey
+      },
+      message: 'Cliente API actualizado exitosamente'
+    });
+  } catch (error) {
+    console.error('Error actualizando cliente API externo:', error);
+    res.status(500).json({ success: false, error: 'Error al actualizar cliente de API externa' });
+  }
+};
+
+export const rotatePublicApiClientKey = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const client = await PublicApiClient.findById(req.params.id).select('+apiKeyHash');
+    if (!client) {
+      res.status(404).json({ success: false, error: 'Cliente API no encontrado' });
+      return;
+    }
+
+    const newApiKey = generateApiKey();
+    (client as any).apiKeyHash = hashApiKey(newApiKey);
+    client.keyHint = `***${newApiKey.slice(-4)}`;
+    (client as any).updatedBy = req.user?._id;
+
+    await client.save();
+    clearApiKeyCache();
+
+    res.json({
+      success: true,
+      data: {
+        client: toSafePublicApiClient(client),
+        apiKey: newApiKey
+      },
+      message: 'API key regenerada exitosamente'
+    });
+  } catch (error) {
+    console.error('Error regenerando API key de cliente externo:', error);
+    res.status(500).json({ success: false, error: 'Error al regenerar API key del cliente' });
+  }
+};
+
+export const deletePublicApiClient = async (_req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const deleted = await PublicApiClient.findByIdAndDelete(_req.params.id);
+    if (!deleted) {
+      res.status(404).json({ success: false, error: 'Cliente API no encontrado' });
+      return;
+    }
+
+    clearApiKeyCache();
+    res.json({ success: true, message: 'Cliente API eliminado exitosamente' });
+  } catch (error) {
+    console.error('Error eliminando cliente API externo:', error);
+    res.status(500).json({ success: false, error: 'Error al eliminar cliente de API externa' });
+  }
+};
+
+export const testPublicApiClient = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const client = await PublicApiClient.findById(req.params.id);
+    if (!client) {
+      res.status(404).json({ success: false, error: 'Cliente API no encontrado' });
+      return;
+    }
+
+    if (!client.isActive) {
+      res.status(400).json({ success: false, error: 'El cliente API esta inactivo' });
+      return;
+    }
+
+    if (!client.canReadCertifications) {
+      res.status(400).json({ success: false, error: 'El cliente API no tiene permiso de lectura' });
+      return;
+    }
+
+    const [totalVisible, sample] = await Promise.all([
+      Certification.aggregate([
+        {
+          $lookup: {
+            from: 'users',
+            localField: 'employeeId',
+            foreignField: '_id',
+            as: 'employee'
+          }
+        },
+        { $unwind: '$employee' },
+        { $match: { 'employee.isActive': true } },
+        { $count: 'count' }
+      ]),
+      Certification.aggregate([
+        {
+          $lookup: {
+            from: 'users',
+            localField: 'employeeId',
+            foreignField: '_id',
+            as: 'employee'
+          }
+        },
+        { $unwind: '$employee' },
+        { $match: { 'employee.isActive': true } },
+        { $sort: { createdAt: -1 } },
+        { $limit: 1 },
+        { $project: { _id: 1, title: 1, certificateUrl: 1 } }
+      ])
+    ]);
+
+    const total = totalVisible[0]?.count || 0;
+    const sampleItem = sample[0];
+
+    res.json({
+      success: true,
+      data: {
+        client: toSafePublicApiClient(client),
+        result: {
+          readEndpoint: '/api/certifications/public/external?page=1&limit=5',
+          downloadEndpoint: sampleItem && client.canDownloadFiles ? `/api/certifications/public/external/${sampleItem._id}/file` : null,
+          visibleCertifications: total,
+          sampleCertificationTitle: sampleItem?.title || null
+        }
+      },
+      message: 'Prueba de cliente API completada'
+    });
+  } catch (error) {
+    console.error('Error probando cliente API externo:', error);
+    res.status(500).json({ success: false, error: 'Error al probar cliente de API externa' });
   }
 };
 
@@ -236,5 +533,55 @@ export const exportReport = async (req: AuthRequest, res: Response): Promise<voi
     res.status(200).send(csv);
   } catch (error) {
     res.status(500).json({ success: false, error: 'Error al exportar reporte' });
+  }
+};
+
+export const getSecuritySettings = async (_req: Request, res: Response): Promise<void> => {
+  try {
+    let settings = await SecuritySettings.findOne().sort({ updatedAt: -1 });
+    if (!settings) {
+      settings = await SecuritySettings.create({
+        passwordExpirationEnabled: false,
+        passwordExpirationMonths: 3,
+        certificateExpirationAlertsEnabled: true // Habilitar por defecto
+      });
+    }
+    res.json({ success: true, data: settings });
+  } catch (error) {
+    console.error('Error obteniendo configuracion de seguridad:', error);
+    res.status(500).json({ success: false, error: 'Error al obtener configuracion de seguridad' });
+  }
+};
+
+export const updateSecuritySettings = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    let settings = await SecuritySettings.findOne().sort({ updatedAt: -1 });
+    if (!settings) {
+      settings = new SecuritySettings();
+    }
+
+    const { passwordExpirationEnabled, passwordExpirationMonths, certificateExpirationAlertsEnabled } = req.body;
+
+    if (passwordExpirationEnabled !== undefined) {
+      settings.passwordExpirationEnabled = Boolean(passwordExpirationEnabled);
+    }
+    if (passwordExpirationMonths !== undefined) {
+      settings.passwordExpirationMonths = Number(passwordExpirationMonths);
+    }
+    if (certificateExpirationAlertsEnabled !== undefined) {
+      settings.certificateExpirationAlertsEnabled = Boolean(certificateExpirationAlertsEnabled);
+    }
+
+    settings.updatedBy = req.user?._id;
+    await settings.save();
+
+    res.json({
+      success: true,
+      data: settings,
+      message: 'Configuracion de seguridad actualizada exitosamente'
+    });
+  } catch (error) {
+    console.error('Error actualizando configuracion de seguridad:', error);
+    res.status(400).json({ success: false, error: 'Error al actualizar configuracion de seguridad' });
   }
 };

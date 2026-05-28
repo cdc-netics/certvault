@@ -21,6 +21,7 @@
   ],
   "author": "Sistema de Certificaciones",
   "license": "MIT",
+  "packageManager": "pnpm@11.3.0",
   "dependencies": {
     "@types/bcryptjs": "^2.4.6",
     "@types/compression": "^1.8.1",
@@ -31,6 +32,7 @@
     "@types/morgan": "^1.9.10",
     "@types/multer": "^2.0.0",
     "@types/validator": "^13.15.3",
+    "adm-zip": "^0.5.17",
     "bcryptjs": "^3.0.3",
     "compression": "^1.8.1",
     "cors": "^2.8.5",
@@ -47,6 +49,7 @@
     "validator": "^13.15.20"
   },
   "devDependencies": {
+    "@types/adm-zip": "^0.5.8",
     "@types/node": "^24.9.1",
     "@types/nodemailer": "^7.0.5",
     "nodemon": "^3.1.10",

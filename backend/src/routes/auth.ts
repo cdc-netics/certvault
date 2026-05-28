@@ -10,7 +10,10 @@ import {
   changePassword,
   forgotPassword,
   resetPassword,
-  verifyEmail
+  verifyEmail,
+  getMyActivity,
+  verifyResetToken,
+  acceptTerms
 } from '../controllers/authController';
 import { authenticate } from '../middleware/auth';
 import { validateRequest } from '../middleware/validation';
@@ -24,6 +27,7 @@ const registerValidation = [
     .matches(/^\w+$/)
     .withMessage('El nombre de usuario solo puede contener letras, numeros y guiones bajos'),
   body('email').isEmail().withMessage('Email invalido').normalizeEmail(),
+  body('personalEmail').isEmail().withMessage('Correo personal invalido').normalizeEmail(),
   body('password')
     .isLength({ min: 6 })
     .withMessage('La contraseña debe tener al menos 6 caracteres')
@@ -60,11 +64,14 @@ router.post('/login', loginValidation, validateRequest, login);
 router.post('/refresh', refreshToken);
 router.post('/forgot-password', forgotPasswordValidation, validateRequest, forgotPassword);
 router.post('/reset-password', resetPasswordValidation, validateRequest, resetPassword);
+router.post('/verify-reset-token', verifyResetToken);
 router.post('/verify-email', verifyEmailValidation, validateRequest, verifyEmail);
 
 router.post('/logout', authenticate, logout);
 router.get('/me', authenticate, getCurrentUser);
+router.get('/my-activity', authenticate, getMyActivity);
 router.put('/profile', authenticate, updateProfile);
 router.put('/change-password', authenticate, changePassword);
+router.post('/accept-terms', authenticate, acceptTerms);
 
 export default router;

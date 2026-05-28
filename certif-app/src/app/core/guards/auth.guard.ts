@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { CanActivate, Router } from '@angular/router';
+import { CanActivate, Router, ActivatedRouteSnapshot, RouterStateSnapshot } from '@angular/router';
 import { Observable, of } from 'rxjs';
 import { map, take } from 'rxjs/operators';
 import { AuthService } from '../services/auth.service';
@@ -14,15 +14,38 @@ export class AuthGuard implements CanActivate {
     private readonly router: Router
   ) {}
 
-  canActivate(): Observable<boolean> {
+  canActivate(route: ActivatedRouteSnapshot, state: RouterStateSnapshot): Observable<boolean> {
+    const targetUrl = state.url;
+
+    // Función auxiliar para determinar si se permite el paso o se redirige
+    const checkPasswordChange = (user: any): boolean => {
+      if (user && user.mustChangePassword) {
+        if (targetUrl !== '/force-password-change') {
+          // Redirigir de forma obligatoria al formulario de cambio de clave forzado
+          this.router.navigate(['/force-password-change']);
+          return false;
+        }
+        return true;
+      }
+      
+      // Si el usuario no requiere cambiar contraseña pero intenta ingresar al formulario forzado
+      if (targetUrl === '/force-password-change') {
+        this.router.navigate(['/dashboard']);
+        return false;
+      }
+      return true;
+    };
+
     if (this.authService.isLoggedIn() && this.authService.getCurrentUser()) {
-      return of(true);
+      const user = this.authService.getCurrentUser();
+      return of(checkPasswordChange(user));
     }
 
     return this.authService.validateSession().pipe(
       map(isValid => {
         if (isValid) {
-          return true;
+          const user = this.authService.getCurrentUser();
+          return checkPasswordChange(user);
         } else {
           this.authService.logout();
           this.router.navigate(['/login']);

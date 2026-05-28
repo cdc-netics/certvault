@@ -8,7 +8,8 @@ import {
   deleteUser,
   getUserStats,
   getDepartments,
-  getRoles
+  getRoles,
+  forcePasswordChange
 } from '../controllers/usersController';
 
 const router = Router();
@@ -24,6 +25,7 @@ router.get('/stats', getUserStats);
 // CRUD de usuarios
 router.get('/', getUsers);
 router.post('/', createUser);
+router.post('/force-password-change', forcePasswordChange);
 router.get('/:id', getUserById);
 router.put('/:id', updateUser);
 router.delete('/:id', deleteUser);

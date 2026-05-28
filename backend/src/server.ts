@@ -7,6 +7,7 @@ import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import path from 'path';
+import fs from 'fs';
 // import rateLimit from 'express-rate-limit';
 
 // Importar configuracion de base de datos y seed
@@ -25,29 +26,52 @@ import { errorHandler } from './middleware/errorHandler';
 import { notFound } from './middleware/notFound';
 import { auditRequest } from './services/auditService';
 
-// Cargar variables de entorno sin depender del directorio desde el que se ejecute
-dotenv.config({
-  path: path.resolve(__dirname, '../.env'),
-  override: true
-});
+// Importar servicio de cron para expiraciones y auditoría
+import { startCronServices } from './services/cronService';
+
+// Cargar variables de entorno desde la raiz del repositorio.
+const explicitEnvPath = process.env.ENV_FILE;
+const envCandidates = [
+  explicitEnvPath,
+  path.resolve(__dirname, '../../.env')
+].filter((candidate): candidate is string => Boolean(candidate));
+
+const discoveredEnvPath = envCandidates.find(candidate => fs.existsSync(candidate));
+if (discoveredEnvPath) {
+  dotenv.config({ path: discoveredEnvPath });
+}
+
+// Expandir variables de entorno de forma iterativa para soportar interpolación compleja (ej. ${PORT})
+// Se realizan múltiples pasadas (máximo 3) para garantizar que las dependencias anidadas se resuelvan correctamente.
+for (let pass = 0; pass < 3; pass++) {
+  let changed = false;
+  for (const key in process.env) {
+    const val = process.env[key];
+    if (val && typeof val === 'string' && val.includes('${')) {
+      const newVal = val.replace(/\${(\w+)}/g, (_, name) => process.env[name] || '');
+      if (newVal !== val) {
+        process.env[key] = newVal;
+        changed = true;
+      }
+    }
+  }
+  if (!changed) break;
+}
+
 
 const app = express();
 app.disable('x-powered-by');
 app.set('trust proxy', 1);
 const PORT = process.env.PORT || 3000;
+const PUBLIC_API_BASE_URL = process.env.PUBLIC_API_BASE_URL || process.env.FRONTEND_URL || '';
 
 // Configuracion de CORS con multiples orígenes permitidos
 const normalizeOrigin = (value: string) => value.replace(/\/$/, '');
 const allowedOrigins = [
-  ...(process.env.FRONTEND_URL ? process.env.FRONTEND_URL.split(',').map(o => normalizeOrigin(o.trim())) : []),
-  'http://localhost:4200',
-  'http://127.0.0.1:4200',
-  'http://localhost:3000',
-  'http://127.0.0.1:3000',
-  'http://10.0.101.27',
-  'http://10.0.101.27:4200'
+  ...(process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',').map(o => normalizeOrigin(o.trim())) : []),
+  ...(process.env.FRONTEND_URL ? process.env.FRONTEND_URL.split(',').map(o => normalizeOrigin(o.trim())) : [])
 ].filter(Boolean);
-const allowAllOrigins = false; // En productivo solo se permiten los orígenes explícitos
+const allowAllOrigins = (process.env.CORS_ALLOW_ALL_ORIGINS || 'true').toLowerCase() === 'true';
 
 // Middlewares
 const corsOptions: cors.CorsOptions = {
@@ -58,7 +82,8 @@ const corsOptions: cors.CorsOptions = {
     if (allowedOrigins.includes(normalized)) {
       return callback(null, true);
     }
-    return callback(new Error('Not allowed by CORS'));
+    console.warn(`[CORS] Origen rechazado: ${origin}. Orígenes permitidos:`, allowedOrigins);
+    return callback(new Error(`Not allowed by CORS: ${origin}`));
   },
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
@@ -141,13 +166,49 @@ const connectDB = async (): Promise<void> => {
 const createDefaultAdminAndSeed = async (): Promise<void> => {
   try {
     const { User, UserRole, Department, Permission } = await import('./models/User');
-    const adminExists = await User.findOne({ role: UserRole.ADMIN });
+
+    const backfillPersonalEmailResult = await User.updateMany(
+      {
+        $or: [
+          { personalEmail: { $exists: false } },
+          { personalEmail: null },
+          { personalEmail: '' }
+        ]
+      },
+      [
+        {
+          $set: {
+            personalEmail: '$email'
+          }
+        }
+      ]
+    );
+
+    const backfillIsActiveResult = await User.updateMany(
+      { isActive: { $exists: false } },
+      { $set: { isActive: true } }
+    );
+
+    // Inicializar el campo de aceptación de términos en usuarios preexistentes
+    const backfillTermsResult = await User.updateMany(
+      { termsAccepted: { $exists: false } },
+      { $set: { termsAccepted: false } }
+    );
+
+    if (backfillPersonalEmailResult.modifiedCount > 0 || backfillIsActiveResult.modifiedCount > 0 || backfillTermsResult.modifiedCount > 0) {
+      console.log(
+        `Backfill usuarios aplicado: personalEmail=${backfillPersonalEmailResult.modifiedCount}, isActive=${backfillIsActiveResult.modifiedCount}, termsAccepted=${backfillTermsResult.modifiedCount}`
+      );
+    }
+
+    const adminExists = await User.findOne({ role: UserRole.ADMIN }).select('+password');
 
     if (!adminExists) {
       console.log('Creando usuario administrador por defecto...');
       const adminUser = new User({
         username: process.env.ADMIN_USERNAME || 'admin',
         email: process.env.ADMIN_EMAIL || 'admin@empresa.com',
+        personalEmail: process.env.ADMIN_PERSONAL_EMAIL || process.env.ADMIN_EMAIL || 'admin@empresa.com',
         password: process.env.ADMIN_PASSWORD || 'Admin123!',
         firstName: 'Administrador',
         lastName: 'del Sistema',
@@ -155,22 +216,32 @@ const createDefaultAdminAndSeed = async (): Promise<void> => {
         department: Department.TI,
         position: 'Administrador del Sistema',
         isActive: true,
+        termsAccepted: false, // Requerir aceptación de términos al ingresar por primera vez
         permissions: Object.values(Permission)
       });
       await adminUser.save();
       console.log('Usuario administrador creado exitosamente');
       console.log(`Email: ${adminUser.email}`);
       console.log(`Contrasena: ${process.env.ADMIN_PASSWORD || 'Admin123!'}`);
-      console.log('Primera instalacion detectada, creando datos de ejemplo...');
-      await seedDatabase();
+      if (process.env.SEED_DATABASE === 'true') {
+        console.log('Primera instalacion detectada. Creando datos de ejemplo...');
+        await seedDatabase();
+      } else {
+        console.log('Primera instalacion detectada. Saltando datos de ejemplo (SEED_DATABASE != true).');
+      }
     } else {
-      console.log('Usuario administrador ya existe');
+      console.log('Usuario administrador ya existe. Sincronizando contraseña con el .env actual...');
+      const envPassword = process.env.ADMIN_PASSWORD || 'Admin123!';
+      adminExists.password = envPassword;
+      await adminExists.save();
+      console.log('Contraseña del administrador sincronizada con éxito');
+ 
       const userCount = await User.countDocuments();
-      if (userCount === 1) {
+      if (userCount === 1 && process.env.SEED_DATABASE === 'true') {
         console.log('Ejecutando seed de datos de ejemplo...');
         await seedDatabase();
       } else {
-        console.log('Base de datos ya contiene datos');
+        console.log('Base de datos limpia o con datos de usuario existentes.');
       }
     }
   } catch (error) {
@@ -194,10 +265,18 @@ process.on('SIGINT', async () => {
 // Iniciar servidor
 const startServer = async (): Promise<void> => {
   await connectDB();
+  
+  // Inicialización de los servicios cron para control periódico de expiración de claves y certificados
+  startCronServices();
+
   app.listen(PORT, () => {
     console.log(`Servidor corriendo en puerto ${PORT}`);
     console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`Health: http://localhost:${PORT}/api/health`);
+    if (PUBLIC_API_BASE_URL) {
+      console.log(`Health: ${PUBLIC_API_BASE_URL.replace(/\/$/, '')}/api/health`);
+    } else {
+      console.log(`Health endpoint: /api/health`);
+    }
   });
 };
 

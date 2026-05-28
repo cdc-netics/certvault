@@ -144,15 +144,32 @@
   <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
       <h6 class="mb-0">Lista de Usuarios</h6>
-      <small class="text-muted">
-        Mostrando {{ users.length }} de {{ pagination.totalUsers }} usuarios
-      </small>
+      <div class="d-flex align-items-center gap-2">
+        <button
+          *ngIf="currentUser?.role === 'admin' && selectedUserIds.length > 0"
+          type="button"
+          class="btn btn-sm btn-warning text-dark fw-bold"
+          (click)="forcePasswordChangeBulk()">
+          <i class="fas fa-key me-1"></i>
+          Forzar Cambio Clave ({{ selectedUserIds.length }})
+        </button>
+        <small class="text-muted">
+          Mostrando {{ users.length }} de {{ pagination.totalUsers }} usuarios
+        </small>
+      </div>
     </div>
     <div class="card-body p-0">
       <div class="table-responsive">
         <table class="table table-hover mb-0">
           <thead class="table-light">
-            <tr>
+             <tr>
+              <th *ngIf="currentUser?.role === 'admin'" style="width: 40px; text-align: center;">
+                <input 
+                  type="checkbox" 
+                  class="form-check-input" 
+                  [checked]="areAllUsersSelected()" 
+                  (change)="toggleSelectAll($event)">
+              </th>
               <th>Usuario</th>
               <th>Rol</th>
               <th>Departamento</th>
@@ -163,7 +180,15 @@
             </tr>
           </thead>
           <tbody>
-            <tr *ngFor="let user of users; trackBy: trackByUserId">
+            <tr *ngFor="let user of users; trackBy: trackByUserId" [class.table-warning]="isUserSelected(user._id!)">
+              <td *ngIf="currentUser?.role === 'admin'" style="text-align: center; vertical-align: middle;">
+                <input 
+                  *ngIf="user._id !== currentUser?._id"
+                  type="checkbox" 
+                  class="form-check-input" 
+                  [checked]="isUserSelected(user._id!)" 
+                  (change)="toggleSelectUser(user._id!)">
+              </td>
               <td>
                 <div class="d-flex align-items-center">
                   <div class="avatar-circle me-3">

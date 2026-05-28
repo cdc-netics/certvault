@@ -18,7 +18,7 @@ export const seedDatabase = async (): Promise<void> => {
     const userCount = await User.countDocuments();
     const certCount = await Certification.countDocuments();
     
-    if (userCount > 0 && certCount > 0) {
+    if (userCount > 1 || certCount > 0) {
       console.log('📄 Base de datos ya contiene datos, omitiendo seed');
       console.log(`👥 Usuarios existentes: ${userCount}`);
       console.log(`📜 Certificaciones existentes: ${certCount}`);
@@ -205,16 +205,32 @@ const createSampleUsers = async () => {
     }
   ];
 
-  const users = await User.insertMany(usersData);
+  const usersWithPersonalEmail = usersData.map((user) => ({
+    ...user,
+    personalEmail: user.email.replace('@empresa.com', '@personal.com')
+  }));
+
+  for (const userData of usersWithPersonalEmail) {
+    await User.updateOne(
+      { username: userData.username },
+      { $setOnInsert: userData },
+      { upsert: true }
+    );
+  }
+
+  const users = await Promise.all(
+    usersWithPersonalEmail.map((userData) => User.findOne({ username: userData.username }))
+  );
+  const existingUsers = users.filter(Boolean);
   
   // Asignar createdBy para algunos usuarios (admin creó a los demás)
-  if (users && users.length > 1) {
-    const adminUser = users[0];
+  if (existingUsers.length > 1) {
+    const adminUser = existingUsers[0];
     if (adminUser && adminUser._id) {
       const adminId = adminUser._id;
-      for (let i = 1; i < users.length; i++) {
-        const user = users[i];
-        if (user) {
+      for (let i = 1; i < existingUsers.length; i++) {
+        const user = existingUsers[i];
+        if (user && !user.createdBy) {
           user.createdBy = adminId as any;
           await user.save();
         }
@@ -222,7 +238,7 @@ const createSampleUsers = async () => {
     }
   }
 
-  return users;
+  return existingUsers;
 };
 
 const createSampleCertifications = async (users: any[]) => {

@@ -23,6 +23,7 @@ export class UsersListComponent implements OnInit, OnDestroy {
   users: User[] = [];
   loading = false;
   errorMessage = '';
+  selectedUserIds: string[] = [];
   stats: UserStats | null = null;
   
   pagination = {
@@ -239,13 +240,9 @@ export class UsersListComponent implements OnInit, OnDestroy {
 
   deleteUser(user: User): void {
     if (!this.canDeleteUser(user)) return;
-    console.log('Intentando eliminar usuario:', user);
-    // if (!confirm(`¿Estás seguro de que deseas eliminar al usuario ${user.firstName} ${user.lastName}?`)) {
-    //   console.log('Eliminación de usuario cancelada por el usuario.');  
-    //   return;
-    //   console.log('Eliminación de usuario confirmada. Procediendo...');
-    // }
-    console.log('Eliminación de usuario confirmada. Procediendo...');
+    if (!confirm(`¿Estás seguro de que deseas eliminar al usuario ${user.firstName} ${user.lastName}? Esta acción enviará un respaldo con sus certificados a su correo personal y los borrará de forma permanente.`)) {
+      return;
+    }
     this.loading = true;
     this.errorMessage = '';
 
@@ -262,6 +259,78 @@ export class UsersListComponent implements OnInit, OnDestroy {
         error: (error) => {
           console.error('Error eliminando usuario:', error);
           this.errorMessage = error.message || 'No se pudo eliminar el usuario';
+          this.loading = false;
+        }
+      });
+  }
+
+  // Verifica si un usuario específico está seleccionado en la lista
+  isUserSelected(userId: string): boolean {
+    return this.selectedUserIds.includes(userId);
+  }
+
+  // Alterna la selección de un usuario individual, ignorando al propio administrador
+  toggleSelectUser(userId: string): void {
+    if (userId === this.currentUser?._id) return;
+    const index = this.selectedUserIds.indexOf(userId);
+    if (index > -1) {
+      this.selectedUserIds.splice(index, 1);
+    } else {
+      this.selectedUserIds.push(userId);
+    }
+  }
+
+  // Alterna la selección de todos los usuarios de la vista actual (excluyendo al administrador actual)
+  toggleSelectAll(event: any): void {
+    const isChecked = event.target.checked;
+    if (isChecked) {
+      const selectableIds = this.users
+        .map(u => u._id)
+        .filter((id): id is string => !!id && id !== this.currentUser?._id);
+      
+      selectableIds.forEach(id => {
+        if (!this.selectedUserIds.includes(id)) {
+          this.selectedUserIds.push(id);
+        }
+      });
+    } else {
+      const pageIds = this.users.map(u => u._id).filter(Boolean);
+      this.selectedUserIds = this.selectedUserIds.filter(id => !pageIds.includes(id));
+    }
+  }
+
+  // Comprueba si todos los usuarios elegibles de la página actual están seleccionados
+  areAllUsersSelected(): boolean {
+    const selectableUsers = this.users.filter(u => u._id !== this.currentUser?._id);
+    if (selectableUsers.length === 0) return false;
+    return selectableUsers.every(u => this.selectedUserIds.includes(u._id!));
+  }
+
+  // Envía la petición masiva para forzar el cambio de clave en el próximo inicio de sesión
+  forcePasswordChangeBulk(): void {
+    if (this.selectedUserIds.length === 0) return;
+
+    if (!confirm(`¿Estás seguro de que deseas forzar el cambio de contraseña para los ${this.selectedUserIds.length} usuarios seleccionados? Deberán cambiar su clave en su próximo inicio de sesión.`)) {
+      return;
+    }
+
+    this.loading = true;
+    this.errorMessage = '';
+
+    this.userService.forcePasswordChange(this.selectedUserIds)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (response) => {
+          if (response.success) {
+            alert('Se ha forzado el cambio de contraseña para los usuarios seleccionados correctamente.');
+            this.selectedUserIds = [];
+            this.loadUsers();
+          }
+          this.loading = false;
+        },
+        error: (error) => {
+          console.error('Error al forzar cambio de contraseña:', error);
+          this.errorMessage = error.message || 'Error al forzar el cambio de contraseña';
           this.loading = false;
         }
       });

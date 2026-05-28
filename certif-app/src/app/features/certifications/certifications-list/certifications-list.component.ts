@@ -1,4 +1,4 @@
-﻿import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule, ActivatedRoute } from '@angular/router';
 import { ReactiveFormsModule, FormBuilder, FormGroup } from '@angular/forms';
@@ -293,42 +293,42 @@ import { Subject, Subscription } from 'rxjs';
             <div class="modal-header">
               <h5 class="modal-title">
                 <i class="fas fa-certificate me-2"></i>
-                {{ selectedCertification?.title }}
+                {{ selectedCertification.title }}
               </h5>
               <button type="button" class="btn-close" aria-label="Close" (click)="closeCertificationDetails()"></button>
             </div>
             <div class="modal-body">
               <div class="row mb-3">
                 <div class="col-md-6">
-                  <p class="mb-1"><strong>Proveedor:</strong> {{ selectedCertification?.provider }}</p>
-                  <p class="mb-1"><strong>Tipo:</strong> {{ selectedCertification?.type }}</p>
-                  <p class="mb-1"><strong>Nivel:</strong> {{ selectedCertification?.level }}</p>
-                  <p class="mb-1"><strong>Departamento:</strong> {{ selectedCertification?.department }}</p>
-                  <p class="mb-1"><strong>Colaborador:</strong> {{ selectedCertification?.employeeName }}</p>
+                  <p class="mb-1"><strong>Proveedor:</strong> {{ selectedCertification.provider }}</p>
+                  <p class="mb-1"><strong>Tipo:</strong> {{ selectedCertification.type }}</p>
+                  <p class="mb-1"><strong>Nivel:</strong> {{ selectedCertification.level }}</p>
+                  <p class="mb-1"><strong>Departamento:</strong> {{ selectedCertification.department }}</p>
+                  <p class="mb-1"><strong>Colaborador:</strong> {{ selectedCertification.employeeName }}</p>
                 </div>
                 <div class="col-md-6">
-                  <p class="mb-1"><strong>Emision:</strong> {{ selectedCertification?.issueDate | date:'yyyy-MM-dd' }}</p>
-                  <p class="mb-1" *ngIf="selectedCertification?.expirationDate"><strong>Vence:</strong> {{ selectedCertification?.expirationDate | date:'yyyy-MM-dd' }}</p>
-                  <p class="mb-1"><strong>Estado:</strong> {{ selectedCertification?.status }}</p>
-                  <p class="mb-1" *ngIf="selectedCertification?.certificateNumber"><strong>N° Certificado:</strong> {{ selectedCertification?.certificateNumber }}</p>
-                  <p class="mb-1" *ngIf="selectedCertification?.validationUrl"><strong>Validacion:</strong> <a [href]="selectedCertification?.validationUrl" target="_blank" rel="noopener">Abrir link</a></p>
+                  <p class="mb-1"><strong>Emision:</strong> {{ selectedCertification.issueDate | date:'yyyy-MM-dd' }}</p>
+                  <p class="mb-1" *ngIf="selectedCertification.expirationDate"><strong>Vence:</strong> {{ selectedCertification.expirationDate | date:'yyyy-MM-dd' }}</p>
+                  <p class="mb-1"><strong>Estado:</strong> {{ selectedCertification.status }}</p>
+                  <p class="mb-1" *ngIf="selectedCertification.certificateNumber"><strong>N° Certificado:</strong> {{ selectedCertification.certificateNumber }}</p>
+                  <p class="mb-1" *ngIf="selectedCertification.validationUrl"><strong>Validacion:</strong> <a [href]="selectedCertification.validationUrl" target="_blank" rel="noopener">Abrir link</a></p>
                 </div>
               </div>
-              <div class="mb-3" *ngIf="selectedCertification?.description">
+              <div class="mb-3" *ngIf="selectedCertification.description">
                 <p class="mb-1"><strong>Descripcion:</strong></p>
-                <p class="text-muted">{{ selectedCertification?.description }}</p>
+                <p class="text-muted">{{ selectedCertification.description }}</p>
               </div>
-              <div class="mb-3" *ngIf="selectedCertification?.tags?.length">
+              <div class="mb-3" *ngIf="selectedCertification.tags?.length">
                 <p class="mb-1"><strong>Tags:</strong></p>
                 <div class="d-flex flex-wrap gap-2">
-                  <span class="badge bg-secondary" *ngFor="let tag of selectedCertification?.tags">{{ tag }}</span>
+                  <span class="badge bg-secondary" *ngFor="let tag of selectedCertification.tags">{{ tag }}</span>
                 </div>
               </div>
               <div class="d-flex gap-2 flex-wrap">
-                <button *ngIf="selectedCertification?.certificateUrl" class="btn btn-outline-primary btn-sm" type="button" (click)="openCertificate(selectedCertification!)">
+                <button *ngIf="selectedCertification.certificateUrl" class="btn btn-outline-primary btn-sm" type="button" (click)="openCertificate(selectedCertification!)">
                   <i class="fas fa-eye me-1"></i> Ver Certificado
                 </button>
-                <button *ngIf="selectedCertification?.certificateUrl" class="btn btn-outline-secondary btn-sm" type="button" (click)="downloadCertificate(selectedCertification!)">
+                <button *ngIf="selectedCertification.certificateUrl" class="btn btn-outline-secondary btn-sm" type="button" (click)="downloadCertificate(selectedCertification!)">
                   <i class="fas fa-download me-1"></i> Descargar
                 </button>
               </div>

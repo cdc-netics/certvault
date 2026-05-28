@@ -3,9 +3,12 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { authenticate } from '../middleware/auth';
+import { requireApiKey } from '../middleware/apiKey';
 import {
   createCertification,
   getCertifications,
+  getPublicCertificationFile,
+  getPublicCertifications,
   getCertificationById,
   updateCertification,
   deleteCertification,
@@ -20,6 +23,10 @@ import {
 } from '../controllers/certificationsController';
 
 const router = Router();
+
+// Endpoint externo de solo lectura protegido por API key.
+router.get('/public/external', requireApiKey, getPublicCertifications);
+router.get('/public/external/:id/file', requireApiKey, getPublicCertificationFile);
 
 // Configuracion de almacenamiento para archivos de certificados
 const uploadsDir = path.resolve(__dirname, '../../uploads/certificates');

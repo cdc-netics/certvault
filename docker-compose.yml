@@ -1,0 +1,66 @@
+services:
+  mongo:
+    image: ${MONGO_IMAGE}
+    container_name: ${MONGO_CONTAINER_NAME}
+    restart: unless-stopped
+    ports:
+      - "${MONGO_PORT}:27017"
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand({ ping: 1 }).ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ${BACKEND_CONTAINER_NAME}
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    depends_on:
+      mongo:
+        condition: service_healthy
+    volumes:
+      - backend_uploads:/app/uploads
+    expose:
+      - "${BACKEND_PORT}"
+
+  frontend:
+    build:
+      context: ./certif-app
+      dockerfile: Dockerfile
+    container_name: ${FRONTEND_CONTAINER_NAME}
+    restart: unless-stopped
+    environment:
+      BACKEND_UPSTREAM_HOST: ${BACKEND_UPSTREAM_HOST}
+      BACKEND_UPSTREAM_PORT: ${BACKEND_PORT}
+    depends_on:
+      - backend
+    # El puerto del frontend se maneja de manera interna en la red docker para que solo el proxy inverso acceda a él
+    expose:
+      - "80"
+
+  # Proxy Inverso Nginx que actúa como intermediario para habilitar SSL/HTTPS
+  reverse-proxy:
+    image: nginx:1.27-alpine
+    container_name: certvault-proxy
+    restart: unless-stopped
+    # Exposición pública de los puertos estándar en producción (HTTP 80 y HTTPS 443)
+    ports:
+      - "80:80"
+      - "${FRONTEND_PORT}:443"
+    # Montaje de la configuración personalizada de Nginx y del directorio de certificados SSL
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./certs:/etc/nginx/certs:ro
+      - ./logs/nginx:/var/log/nginx
+    depends_on:
+      - frontend
+
+volumes:
+  mongo_data:
+  backend_uploads:
