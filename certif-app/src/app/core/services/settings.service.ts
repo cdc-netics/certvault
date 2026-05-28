@@ -30,6 +30,7 @@ export interface BrandingSettings {
 export interface SecuritySettingsData {
   passwordExpirationEnabled: boolean;
   passwordExpirationMonths: number;
+  certificateExpirationAlertsEnabled: boolean;
 }
 
 export interface PublicApiClient {

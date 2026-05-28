@@ -3,6 +3,25 @@
 Todos los cambios notables en este proyecto serán documentados en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y este proyecto se encuentra actualmente en fase de **versiones Beta**.
 
+## [2.1.0-beta] - 2026-05-28 09:30
+
+### Añadido
+- **Alertas de Vencimiento de Certificados por Correo (ISS-004):**
+  - Implementación de un servicio cron diario `checkCertificateExpirationAlerts` que evalúa los certificados de los usuarios y despacha alertas automáticas por correo electrónico a los 60, 30, 15 y 3 días restantes de vigencia.
+  - Función `sendCertificateExpirationWarningEmail` en el servicio de correo (`emailService.ts`) con plantilla HTML en español.
+  - Interruptor toggle global en la interfaz `/settings/security` para habilitar o deshabilitar estas alertas.
+- **Acciones y Errores en Logs de Auditoría (ISS-003):**
+  - Nuevas acciones de auditoría en `AuditAction` (`view`, `view_failed`, `download`, `download_failed`, `error`).
+  - Registro automático en el middleware de auditoría cuando un usuario visualiza o descarga un certificado, o cuando ocurre cualquier error HTTP (código `>= 400`).
+  - Filtros y visualización de colores (badges) adaptados para estos nuevos logs en el panel de auditoría del frontend (`/settings/audit`).
+
+### Modificado
+- **Logs de Auditoría en Proxy Nginx (ISS-003):**
+  - Se configuró la persistencia de logs en el host mapeando el volumen `./logs/nginx:/var/log/nginx` en `docker-compose.yml`.
+  - Se definió un formato detallado `audit_detailed` en `nginx.conf` para capturar IP real, tiempos de respuesta, Host y protocolo/cifrado SSL.
+- **Renombramiento de Servicios de Cron:**
+  - Se centralizó el inicio de los servicios cron renombrando `startPasswordExpirationCron` a `startCronServices` para ejecutar el control diario de claves y certificados conjuntamente.
+
 ---
 
 ## [2.0.0-beta] - 2026-05-27 18:00

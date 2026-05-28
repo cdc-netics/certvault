@@ -7,8 +7,6 @@ Este documento registra los problemas, vulnerabilidades, mejoras y tareas técni
 | ID | Título | Prioridad | Componente | Descripción Completa |
 |---|---|---|---|---|
 | **ISS-002** | Exposición de MongoDB sin TLS | Media | Base de Datos | MongoDB está expuesto en el puerto `27017` en el host de producción, lo que permite conexiones externas directas. Si el host no tiene firewall perimetral, la base de datos podría quedar expuesta a la red sin cifrado de transporte. |
-| **ISS-003** | Falta de Logs de Auditoría en Proxy | Baja | Infraestructura | El proxy Nginx externo actualmente no guarda registros de accesos y errores en un volumen persistente del host, dificultando la auditoría de seguridad ante incidentes. |
-| **ISS-004** | Alerta de vencimiento de certificado por correo | Alta | Backend / Frontend | Notificar a los usuarios a su correo corporativo cuando su certificado esté próximo a vencer: 60 días (2 meses), 30 días (1 mes), 15 días y 3 días antes. Debe tener un interruptor de activación global configurable en la vista de ajustes de seguridad (`/settings/security`). |
 
 ## Issues Completados (Done)
 
@@ -16,6 +14,8 @@ Este documento registra los problemas, vulnerabilidades, mejoras y tareas técni
 |---|---|---|---|---|
 | **ISS-000** | Terminación SSL e HTTPS en Producción | Infraestructura | 27/05/2026 | Se incorporó un proxy inverso Nginx (`reverse-proxy`) en el puerto seguro `443` utilizando certificados locales en `certs/`. |
 | **ISS-001** | Pérdida de cabecera segura en ruteo (QA Fix) | Frontend / Nginx | 27/05/2026 | Se corrigió el Nginx del frontend usando un mapeo dinámico para propagar correctamente `X-Forwarded-Proto` (HTTPS) hacia Express. |
+| **ISS-003** | Falta de Logs de Auditoría en Proxy | Infraestructura | 28/05/2026 | Se creó un volumen persistente para guardar los logs de Nginx y se enriqueció el formato de logging con detalles de red y TLS. Además, se extendió el logging de auditoría a nivel de aplicación para capturar visualizaciones, descargas y errores del sistema, con soporte de filtrado en la interfaz. |
+| **ISS-004** | Alerta de vencimiento de certificado por correo | Backend / Frontend | 28/05/2026 | Se implementó el servicio de envío de correos ante el vencimiento de certificados a los 60, 30, 15 y 3 días de expirar. Se programó la evaluación automática en un servicio cron y se añadió un toggle global en el panel de seguridad del Front-end. |
 
 ---
 

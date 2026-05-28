@@ -542,7 +542,8 @@ export const getSecuritySettings = async (_req: Request, res: Response): Promise
     if (!settings) {
       settings = await SecuritySettings.create({
         passwordExpirationEnabled: false,
-        passwordExpirationMonths: 3
+        passwordExpirationMonths: 3,
+        certificateExpirationAlertsEnabled: true // Habilitar por defecto
       });
     }
     res.json({ success: true, data: settings });
@@ -559,13 +560,16 @@ export const updateSecuritySettings = async (req: AuthRequest, res: Response): P
       settings = new SecuritySettings();
     }
 
-    const { passwordExpirationEnabled, passwordExpirationMonths } = req.body;
+    const { passwordExpirationEnabled, passwordExpirationMonths, certificateExpirationAlertsEnabled } = req.body;
 
     if (passwordExpirationEnabled !== undefined) {
       settings.passwordExpirationEnabled = Boolean(passwordExpirationEnabled);
     }
     if (passwordExpirationMonths !== undefined) {
       settings.passwordExpirationMonths = Number(passwordExpirationMonths);
+    }
+    if (certificateExpirationAlertsEnabled !== undefined) {
+      settings.certificateExpirationAlertsEnabled = Boolean(certificateExpirationAlertsEnabled);
     }
 
     settings.updatedBy = req.user?._id;

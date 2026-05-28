@@ -59,6 +59,22 @@ import { SettingsNavComponent } from '../settings-nav.component';
                     style="cursor: pointer;">
                 </div>
 
+                <!-- Interruptor para Activar/Desactivar Alertas de Vencimiento de Certificados -->
+                <div class="form-check form-switch mb-4 p-3 border rounded bg-light d-flex align-items-center justify-content-between">
+                  <div>
+                    <label class="form-check-label h6 mb-1 fw-bold text-dark" for="certificateExpirationAlertsEnabled">
+                      Habilitar Alertas de Vencimiento de Certificados
+                    </label>
+                    <div class="text-muted small">Notificar por correo cuando los certificados estén próximos a vencer (60, 30, 15 y 3 días antes).</div>
+                  </div>
+                  <input 
+                    class="form-check-input fs-4 me-1" 
+                    type="checkbox" 
+                    id="certificateExpirationAlertsEnabled" 
+                    formControlName="certificateExpirationAlertsEnabled"
+                    style="cursor: pointer;">
+                </div>
+
                 <!-- Meses de Duración -->
                 <div class="mb-4" *ngIf="securityForm.get('passwordExpirationEnabled')?.value">
                   <label for="passwordExpirationMonths" class="form-label fw-bold text-dark">
@@ -144,7 +160,8 @@ export class SecuritySettingsComponent implements OnInit, OnDestroy {
   private initializeForm(): void {
     this.securityForm = this.fb.group({
       passwordExpirationEnabled: [false],
-      passwordExpirationMonths: [3, [Validators.required, Validators.min(1), Validators.max(12)]]
+      passwordExpirationMonths: [3, [Validators.required, Validators.min(1), Validators.max(12)]],
+      certificateExpirationAlertsEnabled: [true]
     });
   }
 
@@ -157,7 +174,8 @@ export class SecuritySettingsComponent implements OnInit, OnDestroy {
           if (response.success && response.data) {
             this.securityForm.patchValue({
               passwordExpirationEnabled: response.data.passwordExpirationEnabled,
-              passwordExpirationMonths: response.data.passwordExpirationMonths || 3
+              passwordExpirationMonths: response.data.passwordExpirationMonths || 3,
+              certificateExpirationAlertsEnabled: response.data.certificateExpirationAlertsEnabled !== false
             });
           }
           this.loading = false;

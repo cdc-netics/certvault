@@ -26,8 +26,8 @@ import { errorHandler } from './middleware/errorHandler';
 import { notFound } from './middleware/notFound';
 import { auditRequest } from './services/auditService';
 
-// Importar servicio de cron para expiración de contraseñas
-import { startPasswordExpirationCron } from './services/cronService';
+// Importar servicio de cron para expiraciones y auditoría
+import { startCronServices } from './services/cronService';
 
 // Cargar variables de entorno desde la raiz del repositorio.
 const explicitEnvPath = process.env.ENV_FILE;
@@ -266,8 +266,8 @@ process.on('SIGINT', async () => {
 const startServer = async (): Promise<void> => {
   await connectDB();
   
-  // Inicialización del servicio cron para control periódico de expiración de claves
-  startPasswordExpirationCron();
+  // Inicialización de los servicios cron para control periódico de expiración de claves y certificados
+  startCronServices();
 
   app.listen(PORT, () => {
     console.log(`Servidor corriendo en puerto ${PORT}`);

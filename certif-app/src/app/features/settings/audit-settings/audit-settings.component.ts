@@ -38,6 +38,11 @@ import { SettingsNavComponent } from '../settings-nav.component';
                 <option value="delete">Eliminar</option>
                 <option value="export">Exportar</option>
                 <option value="test">Test</option>
+                <option value="view">Visualizar</option>
+                <option value="view_failed">Visualización fallida</option>
+                <option value="download">Descargar</option>
+                <option value="download_failed">Descarga fallida</option>
+                <option value="error">Error de sistema</option>
               </select>
             </div>
             <div class="col-md-2">
@@ -87,11 +92,11 @@ import { SettingsNavComponent } from '../settings-nav.component';
                 <td>
                   <!-- Badge con color contextual según la acción de auditoría -->
                   <span class="badge" [ngClass]="{
-                    'bg-danger': log.action === 'access_denied' || log.action === 'login_failed',
-                    'bg-success': log.action === 'login_success',
-                    'bg-warning text-dark': log.action === 'update' || log.action === 'delete',
-                    'bg-info text-dark': log.action === 'create' || log.action === 'test' || log.action === 'export',
-                    'bg-secondary': !['access_denied', 'login_failed', 'login_success', 'update', 'delete', 'create', 'test', 'export'].includes(log.action)
+                    'bg-danger': ['access_denied', 'login_failed', 'download_failed', 'view_failed', 'error'].includes(log.action),
+                    'bg-success': ['login_success'].includes(log.action),
+                    'bg-warning text-dark': ['update', 'delete'].includes(log.action),
+                    'bg-info text-dark': ['create', 'test', 'export', 'download', 'view'].includes(log.action),
+                    'bg-secondary': !['access_denied', 'login_failed', 'login_success', 'update', 'delete', 'create', 'test', 'export', 'download', 'view', 'download_failed', 'view_failed', 'error'].includes(log.action)
                   }">{{ log.action }}</span>
                 </td>
                 <td>{{ log.resource }}</td>

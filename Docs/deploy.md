@@ -6,19 +6,21 @@ Este documento describe la arquitectura de despliegue, la configuración de cont
 
 ## 1. Arquitectura de Contenedores
 
-CertVault está diseñado bajo una arquitectura de microservicios contenerizada con tres componentes principales definidos en el archivo `docker-compose.yml`:
+CertVault está diseñado bajo una arquitectura de microservicios contenerizada con cuatro componentes principales definidos en el archivo `docker-compose.yml`:
 
 ```mermaid
 graph TD
-    Client[Navegador del Cliente] -->|Puerto 8080| Frontend[Contenedor Frontend: Nginx]
-    Frontend -->|Proxy /api| Backend[Contenedor Backend: Node/Express]
+    Client[Navegador del Cliente] -->|Puerto 80/443| Proxy[Contenedor Proxy Inverso: Nginx]
+    Proxy -->|Redirección Interna| Frontend[Contenedor Frontend: Nginx/Angular]
+    Proxy -->|Rutas /api| Backend[Contenedor Backend: Node/Express]
     Backend -->|Conexión Mongoose| DB[(Contenedor MongoDB)]
     Backend -->|Almacenamiento| VolUploads[(Volumen: backend_uploads)]
     DB -->|Persistencia| VolMongo[(Volumen: mongo_data)]
 ```
 
-* **Frontend (Nginx + Angular):** Escucha en el puerto configurado (por defecto `8080`) y actúa como servidor web estático y reverse proxy para redireccionar las llamadas `/api` hacia el contenedor del backend.
-* **Backend (Node.js/TypeScript):** Servicio REST API que ejecuta la lógica de negocios y las tareas en segundo plano (servicio cron de expiración de contraseñas).
+* **Proxy Inverso (Nginx):** Escucha en el puerto seguro estándar `443` (y redirecciona HTTP `80` a HTTPS) para gestionar el cifrado SSL/TLS. Enruta peticiones dinámicamente al Frontend y al Backend.
+* **Frontend (Nginx + Angular):** Servidor interno que entrega la SPA construida en Angular.
+* **Backend (Node.js/TypeScript):** Servicio REST API que ejecuta la lógica de negocios y las tareas en segundo plano (servicios cron de expiración de claves y vencimiento de certificados).
 * **MongoDB:** Base de datos NoSQL persistente utilizada para almacenar los esquemas de usuarios, certificaciones, auditorías y configuraciones.
 
 ---
@@ -120,3 +122,29 @@ Si el entorno no levanta correctamente o experimentas problemas de comunicación
 * **Inspeccionar logs unificados (tiempo real):** `docker compose logs -f`
 * **Revisar logs de un contenedor específico:** `docker logs -f certvault-backend`
 * **Reiniciar un contenedor específico:** `docker compose restart backend`
+
+---
+
+## 6. Logs de Auditoría y Acceso del Proxy Nginx
+
+Para cumplir con las políticas de auditoría de ciberseguridad, el proxy inverso Nginx escribe de forma persistente sus registros en la carpeta local `./logs/nginx/` en el host anfitrión, mapeada a `/var/log/nginx` en el contenedor.
+
+### Ubicación de los archivos en el servidor:
+- **Log de Accesos:** `./logs/nginx/access.log`
+- **Log de Errores/Advertencias:** `./logs/nginx/error.log`
+
+### Formato de Log Detallado (`audit_detailed`)
+El archivo `nginx.conf` tiene configurado un esquema detallado estructurado que facilita la correlación de eventos en un SIEM:
+* IP de origen y X-Forwarded-For (`$remote_addr`, `$http_x_forwarded_for`)
+* Fecha y hora local de la petición (`$time_local`)
+* Petición HTTP (`$request`) y Código de respuesta HTTP (`$status`)
+* Bytes enviados (`$body_bytes_sent`)
+* Host solicitado (`$host`) e información de negociación TLS/SSL (`$ssl_protocol`, `$ssl_cipher`)
+* Tiempos detallados de procesamiento en milisegundos (`$request_time`, `$upstream_response_time`)
+
+### Análisis de Logs desde la Consola
+Para monitorear los accesos y errores del proxy en tiempo real desde el host:
+```bash
+tail -f logs/nginx/access.log
+tail -f logs/nginx/error.log
+```

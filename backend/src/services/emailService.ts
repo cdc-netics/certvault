@@ -260,3 +260,53 @@ export const sendPasswordExpirationWarningEmail = async (
     text: `Hola ${payload.name},\n\nTe informamos que tu contraseña del sistema expirará en ${payload.daysRemaining} ${payload.daysRemaining === 1 ? 'día' : 'días'}.\n\nPor favor, ingresa al sistema y actualízala desde tu perfil.`
   });
 };
+
+interface CertificateExpirationPayload {
+  to: string;
+  name: string;
+  certificateTitle: string;
+  daysRemaining: number;
+  expirationDate: Date;
+}
+
+// Envía un correo electrónico alertando al usuario sobre el vencimiento próximo de su certificado
+export const sendCertificateExpirationWarningEmail = async (
+  payload: CertificateExpirationPayload
+): Promise<void> => {
+  const mailer = await getActiveMailer();
+
+  const formattedDate = new Date(payload.expirationDate).toLocaleDateString('es-ES', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
+
+  const htmlBody = `
+    <div style="font-family: Arial, sans-serif; color: #222;">
+      <h2>Alerta de vencimiento de certificado - CertiVault</h2>
+      <p>Hola ${payload.name},</p>
+      <p>
+        Te informamos que tu certificado <strong>"${payload.certificateTitle}"</strong> está próximo a vencer.
+      </p>
+      <p>
+        Días restantes: <strong>${payload.daysRemaining}</strong> ${payload.daysRemaining === 1 ? 'día' : 'días'}.<br/>
+        Fecha de vencimiento: <strong>${formattedDate}</strong>.
+      </p>
+      <p>
+        Por favor, ingresa al sistema y toma las medidas necesarias para su renovación o actualización.
+      </p>
+      <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;" />
+      <p style="font-size: 0.8rem; color: #666;">
+        Este es un aviso automático de seguridad, por favor no respondas a este correo.
+      </p>
+    </div>
+  `;
+
+  await mailer.transporter.sendMail({
+    from: mailer.from,
+    to: payload.to,
+    subject: `Alerta: Tu certificado "${payload.certificateTitle}" vence en ${payload.daysRemaining} días - CertiVault`,
+    html: htmlBody,
+    text: `Hola ${payload.name},\n\nTe informamos que tu certificado "${payload.certificateTitle}" está próximo a vencer en ${payload.daysRemaining} días (Fecha de vencimiento: ${formattedDate}).\n\nPor favor, ingresa al sistema para revisarlo.`
+  });
+};
