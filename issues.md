@@ -7,6 +7,7 @@ Este documento registra los problemas, vulnerabilidades, mejoras y tareas técni
 | ID | Título | Prioridad | Componente | Descripción Completa |
 |---|---|---|---|---|
 | **ISS-002** | Exposición de MongoDB sin TLS | Media | Base de Datos | MongoDB está expuesto en el puerto `27017` en el host de producción, lo que permite conexiones externas directas. Si el host no tiene firewall perimetral, la base de datos podría quedar expuesta a la red sin cifrado de transporte. |
+| **ISS-005** | Autenticación integrada con Active Directory (AD) | Media | Backend / Frontend | Agregar opción de inicio de sesión único (SSO) con "Netics AD" (Azure AD o LDAP). Debe poder configurarse dinámicamente por el administrador en la vista de ajustes de seguridad `/settings/security` (Tenant ID, Client ID, URLs, etc.) de manera que los parámetros no queden fijos en archivos de entorno. Al ingresar por primera vez, se aprovisiona automáticamente como `READER`, solicitando su correo personal y firma de términos al concluir. |
 
 ## Issues Completados (Done)
 
@@ -48,3 +49,31 @@ Este documento registra los problemas, vulnerabilidades, mejoras y tareas técni
   1. **Modelo**: Añadir el campo booleano `certificateExpirationAlertsEnabled: { type: Boolean, required: true, default: true }` a `ISecuritySettings` en [SecuritySettings.ts](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/backend/src/models/SecuritySettings.ts).
   2. **Cron Service**: Crear la función `checkCertificateExpirationAlerts` en [cronService.ts](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/backend/src/services/cronService.ts) para buscar los certificados próximos a expirar (`daysRemaining` en `[60, 30, 15, 3]`) y enviar un correo de advertencia llamando a un nuevo método en `emailService.ts`.
   3. **Frontend**: Añadir un switch toggle en el componente `/settings/security` que se enlace con esta propiedad de la base de datos para permitir que el administrador active o desactive la notificación de manera global.
+
+---
+
+### [ISS-005] Autenticación integrada con Active Directory (AD)
+* **Código Afectado**:
+  - **Backend (Rutas/Controladores)**: [backend/src/routes/auth.ts](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/backend/src/routes/auth.ts) y [backend/src/controllers/authController.ts](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/backend/src/controllers/authController.ts)
+  - **Frontend (Login)**: `certif-app/src/app/features/auth/login/login.component.ts` (HTML y TS)
+* **Sugerencia de Mejora**:
+  Existen dos formas principales de integrar Active Directory según el tipo de infraestructura:
+  1. **LDAP Local (On-Premise)**: Si se trata de un Active Directory tradicional hospedado de forma local, se utiliza el protocolo LDAP. En el Backend, se puede usar la librería `ldapjs` o `passport-ldapauth`. Al recibir las credenciales, el backend se conecta al servidor AD corporativo para validar el usuario y contraseña.
+  2. **Azure AD / Microsoft Entra ID (Nube)**: Si la empresa utiliza Microsoft 365 / Azure, se implementa mediante el protocolo estándar OpenID Connect (OIDC) / OAuth2. En el Frontend (Angular) se instala la librería oficial de Microsoft `@azure/msal-angular` para redirigir al usuario al portal oficial de Microsoft. Tras autenticarse, Microsoft devuelve un ID Token (JWT) que el frontend envía al backend corporativo para validar su firma y autenticidad usando `passport-azure-ad` o verificando el token con la clave pública de Microsoft.
+  
+  **Aprovisionamiento automático JIT (Just-In-Time)**:
+  - Cuando el backend reciba la confirmación del AD de que el usuario es válido, se buscará al usuario en la base de datos por su correo o nombre de usuario.
+  - Si el usuario **no existe**, el backend lo creará en la base de datos de manera automática con las propiedades:
+    - `role`: `'reader'` (Acceso de solo lectura por defecto).
+    - `termsAccepted`: `false` (Fuerza la firma del modal de términos).
+    - `personalEmail`: `""` o `null` (Lo que obligará al flujo de inicio de sesión a solicitarle que ingrese su correo personal).
+  - Al completar el primer ingreso exitoso, el frontend detectará que no tiene correo personal configurado o que no ha aceptado los términos, forzando la redirección al modal/formulario correspondiente.
+
+  **Configuración Dinámica desde el Panel**:
+  - Para evitar configuraciones estáticas en archivos de entorno, se extenderá la colección `SecuritySettings` en [SecuritySettings.ts](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/backend/src/models/SecuritySettings.ts) para almacenar:
+    - `adLoginEnabled`: booleano para activar/desactivar la opción en el login.
+    - `adProvider`: tipo de proveedor (`'ldap'` o `'azure'`).
+    - **Campos Azure AD**: `azureTenantId`, `azureClientId`, `azureClientSecret`.
+    - **Campos LDAP**: `ldapUrl`, `ldapBaseDN`, `ldapBindDN`, `ldapBindPassword`.
+  - El backend expondrá estos campos de manera segura (encriptando campos sensibles como secretos o contraseñas utilizando la llave `SMTP_ENCRYPTION_KEY` antes de guardarlos en MongoDB).
+  - En el frontend, se añadirá una sección "Configuración de Directorio Activo" en `/settings/security` visible solo para administradores, la cual mostrará los campos según el proveedor seleccionado y un botón para probar la conexión con el servidor AD.
