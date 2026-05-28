@@ -2,7 +2,7 @@ name: Deploy automatico a produccion
 
 on:
   push:
-    branches: [main]
+    branches: [main-desactivado]
   workflow_dispatch:
 
 concurrency:
