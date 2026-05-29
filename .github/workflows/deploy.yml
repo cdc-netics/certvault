@@ -2,7 +2,7 @@ name: Deploy a produccion
 
 on:
   push:
-    branches: [main-desactivado]
+    branches: [main]
   workflow_dispatch:
 
 concurrency:
