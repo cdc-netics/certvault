@@ -116,7 +116,10 @@ export const getCertifications = async (req: Request, res: Response): Promise<vo
 
     if (req.query.type) filter.type = req.query.type;
     if (req.query.level) filter.level = req.query.level;
-    if (req.query.provider) filter.provider = req.query.provider;
+    if (req.query.provider) {
+      const escaped = (req.query.provider as string).trim().replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+      filter.provider = { $regex: new RegExp(`^${escaped}$`, 'i') };
+    }
     if (req.query.department) filter.department = req.query.department;
     if (req.query.status) filter.status = req.query.status;
 
@@ -230,7 +233,10 @@ export const getPublicCertifications = async (req: Request, res: Response): Prom
     const certificationFilter: Record<string, unknown> = {};
     if (req.query.type) certificationFilter.type = req.query.type;
     if (req.query.level) certificationFilter.level = req.query.level;
-    if (req.query.provider) certificationFilter.provider = req.query.provider;
+    if (req.query.provider) {
+      const escaped = (req.query.provider as string).trim().replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+      certificationFilter.provider = { $regex: new RegExp(`^${escaped}$`, 'i') };
+    }
     if (req.query.department) certificationFilter.department = req.query.department;
     if (req.query.status) certificationFilter.status = req.query.status;
     if (req.query.certificateNumber) certificationFilter.certificateNumber = req.query.certificateNumber;
@@ -674,9 +680,23 @@ export const getDepartments = async (_req: Request, res: Response): Promise<void
 
 export const getProviders = async (_req: Request, res: Response): Promise<void> => {
   try {
-    // Retorna la lista única de proveedores de la base de datos
-    const providers = await Certification.distinct('provider');
-    res.json({ success: true, data: providers });
+    // Retorna la lista única de proveedores de la base de datos normalizada case-insensitive
+    const rawProviders = await Certification.distinct('provider');
+    
+    const normalizedSet = new Set<string>();
+    const seenLower = new Set<string>();
+    
+    for (const provider of rawProviders) {
+      if (!provider) continue;
+      const trimmed = provider.trim();
+      const lower = trimmed.toLowerCase();
+      if (!seenLower.has(lower)) {
+        seenLower.add(lower);
+        normalizedSet.add(trimmed);
+      }
+    }
+    
+    res.json({ success: true, data: Array.from(normalizedSet) });
   } catch (error) {
     res.status(500).json({
       success: false,
