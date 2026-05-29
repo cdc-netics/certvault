@@ -244,6 +244,47 @@ const createDefaultAdminAndSeed = async (): Promise<void> => {
         console.log('Base de datos limpia o con datos de usuario existentes.');
       }
     }
+
+    // Normalización y unificación de proveedores (ISS-006)
+    // Se realiza al inicio del servidor para consolidar variantes duplicadas por diferencias de mayúsculas/minúsculas.
+    const CertificationModel = (await import('./models/Certification')).Certification;
+    const uniqueProvidersList = await CertificationModel.distinct('provider');
+
+    // Agrupación de nombres de proveedores pasados a minúsculas para encontrar duplicidades
+    const groupedByLower = new Map<string, string[]>();
+    for (const provider of uniqueProvidersList) {
+      if (!provider) continue;
+      const lower = provider.trim().toLowerCase();
+      if (!groupedByLower.has(lower)) {
+        groupedByLower.set(lower, []);
+      }
+      groupedByLower.get(lower)!.push(provider);
+    }
+
+    // Unificación de las variantes bajo la representación dominante (moda)
+    for (const [lower, variants] of groupedByLower.entries()) {
+      if (variants.length > 1) {
+        const counts: Record<string, number> = {};
+        for (const variant of variants) {
+          counts[variant] = await CertificationModel.countDocuments({ provider: variant });
+        }
+        
+        // Selección de la variante con mayor cantidad de registros asociados
+        const bestVariant = variants.reduce((a, b) => ((counts[a] ?? 0) >= (counts[b] ?? 0) ? a : b));
+        
+        // Actualización de los registros que usan otras variantes de capitalización
+        const result = await CertificationModel.updateMany(
+          { 
+            provider: { $in: variants, $ne: bestVariant }
+          },
+          { $set: { provider: bestVariant } }
+        );
+        
+        if (result.modifiedCount > 0) {
+          console.log(`[Unificación Providers] Normalizados ${result.modifiedCount} registros para el proveedor "${bestVariant}" (variantes unificadas: ${variants.join(', ')})`);
+        }
+      }
+    }
   } catch (error) {
     console.error('Error en configuracion inicial:', error);
   }

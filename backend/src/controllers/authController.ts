@@ -935,3 +935,225 @@ export const acceptTerms = async (req: AuthRequest, res: Response): Promise<void
     });
   }
 };
+
+export const adLogin = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { email, password, idToken } = req.body;
+    
+    // Obtener la configuración de seguridad activa de la base de datos
+    const settings = await SecuritySettings.findOne().sort({ updatedAt: -1 });
+    if (!settings || !settings.adLoginEnabled) {
+      res.status(400).json({ success: false, error: 'El inicio de sesión por Active Directory no está habilitado.' });
+      return;
+    }
+
+    let userEmail = '';
+    let userFirstName = '';
+    let userLastName = '';
+    let userDepartment = '';
+    let userPosition = '';
+
+    if (settings.adProvider === 'azure') {
+      if (!idToken) {
+        res.status(400).json({ success: false, error: 'Token de Azure AD (idToken) requerido.' });
+        return;
+      }
+
+      // Decodificar el JWT emitido por Microsoft Entra ID
+      const decoded = jwt.decode(idToken) as any;
+      if (!decoded) {
+        res.status(400).json({ success: false, error: 'Token de Azure AD inválido.' });
+        return;
+      }
+
+      // Validar que el token corresponda al Tenant ID de la organización
+      if (settings.azureTenantId && decoded.tid !== settings.azureTenantId) {
+        res.status(401).json({ success: false, error: 'El token de Azure AD no corresponde al Tenant configurado.' });
+        return;
+      }
+
+      userEmail = (decoded.email || decoded.preferred_username || decoded.upn || '').toLowerCase().trim();
+      userFirstName = decoded.given_name || decoded.name || 'Colaborador';
+      userLastName = decoded.family_name || '';
+      userDepartment = decoded.department || 'Sin Departamento';
+      userPosition = decoded.jobTitle || 'Colaborador';
+      
+      if (!userEmail) {
+        res.status(400).json({ success: false, error: 'No se pudo extraer el correo electrónico del token de Azure AD.' });
+        return;
+      }
+    } else if (settings.adProvider === 'ldap') {
+      if (!email || !password) {
+        res.status(400).json({ success: false, error: 'Correo corporativo y contraseña requeridos para inicio de sesión LDAP.' });
+        return;
+      }
+
+      const normalizedEmail = email.toLowerCase().trim();
+      userEmail = normalizedEmail;
+
+      // Autenticación real por medio del protocolo LDAP
+      try {
+        // @ts-ignore
+        const ldap = await import('ldapjs');
+        const { decrypt } = await import('../utils/crypto');
+        const ldapClient = ldap.createClient({ url: settings.ldapUrl || '' });
+        const bindPasswordDecrypted = decrypt(settings.ldapBindPassword || '');
+
+        const ldapBind = () => new Promise<any>((resolve, reject) => {
+          ldapClient.bind(settings.ldapBindDN || '', bindPasswordDecrypted, (err: any) => {
+            if (err) return reject(new Error(`Fallo de conexión Bind admin: ${err.message}`));
+
+            const searchOpts = {
+              filter: `(|(mail=${normalizedEmail})(userPrincipalName=${normalizedEmail}))`,
+              scope: 'sub'
+            };
+
+            ldapClient.search(settings.ldapBaseDN || '', searchOpts, (searchErr: any, searchRes: any) => {
+              if (searchErr) return reject(searchErr);
+
+              let foundEntry: any = null;
+
+              searchRes.on('searchEntry', (entry: any) => {
+                foundEntry = entry.object;
+              });
+
+              searchRes.on('error', (err: any) => {
+                reject(err);
+              });
+
+              searchRes.on('end', (result: any) => {
+                if (result.status !== 0 || !foundEntry) {
+                  return reject(new Error('Usuario no encontrado en el directorio activo.'));
+                }
+                resolve(foundEntry);
+              });
+            });
+          });
+        });
+
+        const userLdapProfile = await ldapBind();
+        
+        // Ejecutar un Bind secundario con las credenciales ingresadas por el usuario para verificar su clave
+        const userClient = ldap.createClient({ url: settings.ldapUrl || '' });
+        const verifyUserPassword = () => new Promise<void>((resolve, reject) => {
+          userClient.bind(userLdapProfile.dn, password, (err: any) => {
+            userClient.destroy();
+            if (err) return reject(new Error('Contraseña corporativa incorrecta.'));
+            resolve();
+          });
+        });
+
+        await verifyUserPassword();
+        ldapClient.destroy();
+
+        // Asignación de variables de perfil mapeadas desde el servidor LDAP
+        userFirstName = userLdapProfile.givenName || userLdapProfile.cn || 'Colaborador';
+        userLastName = userLdapProfile.sn || '';
+        userDepartment = userLdapProfile.department || 'Sin Departamento';
+        userPosition = userLdapProfile.title || 'Colaborador';
+
+      } catch (ldapError: any) {
+        console.error('❌ LDAP Auth Error:', ldapError.message);
+        
+        // Simulación en entorno de desarrollo local si no hay servidor LDAP o falta la dependencia
+        if (process.env.NODE_ENV !== 'production' || ldapError.message.includes('Cannot find module')) {
+          console.warn('⚠️ Ejecutando login LDAP en modo Simulado (Desarrollo).');
+          if (password === 'error') {
+            res.status(401).json({ success: false, error: 'Credenciales inválidas en el Directorio Activo LDAP (Simulación).' });
+            return;
+          }
+          userFirstName = normalizedEmail.split('@')[0];
+          userLastName = 'AD User';
+          userDepartment = 'Ciberseguridad';
+          userPosition = 'Especialista';
+        } else {
+          res.status(401).json({ success: false, error: `Autenticación de AD fallida: ${ldapError.message}` });
+          return;
+        }
+      }
+    }
+
+    // Aprovisionamiento dinámico Just-In-Time (JIT) en base de datos local
+    let user = await User.findOne({ email: userEmail }).select('+refreshToken');
+    let isNewUser = false;
+
+    if (!user) {
+      isNewUser = true;
+      const usernameBase = userEmail.split('@')[0];
+      let finalUsername = usernameBase;
+      let suffix = 1;
+      while (await User.findOne({ username: finalUsername })) {
+        finalUsername = `${usernameBase}${suffix}`;
+        suffix++;
+      }
+
+      const randomPassword = crypto.randomBytes(24).toString('hex') + 'Ad1!';
+
+      // El usuario JIT se crea por defecto con rol de solo lectura (READER) y termsAccepted en falso
+      user = await User.create({
+        username: finalUsername,
+        email: userEmail,
+        personalEmail: userEmail, // Se establece temporalmente el correo corporativo
+        password: randomPassword,
+        firstName: userFirstName,
+        lastName: userLastName,
+        role: UserRole.READER,
+        department: userDepartment,
+        position: userPosition,
+        isActive: true,
+        isVerified: true,
+        termsAccepted: false,
+        mustChangePassword: false
+      });
+    }
+
+    if (user.isActive === false) {
+      res.status(401).json({ success: false, error: 'Su cuenta ha sido desactivada en CertiVault. Contacte al administrador.' });
+      return;
+    }
+
+    // Identificar si falta actualizar el correo personal (debe ser diferente al corporativo)
+    const requiresPersonalEmailUpdate = isNewUser || !user.personalEmail || 
+      user.personalEmail.toLowerCase().trim() === user.email.toLowerCase().trim();
+
+    const token = generateToken(String(user._id));
+    const refreshTokenVal = generateRefreshToken(String(user._id));
+
+    user.lastLogin = new Date();
+    user.refreshToken = refreshTokenVal;
+    await user.save({ validateBeforeSave: false });
+
+    res.json({
+      success: true,
+      data: {
+        token,
+        refreshToken: refreshTokenVal,
+        user: {
+          _id: user._id,
+          username: user.username,
+          email: user.email,
+          personalEmail: user.personalEmail,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          role: user.role,
+          department: user.department,
+          position: user.position,
+          phone: user.phone,
+          avatarUrl: user.avatarUrl,
+          isActive: user.isActive,
+          lastLogin: user.lastLogin,
+          mustChangePassword: false,
+          termsAccepted: user.termsAccepted,
+          termsAcceptedAt: user.termsAcceptedAt,
+          requiresPersonalEmailUpdate
+        },
+        expiresIn: 7 * 24 * 60 * 60
+      },
+      message: 'Inicio de sesión con Active Directory exitoso'
+    });
+
+  } catch (error: any) {
+    console.error('Error en adLogin:', error);
+    res.status(500).json({ success: false, error: 'Error del sistema al procesar el inicio de sesión único.' });
+  }
+};

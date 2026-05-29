@@ -105,6 +105,101 @@ import { SettingsNavComponent } from '../settings-nav.component';
                   </div>
                 </div>
 
+                <!-- Integración con Active Directory (SSO) -->
+                <div class="card mt-4 border border-secondary shadow-sm mb-4">
+                  <div class="card-header bg-secondary text-white py-2">
+                    <h6 class="mb-0 fw-bold">
+                      <i class="fas fa-users-cog me-2"></i>
+                      Integración con Directorio Activo (SSO)
+                    </h6>
+                  </div>
+                  <div class="card-body p-3">
+                    <!-- Interruptor Habilitar AD -->
+                    <div class="form-check form-switch mb-3 d-flex align-items-center justify-content-between p-0">
+                      <div>
+                        <label class="form-check-label fw-bold text-dark mb-1" for="adLoginEnabled" style="margin-left: 2.5rem; cursor: pointer;">
+                          Permitir Inicio de Sesión Corporativo (AD/SSO)
+                        </label>
+                        <div class="text-muted small" style="margin-left: 2.5rem;">Habilita a los colaboradores iniciar sesión utilizando sus credenciales corporativas.</div>
+                      </div>
+                      <input 
+                        class="form-check-input fs-4" 
+                        type="checkbox" 
+                        id="adLoginEnabled" 
+                        formControlName="adLoginEnabled"
+                        style="cursor: pointer; margin-left: 0;">
+                    </div>
+
+                    <!-- Configuración Detallada -->
+                    <div *ngIf="securityForm.get('adLoginEnabled')?.value" class="mt-3 border-top pt-3">
+                      <!-- Selector de Proveedor -->
+                      <div class="mb-4">
+                        <label class="form-label fw-bold text-dark d-block">Proveedor de Directorio Activo</label>
+                        <div class="btn-group w-100" role="group">
+                          <input type="radio" class="btn-check" name="adProvider" id="providerAzure" value="azure" formControlName="adProvider">
+                          <label class="btn btn-outline-primary py-2" for="providerAzure">
+                            <i class="fab fa-microsoft me-2"></i>Microsoft Azure AD (Entra ID)
+                          </label>
+
+                          <input type="radio" class="btn-check" name="adProvider" id="providerLdap" value="ldap" formControlName="adProvider">
+                          <label class="btn btn-outline-primary py-2" for="providerLdap">
+                            <i class="fas fa-network-wired me-2"></i>LDAP Tradicional (On-Premise)
+                          </label>
+                        </div>
+                      </div>
+
+                      <!-- Campos Azure AD -->
+                      <div *ngIf="securityForm.get('adProvider')?.value === 'azure'" class="row">
+                        <div class="col-md-6 mb-3">
+                          <label for="azureTenantId" class="form-label fw-bold text-dark">Tenant ID *</label>
+                          <input type="text" class="form-control" id="azureTenantId" formControlName="azureTenantId" placeholder="Ej: f81d4fae-7dec-11d0-a765-00a0c91e6bf6">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                          <label for="azureClientId" class="form-label fw-bold text-dark">Client ID *</label>
+                          <input type="text" class="form-control" id="azureClientId" formControlName="azureClientId" placeholder="Ej: a33e4bbd-5cc4-4aa2-88ef-339ac92ffdd3">
+                        </div>
+                        <div class="col-md-12 mb-3">
+                          <label for="azureClientSecret" class="form-label fw-bold text-dark">Client Secret *</label>
+                          <input type="password" class="form-control" id="azureClientSecret" formControlName="azureClientSecret" placeholder="••••••••••••••••••••">
+                        </div>
+                      </div>
+
+                      <!-- Campos LDAP -->
+                      <div *ngIf="securityForm.get('adProvider')?.value === 'ldap'" class="row">
+                        <div class="col-md-6 mb-3">
+                          <label for="ldapUrl" class="form-label fw-bold text-dark">LDAP URL Server *</label>
+                          <input type="text" class="form-control" id="ldapUrl" formControlName="ldapUrl" placeholder="Ej: ldap://192.168.1.100:389">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                          <label for="ldapBaseDN" class="form-label fw-bold text-dark">Base DN *</label>
+                          <input type="text" class="form-control" id="ldapBaseDN" formControlName="ldapBaseDN" placeholder="Ej: dc=empresa,dc=local">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                          <label for="ldapBindDN" class="form-label fw-bold text-dark">Bind DN (Usuario de Servicio) *</label>
+                          <input type="text" class="form-control" id="ldapBindDN" formControlName="ldapBindDN" placeholder="Ej: cn=admin,dc=empresa,dc=local">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                          <label for="ldapBindPassword" class="form-label fw-bold text-dark">Contraseña del Bind DN *</label>
+                          <input type="password" class="form-control" id="ldapBindPassword" formControlName="ldapBindPassword" placeholder="••••••••••••••••••••">
+                        </div>
+                      </div>
+
+                      <!-- Botón Probar Conexión -->
+                      <div class="d-flex justify-content-start mb-2">
+                        <button 
+                          type="button" 
+                          class="btn btn-outline-secondary btn-sm fw-semibold d-flex align-items-center gap-2"
+                          (click)="testConnection()"
+                          [disabled]="testingAd">
+                          <span *ngIf="testingAd" class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                          <i *ngIf="!testingAd" class="fas fa-plug"></i>
+                          {{ testingAd ? 'Probando...' : 'Probar Conexión con Directorio Activo' }}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 <!-- Botones -->
                 <div class="d-flex justify-content-end gap-2 pt-3 border-top mt-4">
                   <button 
@@ -127,6 +222,7 @@ import { SettingsNavComponent } from '../settings-nav.component';
 export class SecuritySettingsComponent implements OnInit, OnDestroy {
   securityForm!: FormGroup;
   loading = false;
+  testingAd = false;
   private readonly destroy$ = new Subject<void>();
 
   constructor(
@@ -150,6 +246,15 @@ export class SecuritySettingsComponent implements OnInit, OnDestroy {
         }
         monthsControl?.updateValueAndValidity();
       });
+
+    // Suscripción para manejar validadores requeridos en Active Directory
+    this.securityForm.get('adLoginEnabled')?.valueChanges
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(() => this.updateAdValidators());
+
+    this.securityForm.get('adProvider')?.valueChanges
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(() => this.updateAdValidators());
   }
 
   ngOnDestroy(): void {
@@ -161,7 +266,45 @@ export class SecuritySettingsComponent implements OnInit, OnDestroy {
     this.securityForm = this.fb.group({
       passwordExpirationEnabled: [false],
       passwordExpirationMonths: [3, [Validators.required, Validators.min(1), Validators.max(12)]],
-      certificateExpirationAlertsEnabled: [true]
+      certificateExpirationAlertsEnabled: [true],
+      adLoginEnabled: [false],
+      adProvider: ['azure'],
+      azureTenantId: [''],
+      azureClientId: [''],
+      azureClientSecret: [''],
+      ldapUrl: [''],
+      ldapBaseDN: [''],
+      ldapBindDN: [''],
+      ldapBindPassword: ['']
+    });
+  }
+
+  private updateAdValidators(): void {
+    const adEnabled = this.securityForm.get('adLoginEnabled')?.value;
+    const provider = this.securityForm.get('adProvider')?.value;
+
+    const azureFields = ['azureTenantId', 'azureClientId', 'azureClientSecret'];
+    const ldapFields = ['ldapUrl', 'ldapBaseDN', 'ldapBindDN', 'ldapBindPassword'];
+
+    // Limpiar todos primero
+    [...azureFields, ...ldapFields].forEach(field => {
+      this.securityForm.get(field)?.clearValidators();
+    });
+
+    if (adEnabled) {
+      if (provider === 'azure') {
+        azureFields.forEach(field => {
+          this.securityForm.get(field)?.setValidators([Validators.required]);
+        });
+      } else if (provider === 'ldap') {
+        ldapFields.forEach(field => {
+          this.securityForm.get(field)?.setValidators([Validators.required]);
+        });
+      }
+    }
+
+    [...azureFields, ...ldapFields].forEach(field => {
+      this.securityForm.get(field)?.updateValueAndValidity({ emitEvent: false });
     });
   }
 
@@ -172,17 +315,58 @@ export class SecuritySettingsComponent implements OnInit, OnDestroy {
       .subscribe({
         next: (response) => {
           if (response.success && response.data) {
+            const data = response.data as any;
             this.securityForm.patchValue({
-              passwordExpirationEnabled: response.data.passwordExpirationEnabled,
-              passwordExpirationMonths: response.data.passwordExpirationMonths || 3,
-              certificateExpirationAlertsEnabled: response.data.certificateExpirationAlertsEnabled !== false
+              passwordExpirationEnabled: data.passwordExpirationEnabled,
+              passwordExpirationMonths: data.passwordExpirationMonths || 3,
+              certificateExpirationAlertsEnabled: data.certificateExpirationAlertsEnabled !== false,
+              adLoginEnabled: data.adLoginEnabled || false,
+              adProvider: data.adProvider || 'azure',
+              azureTenantId: data.azureTenantId || '',
+              azureClientId: data.azureClientId || '',
+              azureClientSecret: data.azureClientSecret || '',
+              ldapUrl: data.ldapUrl || '',
+              ldapBaseDN: data.ldapBaseDN || '',
+              ldapBindDN: data.ldapBindDN || '',
+              ldapBindPassword: data.ldapBindPassword || ''
             });
+            this.updateAdValidators();
           }
           this.loading = false;
         },
         error: (error) => {
           console.error('Error cargando configuraciones de seguridad:', error);
           this.loading = false;
+        }
+      });
+  }
+
+  testConnection(): void {
+    if (this.securityForm.invalid) {
+      // Forzar validaciones de los campos visibles del proveedor seleccionado antes de la prueba
+      const provider = this.securityForm.get('adProvider')?.value;
+      const fields = provider === 'azure' 
+        ? ['azureTenantId', 'azureClientId', 'azureClientSecret']
+        : ['ldapUrl', 'ldapBaseDN', 'ldapBindDN', 'ldapBindPassword'];
+      
+      fields.forEach(field => this.securityForm.get(field)?.markAsTouched());
+      alert('Complete los campos obligatorios del proveedor seleccionado antes de probar.');
+      return;
+    }
+
+    this.testingAd = true;
+    const payload: SecuritySettingsData = this.securityForm.value;
+
+    this.settingsService.testAdSettings(payload)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (response) => {
+          this.testingAd = false;
+          alert(response.message || 'Prueba de conexión exitosa.');
+        },
+        error: (error) => {
+          this.testingAd = false;
+          alert('Fallo en la prueba de conexión: ' + error.message);
         }
       });
   }

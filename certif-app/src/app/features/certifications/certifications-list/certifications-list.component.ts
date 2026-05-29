@@ -242,7 +242,7 @@ import { Subject, Subscription } from 'rxjs';
                   <button 
                     class="btn btn-sm btn-outline-danger"
                     type="button"
-                    *ngIf="canDeleteCertifications()"
+                    *ngIf="canDeleteCertification(cert)"
                     (click)="deleteCertification(cert)">
                     <i class="fas fa-trash me-1"></i> Borrar
                   </button>
@@ -318,7 +318,7 @@ import { Subject, Subscription } from 'rxjs';
                 <p class="mb-1"><strong>Descripcion:</strong></p>
                 <p class="text-muted">{{ selectedCertification.description }}</p>
               </div>
-              <div class="mb-3" *ngIf="selectedCertification.tags?.length">
+              <div class="mb-3" *ngIf="selectedCertification.tags.length">
                 <p class="mb-1"><strong>Tags:</strong></p>
                 <div class="d-flex flex-wrap gap-2">
                   <span class="badge bg-secondary" *ngFor="let tag of selectedCertification.tags">{{ tag }}</span>
@@ -429,6 +429,7 @@ export class CertificationsListComponent implements OnInit, OnDestroy {
     this.subscribeToExternalFilters();
     this.setupFilterSubscription();
     this.handleQueryParams();
+    this.loadFilterOptions();
   }
 
   ngOnDestroy(): void {
@@ -538,7 +539,6 @@ export class CertificationsListComponent implements OnInit, OnDestroy {
         }
         this.totalCertifications = response.data.total;
         this.totalPages = response.data.totalPages;
-        this.updateUniqueFilters();
       } else {
         this.certifications = [];
         this.availableCertifications = [];
@@ -652,7 +652,7 @@ export class CertificationsListComponent implements OnInit, OnDestroy {
 
   deleteCertification(cert: Certification): void {
     // console.log('Intentando borrar certificacion:', cert);
-    if (!this.canDeleteCertifications()) return;
+    if (!this.canDeleteCertification(cert)) return;
     console.log('Permiso concedido para borrar certificacion');
     // const confirmed = confirm(`¿Borrar la certificación "${cert.title}"? Esta acción es permanente.`);
     // if (!confirmed || !cert._id) return;
@@ -663,6 +663,7 @@ export class CertificationsListComponent implements OnInit, OnDestroy {
     this.certificationService.deleteCertification(cert._id).subscribe({
       next: () => {
         this.loadCertifications();
+        this.loadFilterOptions();
       },
       error: (error) => {
         this.errorMessage = error.message || 'No se pudo borrar la certificación';
@@ -671,8 +672,20 @@ export class CertificationsListComponent implements OnInit, OnDestroy {
     });
   }
 
-  canDeleteCertifications(): boolean {
-    return this.authService.isAdmin();
+  canDeleteCertification(cert: Certification): boolean {
+    const user = this.authService.getCurrentUser();
+    if (!user) return false;
+    
+    // Se evalúan los privilegios de eliminación: propietario, administrador, o líder del área
+    const isOwner = cert.employeeId === user._id || cert.createdBy === user._id;
+    const sameDepartment =
+      cert.department === user.department ||
+      (user.managedDepartments || []).includes(cert.department as any);
+
+    if (this.authService.isAdmin()) return true;
+    if (this.authService.isLeader() && sameDepartment) return true;
+
+    return isOwner;
   }
 
   canEditCertification(cert: Certification): boolean {
@@ -700,17 +713,24 @@ export class CertificationsListComponent implements OnInit, OnDestroy {
     });
   }
 
-  private updateUniqueFilters(): void {
-    const providers = new Set<string>();
-    const departments = new Set<string>();
-
-    this.certifications.forEach(cert => {
-      if (cert.provider) providers.add(cert.provider);
-      if (cert.department) departments.add(cert.department);
+  loadFilterOptions(): void {
+    // Obtener y ordenar la lista completa de emisores del backend
+    this.certificationService.getProviders().subscribe({
+      next: (response) => {
+        if (response.success && response.data) {
+          this.uniqueProviders = response.data.sort((a, b) => a.localeCompare(b));
+        }
+      }
     });
 
-    this.uniqueProviders = Array.from(providers);
-    this.uniqueDepartments = Array.from(departments);
+    // Obtener y ordenar la lista completa de departamentos del backend
+    this.certificationService.getDepartments().subscribe({
+      next: (response) => {
+        if (response.success && response.data) {
+          this.uniqueDepartments = response.data.sort((a, b) => a.localeCompare(b));
+        }
+      }
+    });
   }
 }
 
