@@ -19,6 +19,7 @@ El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1
   - Implementación de normalización case-insensitive al crear o actualizar certificaciones para unificar variantes duplicadas (ej. 'BeyondTrust' vs 'beyondtrust').
   - Incorporación de un script de unificación masiva en el arranque del servidor backend (`server.ts`) para normalizar registros preexistentes a la variante dominante (moda) de cada proveedor.
   - Actualización del frontend para obtener las opciones del filtro de proveedores directamente del backend en lugar de extraerlos de la paginación local.
+  - Normalización e inspección case-insensitive en la lista de proveedores devuelta por el API (`getProviders`) y en las consultas de búsqueda/filtros del backend para evitar duplicados en la interfaz y garantizar compatibilidad con datos inconsistentes preexistentes.
 - **Control de Accesos en Eliminación (ISS-007):**
   - Restricción del endpoint de borrado de certificaciones en el backend para permitir la operación exclusivamente a su propietario, a un administrador global, o al líder de área asignado al departamento correspondiente.
   - Condicionamiento visual del botón "Borrar" en el frontend mediante validación lógica individual por cada certificado.
