@@ -26,7 +26,8 @@ import {
   updateBranding,
   systemWipe,
   getSecuritySettings,
-  updateSecuritySettings
+  updateSecuritySettings,
+  testAdSettings
 } from '../controllers/settingsController';
 import { adminOnly, authenticate } from '../middleware/auth';
 import { validateRequest } from '../middleware/validation';
@@ -120,6 +121,7 @@ router.get('/branding', getBranding);
 router.put('/branding', updateBranding);
 router.get('/security', getSecuritySettings);
 router.put('/security', updateSecuritySettings);
+router.post('/security/test-ad', testAdSettings);
 router.get('/public-api/clients', getPublicApiClients);
 router.post('/public-api/clients', publicApiClientCreateValidation, validateRequest, createPublicApiClient);
 router.put('/public-api/clients/:id', publicApiClientUpdateValidation, validateRequest, updatePublicApiClient);

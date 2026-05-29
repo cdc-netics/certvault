@@ -31,6 +31,15 @@ export interface SecuritySettingsData {
   passwordExpirationEnabled: boolean;
   passwordExpirationMonths: number;
   certificateExpirationAlertsEnabled: boolean;
+  adLoginEnabled: boolean;
+  adProvider: 'ldap' | 'azure';
+  azureTenantId?: string;
+  azureClientId?: string;
+  azureClientSecret?: string;
+  ldapUrl?: string;
+  ldapBaseDN?: string;
+  ldapBindDN?: string;
+  ldapBindPassword?: string;
 }
 
 export interface PublicApiClient {
@@ -210,6 +219,12 @@ export class SettingsService {
   updateSecuritySettings(payload: SecuritySettingsData): Observable<ApiResponse<SecuritySettingsData>> {
     return this.http.put<ApiResponse<SecuritySettingsData>>(`${this.API_URL}/security`, payload)
       .pipe(tap(() => this.clearCache()), catchError(this.handleError));
+  }
+
+  // Probar la configuración de Active Directory (Azure o LDAP) en el backend
+  testAdSettings(payload: SecuritySettingsData): Observable<ApiResponse<any>> {
+    return this.http.post<ApiResponse<any>>(`${this.API_URL}/security/test-ad`, payload)
+      .pipe(catchError(this.handleError));
   }
 
   private handleError(error: HttpErrorResponse): Observable<never> {

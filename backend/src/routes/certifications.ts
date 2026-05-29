@@ -19,7 +19,8 @@ import {
   uploadCertificate,
   searchCertifications,
   getTechnologies,
-  getDepartments
+  getDepartments,
+  getProviders
 } from '../controllers/certificationsController';
 
 const router = Router();
@@ -86,6 +87,7 @@ router.get('/user/:userId', getUserCertifications);
 router.get('/search', searchCertifications);
 router.get('/technologies', getTechnologies);
 router.get('/departments', getDepartments);
+router.get('/providers', getProviders);
 router.get('/:id/file', getCertificationFile);
 router.get('/:id', getCertificationById);
 router.put('/:id', updateCertification);
