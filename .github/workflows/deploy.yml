@@ -1,4 +1,4 @@
-name: Deploy automatico a produccion
+name: Deploy a produccion
 
 on:
   push:
@@ -12,152 +12,101 @@ concurrency:
 jobs:
   deploy:
     runs-on: self-hosted
-    timeout-minutes: 20
+    timeout-minutes: 30
 
     env:
-      APP_DIR: /home/cdc/certvault
-      BUILD_DIR: /home/cdc/certvault-build
-      BACKUP_DIR: /home/cdc/certvault-backup
-      PM2_APP: certif-app-backend
-      HEALTH_URL: http://127.0.0.1:3000/api/health
-      API_BASE_URL: http://127.0.0.1:3000/api
+      REGISTRY: localhost:5000
+      APP_DIR: /opt/certvault
+      IMAGE_TAG: ${{ github.sha }}
 
     steps:
-      - name: Build release outside production
-        shell: bash
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Build imagen backend
         run: |
-          set -Eeuo pipefail
+          docker build \
+            -t $REGISTRY/certvault-backend:$IMAGE_TAG \
+            -t $REGISTRY/certvault-backend:latest \
+            ./backend
 
-          rm -rf "$BUILD_DIR"
-          REPO_URL="$(git -C "$APP_DIR" config --get remote.origin.url)"
-          git clone --no-checkout "$REPO_URL" "$BUILD_DIR"
-          cd "$BUILD_DIR"
-          git fetch --depth 1 origin "${GITHUB_SHA}"
-          git checkout --force FETCH_HEAD
-
-          cd "$BUILD_DIR/backend"
-          npm ci
-          npm run build
-
-          cd "$BUILD_DIR/certif-app"
-          npm ci
-          npm run build
-
-      - name: Snapshot current production
-        shell: bash
+      - name: Build imagen frontend
         run: |
-          set -Eeuo pipefail
+          docker build \
+            -t $REGISTRY/certvault-frontend:$IMAGE_TAG \
+            -t $REGISTRY/certvault-frontend:latest \
+            ./certif-app
 
-          rm -rf "$BACKUP_DIR"
-          mkdir -p "$BACKUP_DIR/backend" "$BACKUP_DIR/certif-app"
-
-          if [ -d "$APP_DIR/backend/dist" ]; then
-            rsync -a --delete "$APP_DIR/backend/dist/" "$BACKUP_DIR/backend/dist/"
-          fi
-
-          if [ -d "$APP_DIR/backend/node_modules" ]; then
-            rsync -a --delete "$APP_DIR/backend/node_modules/" "$BACKUP_DIR/backend/node_modules/"
-          fi
-
-          if [ -d "$APP_DIR/backend/resources" ]; then
-            rsync -a --delete "$APP_DIR/backend/resources/" "$BACKUP_DIR/backend/resources/"
-          fi
-
-          if [ -d "$APP_DIR/certif-app/dist" ]; then
-            rsync -a --delete "$APP_DIR/certif-app/dist/" "$BACKUP_DIR/certif-app/dist/"
-          fi
-
-          cp "$APP_DIR/backend/package.json" "$BACKUP_DIR/backend/package.json"
-          cp "$APP_DIR/backend/package-lock.json" "$BACKUP_DIR/backend/package-lock.json"
-          cp "$APP_DIR/backend/ecosystem.config.js" "$BACKUP_DIR/backend/ecosystem.config.js"
-
-      - name: Publish built artifacts
-        shell: bash
+      - name: Push imágenes al registry local
         run: |
-          set -Eeuo pipefail
+          docker push $REGISTRY/certvault-backend:$IMAGE_TAG
+          docker push $REGISTRY/certvault-backend:latest
+          docker push $REGISTRY/certvault-frontend:$IMAGE_TAG
+          docker push $REGISTRY/certvault-frontend:latest
 
-          rsync -a --delete "$BUILD_DIR/backend/dist/" "$APP_DIR/backend/dist/"
-          rsync -a --delete "$BUILD_DIR/backend/node_modules/" "$APP_DIR/backend/node_modules/"
-          if [ -d "$BUILD_DIR/backend/resources" ]; then
-            rsync -a --delete "$BUILD_DIR/backend/resources/" "$APP_DIR/backend/resources/"
-          fi
-          cp "$BUILD_DIR/backend/package.json" "$APP_DIR/backend/package.json"
-          cp "$BUILD_DIR/backend/package-lock.json" "$APP_DIR/backend/package-lock.json"
-          cp "$BUILD_DIR/backend/ecosystem.config.js" "$APP_DIR/backend/ecosystem.config.js"
-
-          rsync -a --delete "$BUILD_DIR/certif-app/dist/" "$APP_DIR/certif-app/dist/"
-
-      - name: Reload backend and verify health
-        shell: bash
+      - name: Actualizar compose files en producción
         run: |
-          set -Eeuo pipefail
-          unset RUNNER_TRACKING_ID
+          cp docker-compose.yml $APP_DIR/docker-compose.yml
+          cp docker-compose.prod.yml $APP_DIR/docker-compose.prod.yml
 
-          test -f "$APP_DIR/backend/dist/server.js"
-          test -f "$APP_DIR/backend/dist/routes/settings.js"
-          grep -q "/api/settings" "$APP_DIR/backend/dist/server.js"
+      - name: Escribir .env desde GitHub Secrets
+        run: |
+          echo "${{ secrets.CERTVAULT_ENV }}" > $APP_DIR/.env
 
-          cd "$APP_DIR/backend"
-          pm2 startOrReload ecosystem.config.js --only "$PM2_APP" --update-env
-          pm2 describe "$PM2_APP"
+      - name: Deploy stack
+        run: |
+          cd $APP_DIR
+          IMAGE_TAG=$IMAGE_TAG docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.prod.yml \
+            up -d --no-build --remove-orphans
 
-          for attempt in {1..20}; do
-            if curl -fsS "$HEALTH_URL" >/dev/null; then
-              settings_health_status="$(curl -sS -o /tmp/certvault-settings-health.json -w "%{http_code}" "$API_BASE_URL/settings/health" || true)"
+      - name: Verificar contenedores
+        run: |
+          cd $APP_DIR
+          docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.prod.yml \
+            ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}"
 
-              if [ "$settings_health_status" = "200" ]; then
-                pm2 save
-                exit 0
-              fi
-
-              echo "Settings health check failed with status $settings_health_status"
-              cat /tmp/certvault-settings-health.json || true
+      - name: Health check backend
+        run: |
+          for i in {1..15}; do
+            if curl -fsS http://127.0.0.1:3000/api/health >/dev/null 2>&1; then
+              echo "Backend saludable"
+              exit 0
             fi
-            sleep 2
+            echo "Intento $i/15 — esperando backend..."
+            sleep 4
           done
-
-          echo "Health or settings route check failed after deploy"
-          pm2 describe "$PM2_APP" || true
-          pm2 logs "$PM2_APP" --lines 80 --nostream || true
+          echo "Health check fallido"
+          docker logs certvault-backend --tail 50
           exit 1
 
-      - name: Rollback on failure
+      - name: Rollback si falla
         if: failure()
-        shell: bash
         run: |
-          set +e
+          echo "Deploy fallido — revirtiendo al tag anterior..."
+          cd $APP_DIR
 
-          echo "Rolling back previous production artifacts..."
+          PREV_TAG=$(curl -s http://localhost:5000/v2/certvault-backend/tags/list \
+            | python3 -c "
+          import sys, json
+          tags = json.load(sys.stdin).get('tags', [])
+          shas = [t for t in tags if t != 'latest']
+          print(shas[-2] if len(shas) >= 2 else shas[0] if shas else '')
+          ")
 
-          if [ -d "$BACKUP_DIR/backend/dist" ]; then
-            rsync -a --delete "$BACKUP_DIR/backend/dist/" "$APP_DIR/backend/dist/"
+          if [ -n "$PREV_TAG" ]; then
+            echo "Rollback a imagen: $PREV_TAG"
+            IMAGE_TAG=$PREV_TAG docker compose \
+              -f docker-compose.yml \
+              -f docker-compose.prod.yml \
+              up -d --no-build
+          else
+            echo "No hay imagen anterior disponible para rollback"
           fi
 
-          if [ -d "$BACKUP_DIR/backend/node_modules" ]; then
-            rsync -a --delete "$BACKUP_DIR/backend/node_modules/" "$APP_DIR/backend/node_modules/"
-          fi
-
-          if [ -d "$BACKUP_DIR/backend/resources" ]; then
-            rsync -a --delete "$BACKUP_DIR/backend/resources/" "$APP_DIR/backend/resources/"
-          fi
-
-          if [ -f "$BACKUP_DIR/backend/package.json" ]; then
-            cp "$BACKUP_DIR/backend/package.json" "$APP_DIR/backend/package.json"
-          fi
-
-          if [ -f "$BACKUP_DIR/backend/package-lock.json" ]; then
-            cp "$BACKUP_DIR/backend/package-lock.json" "$APP_DIR/backend/package-lock.json"
-          fi
-
-          if [ -f "$BACKUP_DIR/backend/ecosystem.config.js" ]; then
-            cp "$BACKUP_DIR/backend/ecosystem.config.js" "$APP_DIR/backend/ecosystem.config.js"
-          fi
-
-          if [ -d "$BACKUP_DIR/certif-app/dist" ]; then
-            rsync -a --delete "$BACKUP_DIR/certif-app/dist/" "$APP_DIR/certif-app/dist/"
-          fi
-
-          unset RUNNER_TRACKING_ID
-          cd "$APP_DIR/backend"
-          pm2 startOrReload ecosystem.config.js --only "$PM2_APP" --update-env || pm2 restart "$PM2_APP" --update-env
-          pm2 save
+      - name: Limpiar imágenes dangling
+        if: always()
+        run: docker image prune -f
