@@ -300,4 +300,23 @@ export class AuthService {
 
     this.logout();
   }
+
+  // Obtiene si está habilitado el login por AD corporativo y su tipo
+  getAdConfig(): Observable<ApiResponse<{ adLoginEnabled: boolean; adProvider: string }>> {
+    return this.http.get<ApiResponse<any>>(`${this.API_URL}/ad-config`).pipe(
+      catchError(this.handleError)
+    );
+  }
+
+  // Ejecuta la autenticación corporativa por Active Directory (Azure AD o LDAP)
+  adLogin(payload: { email?: string; password?: string; idToken?: string }): Observable<ApiResponse<LoginResponse>> {
+    return this.http.post<ApiResponse<LoginResponse>>(`${this.API_URL}/ad-login`, payload).pipe(
+      tap(response => {
+        if (response.success && response.data) {
+          this.setSession(response.data);
+        }
+      }),
+      catchError(this.handleError)
+    );
+  }
 }

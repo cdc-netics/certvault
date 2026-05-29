@@ -45,16 +45,35 @@ const normalizeTags = (tags?: unknown): string[] => {
   return [];
 };
 
+/**
+ * Normaliza el nombre del emisor/plataforma de la certificación.
+ * Realiza una búsqueda insensible a mayúsculas/minúsculas en la base de datos para reutilizar
+ * el formato de la variante ya registrada (evitando duplicados como "beyondtrust" y "BeyondTrust").
+ * Si no existe en la base de datos, se conserva el valor limpio y recortado tal como lo ingresó el usuario.
+ */
+const normalizeProviderName = async (providerName?: string): Promise<string> => {
+  if (!providerName) return '';
+  const trimmed = providerName.trim();
+  const escaped = trimmed.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+  
+  const existing = await Certification.findOne({
+    provider: { $regex: new RegExp(`^${escaped}$`, 'i') }
+  }).select('provider').lean();
+
+  return existing && existing.provider ? existing.provider : trimmed;
+};
+
 export const createCertification = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const payload = req.body;
+    const providerNormalized = await normalizeProviderName(payload.provider);
 
     const certification = await Certification.create({
       title: payload.title,
       description: payload.description || '',
       type: payload.type,
       technology: payload.technology,
-      provider: payload.provider,
+      provider: providerNormalized,
       level: payload.level,
       employeeId: payload.employeeId || req.user?._id,
       employeeName:
@@ -97,7 +116,10 @@ export const getCertifications = async (req: Request, res: Response): Promise<vo
 
     if (req.query.type) filter.type = req.query.type;
     if (req.query.level) filter.level = req.query.level;
-    if (req.query.provider) filter.provider = req.query.provider;
+    if (req.query.provider) {
+      const escaped = (req.query.provider as string).trim().replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+      filter.provider = { $regex: new RegExp(`^${escaped}$`, 'i') };
+    }
     if (req.query.department) filter.department = req.query.department;
     if (req.query.status) filter.status = req.query.status;
 
@@ -211,7 +233,10 @@ export const getPublicCertifications = async (req: Request, res: Response): Prom
     const certificationFilter: Record<string, unknown> = {};
     if (req.query.type) certificationFilter.type = req.query.type;
     if (req.query.level) certificationFilter.level = req.query.level;
-    if (req.query.provider) certificationFilter.provider = req.query.provider;
+    if (req.query.provider) {
+      const escaped = (req.query.provider as string).trim().replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+      certificationFilter.provider = { $regex: new RegExp(`^${escaped}$`, 'i') };
+    }
     if (req.query.department) certificationFilter.department = req.query.department;
     if (req.query.status) certificationFilter.status = req.query.status;
     if (req.query.certificateNumber) certificationFilter.certificateNumber = req.query.certificateNumber;
@@ -449,6 +474,11 @@ export const updateCertification = async (req: AuthRequest, res: Response): Prom
       updatedBy: req.user?._id
     };
 
+    // Normalizar el emisor/plataforma en caso de que venga en los datos a actualizar
+    if (req.body.provider !== undefined) {
+      updates.provider = await normalizeProviderName(req.body.provider);
+    }
+
     const updated = await Certification.findByIdAndUpdate(req.params.id, updates, {
       new: true,
       runValidators: true
@@ -468,14 +498,34 @@ export const updateCertification = async (req: AuthRequest, res: Response): Prom
     });
   }
 };
-export const deleteCertification = async (req: Request, res: Response): Promise<void> => {
+export const deleteCertification = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const certification = await Certification.findByIdAndDelete(req.params.id);
+    const certification = await Certification.findById(req.params.id);
     if (!certification) {
       res.status(404).json({ success: false, error: 'Certificación no encontrada' });
       return;
     }
 
+    // Validar privilegios: solo el dueño, administradores o el líder de área pueden eliminar la certificación
+    const isOwner =
+      certification.employeeId?.toString() === req.user?._id?.toString() ||
+      certification.createdBy?.toString() === req.user?._id?.toString();
+
+    const isAdmin = req.user?.role === UserRole.ADMIN;
+    const isLeaderOfSameDept =
+      req.user?.role === UserRole.LIDER &&
+      (certification.department === req.user.department ||
+        (req.user.managedDepartments || []).includes(certification.department as any));
+
+    if (!isOwner && !isAdmin && !isLeaderOfSameDept) {
+      res.status(403).json({
+        success: false,
+        error: 'No tienes privilegios para eliminar esta certificación'
+      });
+      return;
+    }
+
+    await Certification.findByIdAndDelete(req.params.id);
     res.json({ success: true, message: 'Certificación eliminada' });
   } catch (error) {
     res.status(500).json({
@@ -624,6 +674,33 @@ export const getDepartments = async (_req: Request, res: Response): Promise<void
     res.status(500).json({
       success: false,
       error: 'Error al obtener departamentos'
+    });
+  }
+};
+
+export const getProviders = async (_req: Request, res: Response): Promise<void> => {
+  try {
+    // Retorna la lista única de proveedores de la base de datos normalizada case-insensitive
+    const rawProviders = await Certification.distinct('provider');
+    
+    const normalizedSet = new Set<string>();
+    const seenLower = new Set<string>();
+    
+    for (const provider of rawProviders) {
+      if (!provider) continue;
+      const trimmed = provider.trim();
+      const lower = trimmed.toLowerCase();
+      if (!seenLower.has(lower)) {
+        seenLower.add(lower);
+        normalizedSet.add(trimmed);
+      }
+    }
+    
+    res.json({ success: true, data: Array.from(normalizedSet) });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: 'Error al obtener proveedores/emisores'
     });
   }
 };

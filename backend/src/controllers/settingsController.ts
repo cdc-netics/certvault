@@ -543,10 +543,22 @@ export const getSecuritySettings = async (_req: Request, res: Response): Promise
       settings = await SecuritySettings.create({
         passwordExpirationEnabled: false,
         passwordExpirationMonths: 3,
-        certificateExpirationAlertsEnabled: true // Habilitar por defecto
+        certificateExpirationAlertsEnabled: true,
+        adLoginEnabled: false,
+        adProvider: 'azure'
       });
     }
-    res.json({ success: true, data: settings });
+
+    // Convertir a objeto plano para poder enmascarar campos confidenciales
+    const settingsObj = settings.toObject();
+    if (settingsObj.azureClientSecret) {
+      settingsObj.azureClientSecret = '******';
+    }
+    if (settingsObj.ldapBindPassword) {
+      settingsObj.ldapBindPassword = '******';
+    }
+
+    res.json({ success: true, data: settingsObj });
   } catch (error) {
     console.error('Error obteniendo configuracion de seguridad:', error);
     res.status(500).json({ success: false, error: 'Error al obtener configuracion de seguridad' });
@@ -560,7 +572,20 @@ export const updateSecuritySettings = async (req: AuthRequest, res: Response): P
       settings = new SecuritySettings();
     }
 
-    const { passwordExpirationEnabled, passwordExpirationMonths, certificateExpirationAlertsEnabled } = req.body;
+    const {
+      passwordExpirationEnabled,
+      passwordExpirationMonths,
+      certificateExpirationAlertsEnabled,
+      adLoginEnabled,
+      adProvider,
+      azureTenantId,
+      azureClientId,
+      azureClientSecret,
+      ldapUrl,
+      ldapBaseDN,
+      ldapBindDN,
+      ldapBindPassword
+    } = req.body;
 
     if (passwordExpirationEnabled !== undefined) {
       settings.passwordExpirationEnabled = Boolean(passwordExpirationEnabled);
@@ -572,16 +597,170 @@ export const updateSecuritySettings = async (req: AuthRequest, res: Response): P
       settings.certificateExpirationAlertsEnabled = Boolean(certificateExpirationAlertsEnabled);
     }
 
+    // Configuraciones de Directorio Activo (SSO)
+    if (adLoginEnabled !== undefined) {
+      settings.adLoginEnabled = Boolean(adLoginEnabled);
+    }
+    if (adProvider !== undefined) {
+      settings.adProvider = adProvider;
+    }
+    if (azureTenantId !== undefined) {
+      settings.azureTenantId = azureTenantId;
+    }
+    if (azureClientId !== undefined) {
+      settings.azureClientId = azureClientId;
+    }
+    
+    // Cifrado de secreto de Azure AD si cambió y no es la máscara
+    if (azureClientSecret !== undefined && azureClientSecret !== '******') {
+      const { encrypt } = await import('../utils/crypto');
+      settings.azureClientSecret = encrypt(azureClientSecret);
+    }
+    
+    if (ldapUrl !== undefined) {
+      settings.ldapUrl = ldapUrl;
+    }
+    if (ldapBaseDN !== undefined) {
+      settings.ldapBaseDN = ldapBaseDN;
+    }
+    if (ldapBindDN !== undefined) {
+      settings.ldapBindDN = ldapBindDN;
+    }
+    
+    // Cifrado de contraseña de Bind DN de LDAP si cambió y no es la máscara
+    if (ldapBindPassword !== undefined && ldapBindPassword !== '******') {
+      const { encrypt } = await import('../utils/crypto');
+      settings.ldapBindPassword = encrypt(ldapBindPassword);
+    }
+
     settings.updatedBy = req.user?._id;
     await settings.save();
 
+    // Devolver objeto enmascarado al cliente
+    const settingsObj = settings.toObject();
+    if (settingsObj.azureClientSecret) settingsObj.azureClientSecret = '******';
+    if (settingsObj.ldapBindPassword) settingsObj.ldapBindPassword = '******';
+
     res.json({
       success: true,
-      data: settings,
+      data: settingsObj,
       message: 'Configuracion de seguridad actualizada exitosamente'
     });
   } catch (error) {
     console.error('Error actualizando configuracion de seguridad:', error);
     res.status(400).json({ success: false, error: 'Error al actualizar configuracion de seguridad' });
+  }
+};
+
+export const testAdSettings = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const {
+      adProvider,
+      azureTenantId,
+      azureClientId,
+      azureClientSecret,
+      ldapUrl,
+      ldapBaseDN,
+      ldapBindDN,
+      ldapBindPassword
+    } = req.body;
+
+    if (adProvider === 'azure') {
+      if (!azureTenantId || !azureClientId || !azureClientSecret) {
+        res.status(400).json({ success: false, error: 'Faltan parámetros obligatorios de Azure AD.' });
+        return;
+      }
+      
+      // Validación básica de formato de UUID
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(azureTenantId) || !uuidRegex.test(azureClientId)) {
+        res.status(400).json({ success: false, error: 'El Tenant ID o Client ID no poseen un formato UUID válido.' });
+        return;
+      }
+
+      res.json({ success: true, message: 'Parámetros de Azure AD validados correctamente (Simulación exitosa).' });
+      return;
+    }
+
+    if (adProvider === 'ldap') {
+      if (!ldapUrl || !ldapBaseDN || !ldapBindDN || !ldapBindPassword) {
+        res.status(400).json({ success: false, error: 'Faltan parámetros obligatorios de LDAP.' });
+        return;
+      }
+
+      // Probar conectividad TCP básica hacia el puerto LDAP configurado de forma robusta
+      try {
+        const net = await import('net');
+        let normalizedUrl = ldapUrl.trim();
+        // Si no tiene esquema (ej. '127.0.0.1:389' o 'servidor.ldap'), añadimos 'ldap://' para el parser
+        if (!/^ldaps?:\/\//i.test(normalizedUrl)) {
+          normalizedUrl = 'ldap://' + normalizedUrl;
+        }
+
+        let host = '';
+        let port = 389;
+
+        try {
+          // Reemplazamos ldap/ldaps por http/https para que el constructor de URL de JS no falle
+          const url = new URL(normalizedUrl.replace(/^ldap:\/\//i, 'http://').replace(/^ldaps:\/\//i, 'https://'));
+          host = url.hostname;
+          port = Number(url.port) || (normalizedUrl.toLowerCase().startsWith('ldaps://') ? 636 : 389);
+          if (!host) {
+            throw new Error('El hostname de la URL de LDAP está vacío');
+          }
+        } catch (urlErr) {
+          // Fallback en caso de que URL falle, intentamos extraer host y puerto de manera manual
+          const cleanUrl = normalizedUrl.replace(/^ldaps?:\/\//i, '');
+          const parts = cleanUrl.split(':');
+          host = parts[0] || '';
+          if (parts[1]) {
+            port = Number(parts[1]);
+          } else {
+            port = normalizedUrl.toLowerCase().startsWith('ldaps://') ? 636 : 389;
+          }
+          if (!host) {
+            throw new Error('La URL de LDAP ingresada no posee un host válido.');
+          }
+        }
+
+        const checkSocket = new Promise<void>((resolve, reject) => {
+          const socket = new net.Socket();
+          socket.setTimeout(2500);
+
+          socket.on('connect', () => {
+            socket.destroy();
+            resolve();
+          });
+
+          socket.on('timeout', () => {
+            socket.destroy();
+            reject(new Error('Tiempo de espera agotado al conectar al servidor LDAP.'));
+          });
+
+          socket.on('error', (err) => {
+            socket.destroy();
+            reject(err);
+          });
+
+          socket.connect(port, host);
+        });
+
+        await checkSocket;
+      } catch (err: any) {
+        res.status(400).json({
+          success: false,
+          error: `Error al conectar por TCP con el servidor LDAP: ${err.message}`
+        });
+        return;
+      }
+
+      res.json({ success: true, message: 'Conexión TCP establecida con el servidor LDAP exitosamente.' });
+      return;
+    }
+
+    res.status(400).json({ success: false, error: 'Proveedor de Active Directory no soportado.' });
+  } catch (error: any) {
+    console.error('Error al probar configuración de AD:', error);
+    res.status(500).json({ success: false, error: `Error durante la prueba de conexión: ${error.message}` });
   }
 };

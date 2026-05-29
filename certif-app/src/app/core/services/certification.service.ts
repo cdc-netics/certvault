@@ -174,6 +174,12 @@ export class CertificationService {
       .pipe(catchError(this.handleError));
   }
 
+  getProviders(): Observable<ApiResponse<string[]>> {
+    // Consume el endpoint para obtener el listado único de emisores/plataformas
+    return this.http.get<ApiResponse<string[]>>(`${this.API_URL}/providers`)
+      .pipe(catchError(this.handleError));
+  }
+
   private handleError(error: HttpErrorResponse): Observable<never> {
     let errorMessage = 'Ha ocurrido un error desconocido';
     

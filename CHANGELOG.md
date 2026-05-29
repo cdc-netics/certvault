@@ -3,6 +3,35 @@
 Todos los cambios notables en este proyecto serán documentados en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y este proyecto se encuentra actualmente en fase de **versiones Beta**.
 
+## [2.2.0-beta] - 2026-05-29 03:40
+
+### Añadido
+- **Autenticación integrada con Active Directory (ISS-005):**
+  - Soporte completo para inicios de sesión únicos corporativos mediante LDAP y Azure AD.
+  - Implementación de un panel de configuración dinámica de Directorio Activo en la UI de ajustes de seguridad (`/settings/security`) con validaciones de formato (UUID para Azure) y un botón de pruebas de conexión TCP de red integrado hacia el servidor.
+  - Creación del módulo de criptografía simétrica (`crypto.ts`) bajo algoritmo `aes-256-cbc` para encriptar contraseñas de enlace LDAP y secretos de cliente de Azure AD al persistir en MongoDB, enmascarándolos a `'******'` al recuperarlos.
+  - Implementación de aprovisionamiento Just-in-Time (JIT) para usuarios inexistentes validados en el AD con rol predeterminado de solo lectura (`READER`), forzando el registro de su correo personal y firma de términos y condiciones en su primer login.
+- **Endpoint de Emisores Únicos (ISS-006):**
+  - Creación de ruta `GET /api/certifications/providers` que consulta todos los proveedores únicos en la base de datos de manera directa y optimizada.
+
+### Modificado
+- **Normalización del Emisor/Plataforma (ISS-006):**
+  - Implementación de normalización case-insensitive al crear o actualizar certificaciones para unificar variantes duplicadas (ej. 'BeyondTrust' vs 'beyondtrust').
+  - Incorporación de un script de unificación masiva en el arranque del servidor backend (`server.ts`) para normalizar registros preexistentes a la variante dominante (moda) de cada proveedor.
+  - Actualización del frontend para obtener las opciones del filtro de proveedores directamente del backend en lugar de extraerlos de la paginación local.
+  - Normalización e inspección case-insensitive en la lista de proveedores devuelta por el API (`getProviders`) y en las consultas de búsqueda/filtros del backend para evitar duplicados en la interfaz y garantizar compatibilidad con datos inconsistentes preexistentes.
+- **Control de Accesos en Eliminación (ISS-007):**
+  - Restricción del endpoint de borrado de certificaciones en el backend para permitir la operación exclusivamente a su propietario, a un administrador global, o al líder de área asignado al departamento correspondiente.
+  - Condicionamiento visual del botón "Borrar" en el frontend mediante validación lógica individual por cada certificado.
+
+### Corregido
+- **Ajustes de QA en Compilación:**
+  - Tipado explícito de parámetros en callbacks de `ldapjs` y uso de `// @ts-ignore` en importaciones dinámicas para corregir fallos con `noImplicitAny` y dependencias faltantes en desarrollo.
+  - Corrección de unificación de moda en `server.ts` con operador de coalescencia nula para resolver advertencias de variables posiblemente indefinidas (`noUncheckedIndexedAccess`).
+  - Resolución de la advertencia `NG8107` en el compilador de Angular reemplazando opcionales redundantes en directivas HTML (`selectedCertification.tags?.length` por `selectedCertification.tags.length`).
+
+---
+
 ## [2.1.0-beta] - 2026-05-28 09:30
 
 ### Añadido
