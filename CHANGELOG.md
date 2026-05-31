@@ -6,15 +6,16 @@ El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1
 ## [2.2.1-beta] - 2026-05-31 16:30
 
 ### Modificado
-- **Robustecimiento del Healthcheck de MongoDB (docker-compose.yml):**
+- **Robustecimiento y Aislamiento de MongoDB (docker-compose.yml):**
   - Incorporación de `start_period: 120s` para otorgar un margen de tiempo extendido a 2 minutos en inicios tras apagados no limpios, garantizando que WiredTiger complete la recuperación de datos sin marcar el contenedor como `unhealthy` incluso bajo condiciones críticas de disco.
   - Ajuste de `interval: 20s` y `timeout: 10s` para optimizar el rendimiento, disminuir la frecuencia de ejecución de `mongosh` y mitigar los logs repetitivos de accesos no autenticados.
+  - Aislamiento completo de MongoDB a la red interna de Docker (`expose` en lugar de `ports`), resolviendo de forma definitiva las colisiones de puertos con la instancia de MongoDB nativa activa en el host (ISS-002).
 - **Permisos de Lectura y Descarga de Certificaciones (certificationsController.ts):**
   - Se habilitó la lectura y descarga de archivos de certificados a todos los usuarios autenticados del sistema de manera global, eliminando las restricciones departamentales previas en el acceso de solo lectura.
 - **Estrategia de Despliegue y Rollback en CI/CD (deploy.yml):**
-  - Se incorporó un paso de sanitización de puertos y sockets en el host, liberando de forma forzada los puertos `80` y `27017` al iniciar el pipeline (mediante eliminación de procesos competidores y contenedores zombis), asegurando que el despliegue funcione al 100% sin intervención manual del usuario.
+  - Se incorporó un paso de sanitización de puertos y sockets en el host, eliminando contenedores huérfanos del stack previo e intentando liberar de forma no interactiva (`sudo -n`) los puertos `80` y `27017` si existen privilegios, asegurando que el despliegue funcione al 100% sin intervención manual del usuario.
   - Se implementó un paso de parada limpia (`docker compose down`) tanto al iniciar el despliegue del nuevo stack como en la fase de reversión (rollback) para garantizar la liberación absoluta de sockets.
-  - Se configuró la variable de entorno global `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24` en `"true"` para forzar la ejecución de las acciones bajo Node 24, previniendo advertencias de deprecación de Node 20.
+  - Se actualizó la acción de checkout a `actions/checkout@v6` para ejecutarse de manera nativa sobre Node 24, eliminando por completo las advertencias de deprecación de Node 20 sin necesidad de usar variables de forzado.
 
 ### Corregido
 - **Mecanismo de Reintentos de Conexión en Backend (database.ts):**
