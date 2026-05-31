@@ -56,6 +56,12 @@ jobs:
       - name: Deploy stack
         run: |
           cd $APP_DIR
+          # Parada y remoción ordenada de contenedores anteriores para garantizar la liberación física de puertos y sockets en el host
+          IMAGE_TAG=$IMAGE_TAG docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.prod.yml \
+            down
+          # Inicialización limpia de la nueva versión del stack
           IMAGE_TAG=$IMAGE_TAG docker compose \
             -f docker-compose.yml \
             -f docker-compose.prod.yml \

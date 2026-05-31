@@ -3,6 +3,7 @@ services:
     image: ${MONGO_IMAGE}
     container_name: ${MONGO_CONTAINER_NAME}
     restart: unless-stopped
+    # Exposición pública del puerto mapeado al host anfitrión según especificación del entorno
     ports:
       - "${MONGO_PORT}:27017"
     volumes:
