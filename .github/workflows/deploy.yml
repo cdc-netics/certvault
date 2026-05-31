@@ -18,10 +18,23 @@ jobs:
       REGISTRY: localhost:5000
       APP_DIR: /opt/certvault
       IMAGE_TAG: ${{ github.sha }}
+      # Forzar el uso de Node 24 en las acciones de JavaScript del runner para evitar avisos de deprecación de Node 20 (EOL)
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
     steps:
       - name: Checkout código
         uses: actions/checkout@v4
+
+      - name: Sanitizar puertos y sockets del host
+        run: |
+          echo "Liberando puertos 80 y 27017 en el host de manera automatizada..."
+          # Detener de forma forzada cualquier proceso (servicios nativos o huérfanos) que esté escuchando en los puertos del stack
+          sudo kill -9 $(sudo lsof -t -i:80) 2>/dev/null || true
+          sudo kill -9 $(sudo lsof -t -i:27017) 2>/dev/null || true
+          # Eliminar de manera inmediata contenedores del stack previo para evitar colisiones de puertos al recrear
+          docker rm -f certvault-proxy certvault-backend certvault-frontend certvault-mongo 2>/dev/null || true
+          # Limpiar redes de Docker huérfanas
+          docker network prune -f 2>/dev/null || true
 
       - name: Build imagen backend
         run: |
@@ -105,6 +118,12 @@ jobs:
 
           if [ -n "$PREV_TAG" ]; then
             echo "Rollback a imagen: $PREV_TAG"
+            # Detener y remover de forma limpia el stack fallido para liberar los puertos mapeados en el host
+            IMAGE_TAG=$PREV_TAG docker compose \
+              -f docker-compose.yml \
+              -f docker-compose.prod.yml \
+              down
+            # Levantar la versión anterior estable
             IMAGE_TAG=$PREV_TAG docker compose \
               -f docker-compose.yml \
               -f docker-compose.prod.yml \

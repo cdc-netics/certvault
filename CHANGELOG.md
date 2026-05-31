@@ -11,8 +11,10 @@ El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1
   - Ajuste de `interval: 20s` y `timeout: 10s` para optimizar el rendimiento, disminuir la frecuencia de ejecución de `mongosh` y mitigar los logs repetitivos de accesos no autenticados.
 - **Permisos de Lectura y Descarga de Certificaciones (certificationsController.ts):**
   - Se habilitó la lectura y descarga de archivos de certificados a todos los usuarios autenticados del sistema de manera global, eliminando las restricciones departamentales previas en el acceso de solo lectura.
-- **Estrategia de Despliegue en CI/CD (deploy.yml):**
-  - Se incorporó un paso de parada y remoción limpia (`docker compose down`) previo al levantamiento del nuevo stack en caliente. Esto asegura la liberación absoluta de todos los sockets del host (evitando estados `TIME_WAIT` o bloqueos de `docker-proxy`) y resuelve de forma permanente el conflicto de puertos ocupados (`address already in use`) durante la recreación de contenedores públicos (como MongoDB y Nginx).
+- **Estrategia de Despliegue y Rollback en CI/CD (deploy.yml):**
+  - Se incorporó un paso de sanitización de puertos y sockets en el host, liberando de forma forzada los puertos `80` y `27017` al iniciar el pipeline (mediante eliminación de procesos competidores y contenedores zombis), asegurando que el despliegue funcione al 100% sin intervención manual del usuario.
+  - Se implementó un paso de parada limpia (`docker compose down`) tanto al iniciar el despliegue del nuevo stack como en la fase de reversión (rollback) para garantizar la liberación absoluta de sockets.
+  - Se configuró la variable de entorno global `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24` en `"true"` para forzar la ejecución de las acciones bajo Node 24, previniendo advertencias de deprecación de Node 20.
 
 ### Corregido
 - **Mecanismo de Reintentos de Conexión en Backend (database.ts):**
