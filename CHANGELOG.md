@@ -19,6 +19,10 @@ El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1
   - Se independizó y robusteció la validación de escritura al modificar una certificación, garantizando que solo el propietario original, administradores o líderes del departamento correspondiente puedan actualizar los registros, previniendo alteraciones no autorizadas.
 - **Visualización de Versión en Pantalla de Login (login.component.ts):**
   - Se eliminó el texto de versión estático y desactualizado en el login del frontend, reemplazándolo por una variable de componente reactiva (`appVersion`) vinculada dinámicamente con la versión actual de la entrega (`2.2.1-beta`).
+- **Prueba de Salud del Backend en CI/CD (deploy.yml):**
+  - Se adaptó el paso de comprobación de salud del backend para ejecutarse internamente dentro del contenedor (`docker exec` con Node.js) en lugar de una llamada directa con `curl` hacia el localhost. Esto previene que el despliegue falle debido a que el puerto de desarrollo del backend (`3000`) no está expuesto públicamente en el host de producción.
+- **Sanitización de Expresiones Regulares en Búsquedas (certificationsController.ts):**
+  - Se implementó el escape de caracteres especiales de expresiones regulares en las cadenas de entrada del usuario en las funciones de búsqueda y autocompletado del backend, mitigando vulnerabilidades de inyección NoSQL y ataques de denegación de servicio (ReDoS).
 
 ## [2.2.0-beta] - 2026-05-29 03:40
 

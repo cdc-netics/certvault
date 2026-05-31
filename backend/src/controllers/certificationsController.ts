@@ -120,12 +120,14 @@ export const getCertifications = async (req: Request, res: Response): Promise<vo
     }
 
     if (search) {
+      // Se escapan caracteres especiales para prevenir ataques de inyección de expresiones regulares (ReDoS)
+      const escapedSearch = search.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
       filter.$or = [
-        { title: { $regex: search, $options: 'i' } },
-        { employeeName: { $regex: search, $options: 'i' } },
-        { technology: { $regex: search, $options: 'i' } },
-        { provider: { $regex: search, $options: 'i' } },
-        { department: { $regex: search, $options: 'i' } }
+        { title: { $regex: escapedSearch, $options: 'i' } },
+        { employeeName: { $regex: escapedSearch, $options: 'i' } },
+        { technology: { $regex: escapedSearch, $options: 'i' } },
+        { provider: { $regex: escapedSearch, $options: 'i' } },
+        { department: { $regex: escapedSearch, $options: 'i' } }
       ];
     }
 
@@ -224,12 +226,14 @@ export const getPublicCertifications = async (req: Request, res: Response): Prom
     if (req.query.certificateNumber) certificationFilter.certificateNumber = req.query.certificateNumber;
 
     if (search) {
+      // Se escapan caracteres especiales para prevenir ataques de inyección de expresiones regulares (ReDoS)
+      const escapedSearch = search.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
       certificationFilter.$or = [
-        { title: { $regex: search, $options: 'i' } },
-        { employeeName: { $regex: search, $options: 'i' } },
-        { technology: { $regex: search, $options: 'i' } },
-        { provider: { $regex: search, $options: 'i' } },
-        { certificateNumber: { $regex: search, $options: 'i' } }
+        { title: { $regex: escapedSearch, $options: 'i' } },
+        { employeeName: { $regex: escapedSearch, $options: 'i' } },
+        { technology: { $regex: escapedSearch, $options: 'i' } },
+        { provider: { $regex: escapedSearch, $options: 'i' } },
+        { certificateNumber: { $regex: escapedSearch, $options: 'i' } }
       ];
     }
 
@@ -623,7 +627,9 @@ export const searchCertifications = async (req: Request, res: Response): Promise
       return;
     }
 
-    const regex = new RegExp(q, 'i');
+    // Se escapan caracteres especiales de expresiones regulares para evitar inyección y caídas del backend
+    const escapedQ = q.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+    const regex = new RegExp(escapedQ, 'i');
     const certifications = await Certification.find({
       $or: [
         { title: regex },
