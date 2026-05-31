@@ -26,11 +26,16 @@ jobs:
 
       - name: Sanitizar puertos y sockets del host
         run: |
-          echo "Liberando puertos 80 y 27017 en el host de manera automatizada..."
-          # Intentar detener de forma no interactiva procesos en los puertos si el runner tiene privilegios passwordless configurados
-          sudo -n kill -9 $(sudo -n lsof -t -i:80) 2>/dev/null || true
-          sudo -n kill -9 $(sudo -n lsof -t -i:27017) 2>/dev/null || true
-          # Detener y eliminar contenedores huérfanos/previos del stack para liberar los sockets del host
+          echo "Deteniendo el stack actual antes de iniciar el build..."
+          cd $APP_DIR
+          # Detener de forma ordenada el stack actual en producción para liberar todos los sockets
+          docker compose down 2>/dev/null || true
+          
+          echo "Liberando puertos 80 y 27017 en el host..."
+          # Remover de forma forzada cualquier contenedor Docker huérfano que esté ocupando el puerto 80 o 27017 en el host
+          docker rm -f $(docker ps -q --filter "publish=80") 2>/dev/null || true
+          docker rm -f $(docker ps -q --filter "publish=27017") 2>/dev/null || true
+          # Detener y eliminar contenedores específicos por nombre para evitar colisiones
           docker rm -f certvault-proxy certvault-backend certvault-frontend certvault-mongo 2>/dev/null || true
           # Limpiar redes huérfanas para prevenir conflictos de asignación de IPs
           docker network prune -f 2>/dev/null || true
@@ -68,12 +73,7 @@ jobs:
       - name: Deploy stack
         run: |
           cd $APP_DIR
-          # Parada y remoción ordenada de contenedores anteriores para garantizar la liberación física de puertos y sockets en el host
-          IMAGE_TAG=$IMAGE_TAG docker compose \
-            -f docker-compose.yml \
-            -f docker-compose.prod.yml \
-            down
-          # Inicialización limpia de la nueva versión del stack
+          # Inicialización de la nueva versión del stack. Los contenedores anteriores ya fueron detenidos y removidos en el paso de sanitización inicial.
           IMAGE_TAG=$IMAGE_TAG docker compose \
             -f docker-compose.yml \
             -f docker-compose.prod.yml \

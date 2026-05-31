@@ -53,9 +53,8 @@ services:
     image: nginx:1.27-alpine
     container_name: certvault-proxy
     restart: unless-stopped
-    # Exposición pública de los puertos estándar en producción (HTTP 80 y HTTPS 443)
+    # Se expone únicamente el puerto seguro HTTPS (443) para el proxy inverso, eliminando el mapeo de puerto 80 para evitar colisiones.
     ports:
-      - "80:80"
       - "${FRONTEND_PORT}:443"
     # Montaje de la configuración personalizada de Nginx y del directorio de certificados SSL
     volumes:
