@@ -11,6 +11,8 @@ El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1
   - Ajuste de `interval: 20s` y `timeout: 10s` para optimizar el rendimiento, disminuir la frecuencia de ejecución de `mongosh` y mitigar los logs repetitivos de accesos no autenticados.
 - **Permisos de Lectura y Descarga de Certificaciones (certificationsController.ts):**
   - Se habilitó la lectura y descarga de archivos de certificados a todos los usuarios autenticados del sistema de manera global, eliminando las restricciones departamentales previas en el acceso de solo lectura.
+- **Estrategia de Despliegue en CI/CD (deploy.yml):**
+  - Se incorporó un paso de parada y remoción limpia (`docker compose down`) previo al levantamiento del nuevo stack en caliente. Esto asegura la liberación absoluta de todos los sockets del host (evitando estados `TIME_WAIT` o bloqueos de `docker-proxy`) y resuelve de forma permanente el conflicto de puertos ocupados (`address already in use`) durante la recreación de contenedores públicos (como MongoDB y Nginx).
 
 ### Corregido
 - **Mecanismo de Reintentos de Conexión en Backend (database.ts):**
