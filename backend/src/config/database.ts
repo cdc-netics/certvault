@@ -11,38 +11,55 @@ export class DatabaseConnection {
     DatabaseConnection.instance = this;
   }
 
-  public async connect(): Promise<void> {
+  /**
+   * Establece la conexión con MongoDB con un mecanismo de reintentos automático.
+   * Esto previene que la aplicación backend aborte de forma inmediata si el motor
+   * de base de datos tarda en iniciar o responder al arrancar el contenedor.
+   * 
+   * @param retries Número máximo de intentos de conexión permitidos.
+   * @param delay Tiempo de espera en milisegundos entre cada intento.
+   */
+  public async connect(retries = 5, delay = 5000): Promise<void> {
     if (this.isConnected) {
       console.log('📄 Ya está conectado a MongoDB');
       return;
     }
 
-    try {
-      const mongoURI = process.env.MONGODB_URI;
-      if (!mongoURI) {
-        throw new Error('MONGODB_URI no esta definido en el entorno');
-      }
-      
-      // Configuración de mongoose
-      mongoose.set('strictQuery', false);
-      
-      // Opciones de conexión
-      const options = {
-        serverSelectionTimeoutMS: 5000, // Timeout después de 5s en lugar de 30s por defecto
-        socketTimeoutMS: 45000 // Cerrar socket después de 45s de inactividad
-      };
+    const mongoURI = process.env.MONGODB_URI;
+    if (!mongoURI) {
+      throw new Error('MONGODB_URI no esta definido en el entorno');
+    }
+    
+    // Configuración estricta de consultas deshabilitada para mayor flexibilidad en los esquemas
+    mongoose.set('strictQuery', false);
+    
+    const options = {
+      serverSelectionTimeoutMS: 5000, // Tiempo límite de selección del servidor
+      socketTimeoutMS: 45000 // Desconexión de socket inactivo tras 45s
+    };
 
-      // Conectar a MongoDB
-      await mongoose.connect(mongoURI, options);
-      
-      this.isConnected = true;
-      console.log('🟢 Conectado exitosamente a MongoDB');
-      console.log(`📊 Base de datos: ${mongoose.connection.db?.databaseName || 'unknown'}`);
-      console.log(`🔗 Host: ${mongoose.connection.host}:${mongoose.connection.port}`);
-      
-    } catch (error) {
-      console.error('🔴 Error conectando a MongoDB:', error);
-      throw error;
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      try {
+        console.log(`🔌 Intentando conectar a MongoDB (Intento ${attempt}/${retries})...`);
+        await mongoose.connect(mongoURI, options);
+        
+        this.isConnected = true;
+        console.log('🟢 Conectado exitosamente a MongoDB');
+        console.log(`📊 Base de datos: ${mongoose.connection.db?.databaseName || 'unknown'}`);
+        console.log(`🔗 Host: ${mongoose.connection.host}:${mongoose.connection.port}`);
+        return;
+        
+      } catch (error) {
+        console.error(`🔴 Intento ${attempt} fallido al conectar a MongoDB:`, error);
+        
+        if (attempt === retries) {
+          console.error('🚨 Se han agotado todos los intentos de conexión a la base de datos.');
+          throw error;
+        }
+        
+        console.log(`⏳ Esperando ${delay / 1000} segundos antes de realizar el siguiente intento...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
     }
   }
 

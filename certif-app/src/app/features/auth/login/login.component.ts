@@ -118,7 +118,7 @@ import { AuthService } from '../../../core/services/auth.service';
                   </div>
 
                   <div class="small-info text-center mt-3">
-                    <p class="text-muted mb-0">Versión 1.8-beta</p>
+                    <p class="text-muted mb-0">Versión {{ appVersion }}</p>
                     <p class="mb-0 mt-2">
                       <small class="text-muted">¿Aún no tienes cuenta? <a routerLink="/register" class="text-primary text-decoration-none">Regístrate</a></small>
                     </p>
@@ -160,6 +160,9 @@ import { AuthService } from '../../../core/services/auth.service';
   `]
 })
 export class LoginComponent implements OnInit {
+  // Versión actual del aplicativo desplegado en producción
+  appVersion = '2.2.1-beta';
+
   loginForm: FormGroup;
   isLoading = false;
   errorMessage = '';

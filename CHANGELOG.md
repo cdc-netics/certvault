@@ -3,6 +3,23 @@
 Todos los cambios notables en este proyecto serán documentados en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y este proyecto se encuentra actualmente en fase de **versiones Beta**.
 
+## [2.2.1-beta] - 2026-05-31 16:30
+
+### Modificado
+- **Robustecimiento del Healthcheck de MongoDB (docker-compose.yml):**
+  - Incorporación de `start_period: 120s` para otorgar un margen de tiempo extendido a 2 minutos en inicios tras apagados no limpios, garantizando que WiredTiger complete la recuperación de datos sin marcar el contenedor como `unhealthy` incluso bajo condiciones críticas de disco.
+  - Ajuste de `interval: 20s` y `timeout: 10s` para optimizar el rendimiento, disminuir la frecuencia de ejecución de `mongosh` y mitigar los logs repetitivos de accesos no autenticados.
+- **Permisos de Lectura y Descarga de Certificaciones (certificationsController.ts):**
+  - Se habilitó la lectura y descarga de archivos de certificados a todos los usuarios autenticados del sistema de manera global, eliminando las restricciones departamentales previas en el acceso de solo lectura.
+
+### Corregido
+- **Mecanismo de Reintentos de Conexión en Backend (database.ts):**
+  - Implementación de un ciclo de reintentos automático de conexión a nivel de Mongoose. El backend ahora realiza hasta 5 intentos con intervalos de 5 segundos en lugar de ejecutar un cierre inmediato del proceso (`process.exit(1)`) ante demoras iniciales de MongoDB.
+- **Privilegios de Actualización de Certificaciones (certificationsController.ts):**
+  - Se independizó y robusteció la validación de escritura al modificar una certificación, garantizando que solo el propietario original, administradores o líderes del departamento correspondiente puedan actualizar los registros, previniendo alteraciones no autorizadas.
+- **Visualización de Versión en Pantalla de Login (login.component.ts):**
+  - Se eliminó el texto de versión estático y desactualizado en el login del frontend, reemplazándolo por una variable de componente reactiva (`appVersion`) vinculada dinámicamente con la versión actual de la entrega (`2.2.1-beta`).
+
 ## [2.2.0-beta] - 2026-05-29 03:40
 
 ### Añadido

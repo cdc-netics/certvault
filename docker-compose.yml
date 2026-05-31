@@ -8,10 +8,12 @@ services:
     volumes:
       - mongo_data:/data/db
     healthcheck:
+      # Comprobación de salud mediante ping interno. Se utiliza mongosh para validar que el motor responda.
       test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand({ ping: 1 }).ok"]
-      interval: 10s
-      timeout: 5s
+      interval: 20s
+      timeout: 10s
       retries: 5
+      start_period: 120s # Ventana de tiempo inicial extendida a 2 minutos para permitir tareas de recuperación de WiredTiger en hardware con disco saturado tras cortes de energía
 
   backend:
     build:
