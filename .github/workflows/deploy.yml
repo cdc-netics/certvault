@@ -18,22 +18,21 @@ jobs:
       REGISTRY: localhost:5000
       APP_DIR: /opt/certvault
       IMAGE_TAG: ${{ github.sha }}
-      # Forzar el uso de Node 24 en las acciones de JavaScript del runner para evitar avisos de deprecación de Node 20 (EOL)
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
     steps:
       - name: Checkout código
-        uses: actions/checkout@v4
+        # Se actualiza a v6 para ejecutar de manera nativa sobre Node 24 y evitar advertencias de deprecación (EOL de Node 20)
+        uses: actions/checkout@v6
 
       - name: Sanitizar puertos y sockets del host
         run: |
           echo "Liberando puertos 80 y 27017 en el host de manera automatizada..."
-          # Detener de forma forzada cualquier proceso (servicios nativos o huérfanos) que esté escuchando en los puertos del stack
-          sudo kill -9 $(sudo lsof -t -i:80) 2>/dev/null || true
-          sudo kill -9 $(sudo lsof -t -i:27017) 2>/dev/null || true
-          # Eliminar de manera inmediata contenedores del stack previo para evitar colisiones de puertos al recrear
+          # Intentar detener de forma no interactiva procesos en los puertos si el runner tiene privilegios passwordless configurados
+          sudo -n kill -9 $(sudo -n lsof -t -i:80) 2>/dev/null || true
+          sudo -n kill -9 $(sudo -n lsof -t -i:27017) 2>/dev/null || true
+          # Detener y eliminar contenedores huérfanos/previos del stack para liberar los sockets del host
           docker rm -f certvault-proxy certvault-backend certvault-frontend certvault-mongo 2>/dev/null || true
-          # Limpiar redes de Docker huérfanas
+          # Limpiar redes huérfanas para prevenir conflictos de asignación de IPs
           docker network prune -f 2>/dev/null || true
 
       - name: Build imagen backend

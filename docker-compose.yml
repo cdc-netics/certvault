@@ -3,9 +3,10 @@ services:
     image: ${MONGO_IMAGE}
     container_name: ${MONGO_CONTAINER_NAME}
     restart: unless-stopped
-    # Exposición pública del puerto mapeado al host anfitrión según especificación del entorno
-    ports:
-      - "${MONGO_PORT}:27017"
+    # Se aísla el contenedor de base de datos exponiendo el puerto únicamente a la red interna de Docker.
+    # Esto evita colisiones si hay servicios de MongoDB corriendo nativamente en el host y mitiga la exposición pública de la base de datos (ISS-002).
+    expose:
+      - "27017"
     volumes:
       - mongo_data:/data/db
     healthcheck:
