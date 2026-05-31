@@ -10,27 +10,9 @@ import { AuthRequest } from '../middleware/auth';
 import { User, UserRole } from '../models/User';
 
 const canAccessCertification = (certification: ICertification, user: any): boolean => {
-  if (!user) return false;
-  if (user.role === UserRole.ADMIN) return true;
-
-  const isOwner =
-    certification.employeeId?.toString() === user._id?.toString() ||
-    certification.createdBy?.toString() === user._id?.toString();
-
-  if (isOwner) return true;
-
-  // Un lider puede acceder a las certificaciones de su departamento o departamentos gestionados
-  const isLeaderWithAccess =
-    user.role === UserRole.LIDER &&
-    (certification.department === user.department ||
-      (user.managedDepartments || []).includes(certification.department as any));
-
-  // Un usuario con rol de Solo Lectura (reader) puede acceder a leer las certificaciones de su mismo departamento
-  const isReaderOfSameDepartment =
-    user.role === UserRole.READER &&
-    certification.department === user.department;
-
-  return isLeaderWithAccess || isReaderOfSameDepartment;
+  // Se permite el acceso de lectura y descarga de archivos a cualquier usuario autenticado en la plataforma.
+  // Las restricciones de modificación y eliminación se evalúan de forma independiente en sus respectivos endpoints.
+  return !!user;
 };
 
 const normalizeTags = (tags?: unknown): string[] => {
@@ -450,20 +432,27 @@ export const updateCertification = async (req: AuthRequest, res: Response): Prom
       certification.employeeId?.toString() === req.user?._id?.toString() ||
       certification.createdBy?.toString() === req.user?._id?.toString();
 
-    // Se restringe a los usuarios Solo Lectura (reader) de actualizar certificaciones ajenas de su departamento
+    const isAdmin = req.user?.role === UserRole.ADMIN;
+    const isLeaderOfSameDept =
+      req.user?.role === UserRole.LIDER &&
+      (certification.department === req.user.department ||
+        (req.user.managedDepartments || []).includes(certification.department as any));
+
+    // Se restringe a los usuarios Solo Lectura (reader) de actualizar certificaciones ajenas
     const isReader = req.user?.role === UserRole.READER;
     if (isReader && !isOwner) {
       res.status(403).json({
         success: false,
-        error: 'Un usuario con rol de solo lectura no tiene permisos para actualizar certificaciones de otros colaboradores'
+        error: 'Un usuario con rol de solo lectura no tiene permisos para actualizar certificaciones ajenas'
       });
       return;
     }
 
-    if (!canAccessCertification(certification, req.user)) {
+    // Validar privilegios de edición: solo el dueño, administradores o líderes del departamento pueden actualizar
+    if (!isOwner && !isAdmin && !isLeaderOfSameDept) {
       res.status(403).json({
         success: false,
-        error: 'Solo el propietario o el líder de su departamento pueden actualizar esta certificación'
+        error: 'No tienes privilegios para actualizar esta certificación'
       });
       return;
     }
