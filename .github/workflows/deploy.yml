@@ -68,7 +68,8 @@ jobs:
 
       - name: Escribir .env desde GitHub Secrets
         run: |
-          echo "${{ secrets.CERTVAULT_ENV }}" > $APP_DIR/.env
+          # Se usan comillas simples para evitar que bash expanda variables de entorno como $APP_HOST al escribir el archivo
+          echo '${{ secrets.CERTVAULT_ENV }}' > $APP_DIR/.env
 
       - name: Deploy stack
         run: |
