@@ -220,7 +220,7 @@
                   class="form-select"
                   id="role"
                   formControlName="role"
-                  [disabled]="!canEditRoles || targetUserIsAdmin"
+                  [disabled]="!canEditRoles || (targetUserIsAdmin && !canEditAdminFields)"
                   (change)="onRoleChange()"
                   [class.is-invalid]="role?.invalid && role?.touched">
                   <option *ngFor="let roleOption of availableRoles"

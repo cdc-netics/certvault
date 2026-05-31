@@ -13,7 +13,7 @@ El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1
 - **Permisos de Lectura y Descarga de Certificaciones (certificationsController.ts):**
   - Se habilitó la lectura y descarga de archivos de certificados a todos los usuarios autenticados del sistema de manera global, eliminando las restricciones departamentales previas en el acceso de solo lectura.
 - **Estrategia de Despliegue y Rollback en CI/CD (deploy.yml):**
-  - Se mejoró el paso de sanitización en el host para identificar y remover automáticamente cualquier contenedor Docker que esté ocupando los puertos `80` o `27017` (`docker rm -f $(docker ps -q --filter "publish=...")`), prescindiendo por completo de comandos `sudo` interactivos o restrictivos en el runner.
+  - Se mejoró el paso de sanitización en el host para identificar y remover automáticamente cualquier contenedor Docker que esté ocupando los puertos `80`, `443` o `27017` (`docker rm -f $(docker ps -q --filter "publish=...")`), prescindiendo por completo de comandos `sudo` interactivos o restrictivos en el runner.
   - Se estructuró el flujo para detener y remover de forma limpia el stack completo en producción (`docker compose down`) al inicio del pipeline (paso de sanitización), liberando todos los puertos y sockets físicos antes de realizar compilaciones y construcciones de nuevas imágenes.
   - Se actualizó la acción de checkout a `actions/checkout@v6` para ejecutarse de manera nativa sobre Node 24, eliminando por completo las advertencias de deprecación de Node 20 sin necesidad de usar variables de forzado.
   - Se corrigió la escritura de `.env` usando comillas simples (`echo '...'`) en el workflow para evitar que Bash expanda y vacíe las referencias a variables como `$APP_HOST` contenidas en los secretos.
@@ -31,6 +31,10 @@ El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1
   - Se adaptó el paso de comprobación de salud del backend para ejecutarse internamente dentro del contenedor (`docker exec` con Node.js) en lugar de una llamada directa con `curl` hacia el localhost. Esto previene que el despliegue falle debido a que el puerto de desarrollo del backend (`3000`) no está expuesto públicamente en el host de producción.
 - **Sanitización de Expresiones Regulares en Búsquedas (certificationsController.ts):**
   - Se implementó el escape de caracteres especiales de expresiones regulares en las cadenas de entrada del usuario en las funciones de búsqueda y autocompletado del backend, mitigando vulnerabilidades de inyección NoSQL y ataques de denegación de servicio (ReDoS).
+
+### Eliminado
+- **Procesos nativos en el servidor host:**
+  - Desinstalación definitiva de servicios nativos (`nginx` y `mongodb-org`) que colisionaban con el entorno Docker de CertVault (puertos 80, 443 y 27017). Se centralizó toda la base de datos y proxy en contenedores aislados.
 
 ## [2.2.0-beta] - 2026-05-29 03:40
 
