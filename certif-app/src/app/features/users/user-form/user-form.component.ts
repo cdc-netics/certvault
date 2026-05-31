@@ -26,11 +26,14 @@ export class UserFormComponent implements OnInit, OnDestroy {
   availableRoles: RoleOption[] = [];
   availableDepartments: DepartmentOption[] = [];
   targetUserIsAdmin = false;
+  // Bandera para indicar si el usuario actual puede editar campos clave de un administrador
+  canEditAdminFields = false;
   canEditDepartmentField = false;
   canEditPositionField = false;
   canEditRoles = false;
   canSetLeader = false;
   canAdminChangePassword = false;
+
 
   private readonly destroy$ = new Subject<void>();
   private readonly passwordComplexityRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$/;
@@ -102,6 +105,8 @@ export class UserFormComponent implements OnInit, OnDestroy {
       : true;
 
     this.targetUserIsAdmin = !!targetIsAdmin;
+    // Un administrador del sistema puede gestionar los campos de otros administradores
+    this.canEditAdminFields = isAdminCurrent;
     const leaderCanManageTarget = isLeaderCurrent && sameDepartment && !targetIsAdmin;
 
     this.canEditRoles = isAdminCurrent || leaderCanManageTarget;
@@ -111,9 +116,12 @@ export class UserFormComponent implements OnInit, OnDestroy {
 
     this.updateControlState('department', this.canEditDepartmentField);
     this.updateControlState('position', this.canEditPositionField);
-    this.updateControlState('role', this.canEditRoles && !this.targetUserIsAdmin);
-    this.updateControlState('departmentLeader', this.canSetLeader && !this.targetUserIsAdmin);
-    this.updateControlState('managedDepartments', this.canSetLeader && !this.targetUserIsAdmin);
+
+    // Solo se deshabilitan las opciones si el destino es admin y el usuario conectado NO es admin del sistema
+    const disableRoleField = this.targetUserIsAdmin && !this.canEditAdminFields;
+    this.updateControlState('role', this.canEditRoles && !disableRoleField);
+    this.updateControlState('departmentLeader', this.canSetLeader && !disableRoleField);
+    this.updateControlState('managedDepartments', this.canSetLeader && !disableRoleField);
   }
 
   private updateControlState(controlName: string, enabled: boolean): void {
@@ -357,7 +365,8 @@ export class UserFormComponent implements OnInit, OnDestroy {
   }
 
   canSelectRole(role: UserRole): boolean {
-    if (this.targetUserIsAdmin) return false;
+    // Si el usuario destino es administrador, solo un administrador del sistema puede asignarle o cambiarle el rol
+    if (this.targetUserIsAdmin && !this.authService.isAdmin()) return false;
     if (!this.canEditRoles) return false;
     if (this.currentUser?.role === UserRole.LIDER) {
       return ![UserRole.ADMIN, UserRole.LIDER].includes(role);

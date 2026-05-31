@@ -31,9 +31,10 @@ jobs:
           # Detener de forma ordenada el stack actual en producción para liberar todos los sockets
           docker compose down 2>/dev/null || true
           
-          echo "Liberando puertos 80 y 27017 en el host..."
-          # Remover de forma forzada cualquier contenedor Docker huérfano que esté ocupando el puerto 80 o 27017 en el host
+          echo "Liberando puertos 80, 443 y 27017 en el host..."
+          # Remover de forma forzada cualquier contenedor Docker huérfano que esté ocupando los puertos del stack (80, 443 o 27017) en el host
           docker rm -f $(docker ps -q --filter "publish=80") 2>/dev/null || true
+          docker rm -f $(docker ps -q --filter "publish=443") 2>/dev/null || true
           docker rm -f $(docker ps -q --filter "publish=27017") 2>/dev/null || true
           # Detener y eliminar contenedores específicos por nombre para evitar colisiones
           docker rm -f certvault-proxy certvault-backend certvault-frontend certvault-mongo 2>/dev/null || true
