@@ -15,7 +15,8 @@ export enum CertificationLevel {
   BEGINNER = 'beginner',
   INTERMEDIATE = 'intermediate',
   ADVANCED = 'advanced',
-  EXPERT = 'expert'
+  EXPERT = 'expert',
+  ACADEMIC = 'academic'
 }
 
 export enum CertificationStatus {

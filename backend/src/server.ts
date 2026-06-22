@@ -24,7 +24,8 @@ import settingsRoutes from './routes/settings';
 // Importar middleware
 import { errorHandler } from './middleware/errorHandler';
 import { notFound } from './middleware/notFound';
-import { auditRequest } from './services/auditService';
+import { auditRequest, recordAuditLog } from './services/auditService';
+import { AuditAction } from './models/AuditLog';
 
 // Importar servicio de cron para expiraciones y auditoría
 import { startCronServices } from './services/cronService';
@@ -293,12 +294,32 @@ const createDefaultAdminAndSeed = async (): Promise<void> => {
 // Manejo de cierre graceful
 process.on('SIGTERM', async () => {
   console.log('Recibida senal SIGTERM, cerrando servidor...');
+  try {
+    // Registrar la detención controlada del sistema en la base de datos de auditoría
+    await recordAuditLog({
+      action: AuditAction.SYSTEM_STOP,
+      resource: 'system',
+      message: 'El servidor backend de CertVault se está deteniendo de forma controlada (SIGTERM / Detención de Docker).'
+    });
+  } catch (err) {
+    console.error('Error al registrar log de apagado:', err);
+  }
   await database.disconnect();
   process.exit(0);
 });
 
 process.on('SIGINT', async () => {
   console.log('Recibida senal SIGINT, cerrando servidor...');
+  try {
+    // Registrar la detención controlada del sistema en la base de datos de auditoría
+    await recordAuditLog({
+      action: AuditAction.SYSTEM_STOP,
+      resource: 'system',
+      message: 'El servidor backend de CertVault se está deteniendo de forma controlada (SIGINT / Interrupción manual).'
+    });
+  } catch (err) {
+    console.error('Error al registrar log de apagado:', err);
+  }
   await database.disconnect();
   process.exit(0);
 });
@@ -306,6 +327,17 @@ process.on('SIGINT', async () => {
 // Iniciar servidor
 const startServer = async (): Promise<void> => {
   await connectDB();
+  
+  try {
+    // Registrar el arranque exitoso del sistema en la base de datos de auditoría
+    await recordAuditLog({
+      action: AuditAction.SYSTEM_START,
+      resource: 'system',
+      message: 'El servidor backend de CertVault se ha iniciado correctamente y está listo para recibir conexiones.'
+    });
+  } catch (err) {
+    console.error('Error al registrar log de inicio:', err);
+  }
   
   // Inicialización de los servicios cron para control periódico de expiración de claves y certificados
   startCronServices();

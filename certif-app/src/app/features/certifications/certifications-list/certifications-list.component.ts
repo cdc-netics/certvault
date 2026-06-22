@@ -18,7 +18,7 @@ import { Subject, Subscription } from 'rxjs';
     <div class="container-fluid">
       <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
         <h1 class="h2">
-          Certificaciones 
+          Certificaciones
           <span class="badge bg-primary ms-2" *ngIf="totalCertifications > 0">{{ totalCertifications }}</span>
         </h1>
         <div class="btn-toolbar mb-2 mb-md-0">
@@ -46,9 +46,9 @@ import { Subject, Subscription } from 'rxjs';
           <h6 class="card-title mb-0">
             <i class="fas fa-filter me-2"></i>
             Filtros de Busqueda
-            <button 
-              class="btn btn-sm btn-link float-end" 
-              type="button" 
+            <button
+              class="btn btn-sm btn-link float-end"
+              type="button"
               (click)="toggleFilters()"
             >
               <i class="fas" [class.fa-chevron-up]="showFilters" [class.fa-chevron-down]="!showFilters"></i>
@@ -97,6 +97,7 @@ import { Subject, Subscription } from 'rxjs';
                   <option value="intermediate">Intermedio</option>
                   <option value="advanced">Avanzado</option>
                   <option value="expert">Experto</option>
+                  <option value="academic">Académico</option>
                 </select>
               </div>
             </div>
@@ -171,7 +172,7 @@ import { Subject, Subscription } from 'rxjs';
                 <div class="card-body">
                   <div class="d-flex justify-content-between align-items-start mb-2">
                     <h5 class="card-title mb-0">{{ cert.title }}</h5>
-                    <span class="badge bg-secondary text-uppercase">{{ cert.level }}</span>
+                    <span class="badge bg-secondary text-uppercase">{{ getLevelLabel(cert.level) }}</span>
                   </div>
                   <p class="text-muted mb-2">
                     <i class="fas fa-building me-1"></i>{{ cert.provider }}
@@ -205,7 +206,7 @@ import { Subject, Subscription } from 'rxjs';
               <div class="card-body">
                 <div class="d-flex justify-content-between align-items-start mb-2">
                   <h5 class="card-title mb-0">{{ cert.title }}</h5>
-                  <span class="badge bg-primary text-uppercase">{{ cert.level }}</span>
+                  <span class="badge bg-primary text-uppercase">{{ getLevelLabel(cert.level) }}</span>
                 </div>
                 <p class="text-muted mb-2">
                   <i class="fas fa-building me-1"></i>{{ cert.provider }}
@@ -239,7 +240,7 @@ import { Subject, Subscription } from 'rxjs';
                     [routerLink]="['/certifications/edit', cert._id]">
                     <i class="fas fa-pen me-1"></i> Editar
                   </a>
-                  <button 
+                  <button
                     class="btn btn-sm btn-outline-danger"
                     type="button"
                     *ngIf="canDeleteCertification(cert)"
@@ -276,9 +277,9 @@ import { Subject, Subscription } from 'rxjs';
         <p class="text-muted">
           Crea una nueva certificacion o ajusta los filtros para ver resultados.
         </p>
-        <button 
-          type="button" 
-          class="btn btn-primary" 
+        <button
+          type="button"
+          class="btn btn-primary"
           routerLink="/certifications/new"
         >
           <i class="fas fa-plus me-1"></i>
@@ -302,7 +303,7 @@ import { Subject, Subscription } from 'rxjs';
                 <div class="col-md-6">
                   <p class="mb-1"><strong>Proveedor:</strong> {{ selectedCertification.provider }}</p>
                   <p class="mb-1"><strong>Tipo:</strong> {{ selectedCertification.type }}</p>
-                  <p class="mb-1"><strong>Nivel:</strong> {{ selectedCertification.level }}</p>
+                  <p class="mb-1"><strong>Nivel:</strong> {{ getLevelLabel(selectedCertification.level) }}</p>
                   <p class="mb-1"><strong>Departamento:</strong> {{ selectedCertification.department }}</p>
                   <p class="mb-1"><strong>Colaborador:</strong> {{ selectedCertification.employeeName }}</p>
                 </div>
@@ -347,31 +348,31 @@ import { Subject, Subscription } from 'rxjs';
       transition: transform 0.2s, box-shadow 0.2s;
       border: 1px solid #e9ecef;
     }
-    
+
     .certification-card:hover {
       transform: translateY(-2px);
       box-shadow: 0 4px 8px rgba(0,0,0,0.1);
     }
-    
+
     .table th {
       border-top: none;
       font-weight: 600;
       font-size: 0.875rem;
     }
-    
+
     .btn-group-sm .btn {
       padding: 0.25rem 0.5rem;
     }
-    
+
     .page-link {
       color: var(--primary-color);
     }
-    
+
     .page-item.active .page-link {
       background-color: var(--primary-color);
       border-color: var(--primary-color);
     }
-    
+
     .card-header {
       background-color: #f8f9fa;
       border-bottom: 1px solid #e9ecef;
@@ -390,19 +391,19 @@ export class CertificationsListComponent implements OnInit, OnDestroy {
   errorMessage = '';
   showFilters = true;
   viewMode: 'grid' | 'table' = 'grid';
-  
+
   currentPage = 1;
   itemsPerPage = 12;
   totalPages = 1;
   totalCertifications = 0;
-  
+
   uniqueProviders: string[] = [];
   uniqueDepartments: string[] = [];
-  
+
   stats: any = null;
   selectedCertification: Certification | null = null;
   showDetailsModal = false;
-  
+
   private filtersSubscription?: Subscription;
   private readonly destroy$ = new Subject<void>();
 
@@ -460,7 +461,7 @@ export class CertificationsListComponent implements OnInit, OnDestroy {
 
   getActiveFilterMessage(): string {
     const currentFilters = this.certificationService.getCurrentFilters();
-    
+
     if (currentFilters.status) {
       switch (currentFilters.status) {
         case CertificationStatus.ACTIVE:
@@ -473,7 +474,7 @@ export class CertificationsListComponent implements OnInit, OnDestroy {
           return 'Filtro personalizado aplicado';
       }
     }
-    
+
     return 'Filtro personalizado aplicado';
   }
 
@@ -497,6 +498,23 @@ export class CertificationsListComponent implements OnInit, OnDestroy {
 
   clearFilters(): void {
     this.clearAllFilters();
+  }
+
+  getLevelLabel(level: string): string {
+    switch (level) {
+      case 'beginner':
+        return 'Principiante';
+      case 'intermediate':
+        return 'Intermedio';
+      case 'advanced':
+        return 'Avanzado';
+      case 'expert':
+        return 'Experto';
+      case 'academic':
+        return 'Académico';
+      default:
+        return level;
+    }
   }
 
   toggleFilters(): void {
@@ -675,7 +693,7 @@ export class CertificationsListComponent implements OnInit, OnDestroy {
   canDeleteCertification(cert: Certification): boolean {
     const user = this.authService.getCurrentUser();
     if (!user) return false;
-    
+
     // Se evalúan los privilegios de eliminación: propietario, administrador, o líder del área
     const isOwner = cert.employeeId === user._id || cert.createdBy === user._id;
     const sameDepartment =

@@ -25,11 +25,11 @@ import { BackButtonComponent } from '../../../shared/components/back-button/back
           <div class="card">
             <div class="card-body">
               <form [formGroup]="certificationForm" (ngSubmit)="onSubmit()" enctype="multipart/form-data">
-                
+
                 <!-- Informacion Basica -->
                 <div class="mb-4">
                   <h5 class="card-title mb-3">Informacion Basica</h5>
-                  
+
                   <div class="row">
                     <!-- Certificacion -->
                     <div class="col-md-6 mb-3">
@@ -89,6 +89,7 @@ import { BackButtonComponent } from '../../../shared/components/back-button/back
                         <option value="intermediate">Intermedio</option>
                         <option value="advanced">Avanzado</option>
                         <option value="expert">Experto</option>
+                        <option value="academic">Académico</option>
                       </select>
                       <div class="invalid-feedback" *ngIf="certificationForm.get('level')?.invalid && certificationForm.get('level')?.touched">
                         <small *ngIf="certificationForm.get('level')?.errors?.['required']">El nivel es requerido</small>
@@ -149,7 +150,7 @@ import { BackButtonComponent } from '../../../shared/components/back-button/back
                 <!-- Fechas -->
                 <div class="mb-4">
                   <h5 class="card-title mb-3">Fechas</h5>
-                  
+
                   <div class="row">
                     <!-- Fecha de Emision -->
                     <div class="col-md-6 mb-3">
@@ -185,7 +186,7 @@ import { BackButtonComponent } from '../../../shared/components/back-button/back
                 <!-- Informacion Adicional -->
                 <div class="mb-4">
                   <h5 class="card-title mb-3">Informacion Adicional</h5>
-                  
+
                   <div class="row">
                     <!-- Tags -->
                     <div class="col-md-6 mb-3">
@@ -307,12 +308,12 @@ import { BackButtonComponent } from '../../../shared/components/back-button/back
       border: none;
       box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
     }
-    
+
     .form-control:focus {
       border-color: var(--primary-color);
       box-shadow: 0 0 0 0.2rem rgba(37, 99, 235, 0.25);
     }
-    
+
     .card-title {
       color: var(--primary-color);
       border-bottom: 1px solid #e9ecef;
@@ -358,7 +359,7 @@ export class CertificationFormComponent implements OnInit {
 
   ngOnInit(): void {
     this.currentUser = this.authService.getCurrentUser();
-    
+
     // Verificar si es modo edicion
     this.route.params.subscribe(params => {
       if (params['id']) {
@@ -412,14 +413,14 @@ export class CertificationFormComponent implements OnInit {
         this.errorMessage = 'El archivo no puede superar los 5MB';
         return;
       }
-      
+
       // Validar tipo
       const allowedTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
       if (!allowedTypes.includes(file.type)) {
         this.errorMessage = 'Formato de archivo no valido. Use PDF, JPG o PNG';
         return;
       }
-      
+
       this.selectedFile = file;
       this.errorMessage = '';
     }
@@ -525,10 +526,10 @@ export class CertificationFormComponent implements OnInit {
       operation.subscribe({
         next: (response) => {
           if (response.success) {
-            this.successMessage = this.isEditMode 
+            this.successMessage = this.isEditMode
               ? 'Certificacion actualizada exitosamente'
               : 'Certificacion creada exitosamente';
-            
+
             // Si hay archivo, subirlo
             if (this.selectedFile && response.data?._id) {
               this.uploadFile(response.data._id);
