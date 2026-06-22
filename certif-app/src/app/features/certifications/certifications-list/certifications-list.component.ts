@@ -97,6 +97,7 @@ import { Subject, Subscription } from 'rxjs';
                   <option value="intermediate">Intermedio</option>
                   <option value="advanced">Avanzado</option>
                   <option value="expert">Experto</option>
+                  <option value="academic">Académico</option>
                 </select>
               </div>
             </div>
@@ -171,7 +172,7 @@ import { Subject, Subscription } from 'rxjs';
                 <div class="card-body">
                   <div class="d-flex justify-content-between align-items-start mb-2">
                     <h5 class="card-title mb-0">{{ cert.title }}</h5>
-                    <span class="badge bg-secondary text-uppercase">{{ cert.level }}</span>
+                    <span class="badge bg-secondary text-uppercase">{{ getLevelLabel(cert.level) }}</span>
                   </div>
                   <p class="text-muted mb-2">
                     <i class="fas fa-building me-1"></i>{{ cert.provider }}
@@ -205,7 +206,7 @@ import { Subject, Subscription } from 'rxjs';
               <div class="card-body">
                 <div class="d-flex justify-content-between align-items-start mb-2">
                   <h5 class="card-title mb-0">{{ cert.title }}</h5>
-                  <span class="badge bg-primary text-uppercase">{{ cert.level }}</span>
+                  <span class="badge bg-primary text-uppercase">{{ getLevelLabel(cert.level) }}</span>
                 </div>
                 <p class="text-muted mb-2">
                   <i class="fas fa-building me-1"></i>{{ cert.provider }}
@@ -302,7 +303,7 @@ import { Subject, Subscription } from 'rxjs';
                 <div class="col-md-6">
                   <p class="mb-1"><strong>Proveedor:</strong> {{ selectedCertification.provider }}</p>
                   <p class="mb-1"><strong>Tipo:</strong> {{ selectedCertification.type }}</p>
-                  <p class="mb-1"><strong>Nivel:</strong> {{ selectedCertification.level }}</p>
+                  <p class="mb-1"><strong>Nivel:</strong> {{ getLevelLabel(selectedCertification.level) }}</p>
                   <p class="mb-1"><strong>Departamento:</strong> {{ selectedCertification.department }}</p>
                   <p class="mb-1"><strong>Colaborador:</strong> {{ selectedCertification.employeeName }}</p>
                 </div>
@@ -497,6 +498,23 @@ export class CertificationsListComponent implements OnInit, OnDestroy {
 
   clearFilters(): void {
     this.clearAllFilters();
+  }
+
+  getLevelLabel(level: string): string {
+    switch (level) {
+      case 'beginner':
+        return 'Principiante';
+      case 'intermediate':
+        return 'Intermedio';
+      case 'advanced':
+        return 'Avanzado';
+      case 'expert':
+        return 'Experto';
+      case 'academic':
+        return 'Académico';
+      default:
+        return level;
+    }
   }
 
   toggleFilters(): void {
