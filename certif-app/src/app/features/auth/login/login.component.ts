@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { Router, RouterModule } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
+import { MsalBrowserService } from '../../../core/services/msal-browser.service';
 
 @Component({
   selector: 'app-login',
@@ -167,14 +168,17 @@ export class LoginComponent implements OnInit {
   isLoading = false;
   errorMessage = '';
 
-  // Configuración de Active Directory
   adLoginEnabled = false;
   adProvider: 'ldap' | 'azure' = 'azure';
   useAdLdap = false;
 
+  private azureClientId: string | null = null;
+  private azureTenantId: string | null = null;
+
   constructor(
     private readonly fb: FormBuilder,
     private readonly authService: AuthService,
+    private readonly msalService: MsalBrowserService,
     private readonly router: Router
   ) {
     this.loginForm = this.fb.group({
@@ -184,12 +188,13 @@ export class LoginComponent implements OnInit {
   }
 
   ngOnInit(): void {
-    // Carga inicial de la configuración de AD/SSO para renderizar las opciones de login
     this.authService.getAdConfig().subscribe({
       next: (response) => {
         if (response.success && response.data) {
           this.adLoginEnabled = response.data.adLoginEnabled;
           this.adProvider = response.data.adProvider as 'ldap' | 'azure';
+          this.azureClientId = response.data.azureClientId;
+          this.azureTenantId = response.data.azureTenantId;
         }
       },
       error: (err) => {
@@ -203,55 +208,62 @@ export class LoginComponent implements OnInit {
   }
 
   loginWithAzure(): void {
-    // Simulación de redirección de inicio de sesión único con Microsoft Azure AD (Entra ID)
-    const mockEmail = prompt('Simulación de Microsoft SSO. Ingrese su correo corporativo para iniciar sesión:');
-    if (!mockEmail || !mockEmail.trim()) {
+    this.isLoading = true;
+    this.errorMessage = '';
+
+    if (this.azureClientId && this.azureTenantId) {
+      this.loginWithAzureMsal(this.azureClientId, this.azureTenantId);
+    } else {
+      this.loginWithAzureSimulation();
+    }
+  }
+
+  private loginWithAzureMsal(clientId: string, tenantId: string): void {
+    this.msalService.initialize({ clientId, tenantId })
+      .then(() => this.msalService.loginPopup())
+      .then((result) => {
+        return this.authService.adLogin({ idToken: result.idToken }).toPromise();
+      })
+      .then((response) => {
+        if (response?.success) {
+          this.router.navigate(['/dashboard']);
+        }
+      })
+      .catch((error) => {
+        if (error?.errorCode === 'user_cancelled') {
+          this.errorMessage = '';
+        } else {
+          this.errorMessage = error?.message || 'Error al autenticar con Microsoft. Intente nuevamente.';
+        }
+        this.isLoading = false;
+      });
+  }
+
+  private loginWithAzureSimulation(): void {
+    const mockEmail = prompt('Modo desarrollo — ingrese su correo corporativo:');
+    if (!mockEmail?.trim()) {
+      this.isLoading = false;
       return;
     }
 
     const emailTrimmed = mockEmail.trim().toLowerCase();
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(emailTrimmed)) {
-      alert('Formato de correo electrónico no válido.');
-      return;
-    }
-
-    this.isLoading = true;
-    this.errorMessage = '';
-
-    // En producción se enviaría el idToken real provisto por MSAL
-    const mockPayload = {
-      idToken: `mock-jwt-azure-sso-token-for-${emailTrimmed}`
-    };
-
-    // Simulamos la verificación del token en el backend
-    // Pasamos los claims necesarios encriptados o estructurados en la firma
     const tokenObj = {
-      tid: 'f81d4fae-7dec-11d0-a765-00a0c91e6bf6', // Mismo UUID simulado en el backend
       email: emailTrimmed,
-      name: emailTrimmed.split('@')[0].replace('.', ' '),
       given_name: emailTrimmed.split('@')[0],
       family_name: 'AD User',
       department: 'Ciberseguridad',
       jobTitle: 'Especialista'
     };
 
-    // Firmar simulación codificando en Base64
-    const simulatedToken = btoa(JSON.stringify(tokenObj));
-
-    this.authService.adLogin({ idToken: simulatedToken }).subscribe({
+    this.authService.adLogin({ idToken: btoa(JSON.stringify(tokenObj)) }).subscribe({
       next: (response) => {
-        if (response.success) {
-          this.router.navigate(['/dashboard']);
-        }
+        if (response.success) this.router.navigate(['/dashboard']);
       },
       error: (error) => {
-        this.errorMessage = error.message || 'Error en autenticación corporativa con Azure AD';
+        this.errorMessage = error.message || 'Error en autenticación corporativa';
         this.isLoading = false;
       },
-      complete: () => {
-        this.isLoading = false;
-      }
+      complete: () => { this.isLoading = false; }
     });
   }
 

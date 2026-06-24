@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { Response, Request } from 'express';
-import jwt from 'jsonwebtoken';
+import jwt, { JwtHeader } from 'jsonwebtoken';
+import jwksClient from 'jwks-rsa';
 import { User, UserRole } from '../models/User';
 import { AuthRequest } from '../middleware/auth';
 import { saveBase64Avatar } from '../utils/avatar';
@@ -936,6 +937,57 @@ export const acceptTerms = async (req: AuthRequest, res: Response): Promise<void
   }
 };
 
+export const getAdConfig = async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const settings = await SecuritySettings.findOne().sort({ updatedAt: -1 });
+    res.json({
+      success: true,
+      data: {
+        adLoginEnabled: settings?.adLoginEnabled ?? false,
+        adProvider: settings?.adProvider ?? 'azure',
+        azureClientId: settings?.azureClientId ?? null,
+        azureTenantId: settings?.azureTenantId ?? null,
+      }
+    });
+  } catch (error) {
+    console.error('Error obteniendo configuración AD:', error);
+    res.status(500).json({ success: false, error: 'Error al obtener la configuración de acceso corporativo.' });
+  }
+};
+
+const verifyAzureToken = (idToken: string, tenantId: string, clientId: string): Promise<any> => {
+  const client = jwksClient({
+    jwksUri: `https://login.microsoftonline.com/${tenantId}/discovery/v2.0/keys`,
+    cache: true,
+    rateLimit: true
+  });
+
+  return new Promise((resolve, reject) => {
+    const getKey = (header: JwtHeader, callback: (err: Error | null, key?: string) => void) => {
+      client.getSigningKey(header.kid!, (err, key) => {
+        if (err) return callback(err as Error);
+        callback(null, key!.getPublicKey());
+      });
+    };
+
+    jwt.verify(
+      idToken,
+      getKey as any,
+      {
+        audience: clientId,
+        issuer: [
+          `https://login.microsoftonline.com/${tenantId}/v2.0`,
+          `https://sts.windows.net/${tenantId}/`
+        ]
+      },
+      (err, decoded) => {
+        if (err) return reject(err);
+        resolve(decoded);
+      }
+    );
+  });
+};
+
 export const adLogin = async (req: Request, res: Response): Promise<void> => {
   try {
     const { email, password, idToken } = req.body;
@@ -959,16 +1011,32 @@ export const adLogin = async (req: Request, res: Response): Promise<void> => {
         return;
       }
 
-      // Decodificar el JWT emitido por Microsoft Entra ID
-      const decoded = jwt.decode(idToken) as any;
-      if (!decoded) {
-        res.status(400).json({ success: false, error: 'Token de Azure AD inválido.' });
-        return;
-      }
+      let decoded: any;
+      const hasAzureCredentials = settings.azureTenantId && settings.azureClientId;
 
-      // Validar que el token corresponda al Tenant ID de la organización
-      if (settings.azureTenantId && decoded.tid !== settings.azureTenantId) {
-        res.status(401).json({ success: false, error: 'El token de Azure AD no corresponde al Tenant configurado.' });
+      if (hasAzureCredentials) {
+        // Validación real: verificar firma con JWKS de Microsoft Entra ID
+        try {
+          decoded = await verifyAzureToken(idToken, settings.azureTenantId!, settings.azureClientId!);
+        } catch (verifyError: any) {
+          console.error('Azure token verification failed:', verifyError.message);
+          res.status(401).json({ success: false, error: 'Token de Azure AD inválido o expirado.' });
+          return;
+        }
+      } else if (process.env.NODE_ENV !== 'production') {
+        // Modo desarrollo: decodificar sin verificar firma (solo cuando no hay credenciales configuradas)
+        try {
+          decoded = JSON.parse(Buffer.from(idToken, 'base64').toString('utf-8'));
+        } catch {
+          decoded = jwt.decode(idToken) as any;
+        }
+        if (!decoded) {
+          res.status(400).json({ success: false, error: 'Token de Azure AD inválido.' });
+          return;
+        }
+        console.warn('⚠️  Azure SSO en modo simulación (dev). Configure azureClientId y azureTenantId para producción.');
+      } else {
+        res.status(503).json({ success: false, error: 'Azure AD no está configurado correctamente. Contacte al administrador.' });
         return;
       }
 
@@ -977,7 +1045,7 @@ export const adLogin = async (req: Request, res: Response): Promise<void> => {
       userLastName = decoded.family_name || '';
       userDepartment = decoded.department || 'Sin Departamento';
       userPosition = decoded.jobTitle || 'Colaborador';
-      
+
       if (!userEmail) {
         res.status(400).json({ success: false, error: 'No se pudo extraer el correo electrónico del token de Azure AD.' });
         return;
@@ -1005,7 +1073,7 @@ export const adLogin = async (req: Request, res: Response): Promise<void> => {
 
             const searchOpts = {
               filter: `(|(mail=${normalizedEmail})(userPrincipalName=${normalizedEmail}))`,
-              scope: 'sub'
+              scope: 'sub' as const
             };
 
             ldapClient.search(settings.ldapBaseDN || '', searchOpts, (searchErr: any, searchRes: any) => {

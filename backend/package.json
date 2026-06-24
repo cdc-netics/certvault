@@ -42,6 +42,8 @@
     "express-validator": "^7.3.0",
     "helmet": "^8.1.0",
     "jsonwebtoken": "^8.5.1",
+    "jwks-rsa": "^4.0.1",
+    "ldapjs": "^3.0.7",
     "mongoose": "^8.19.3",
     "morgan": "^1.10.1",
     "multer": "^2.0.2",
@@ -50,6 +52,7 @@
   },
   "devDependencies": {
     "@types/adm-zip": "^0.5.8",
+    "@types/ldapjs": "^3.0.6",
     "@types/node": "^24.9.1",
     "@types/nodemailer": "^7.0.5",
     "nodemon": "^3.1.10",
