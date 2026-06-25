@@ -4,7 +4,12 @@ Este documento registra los problemas, vulnerabilidades, mejoras y tareas técni
 
 ## Issues Pendientes (To Do)
 
-_No hay issues pendientes registrados._
+| ID          | Título                                                             | Componente         | Prioridad | Estado |
+| ----------- | ------------------------------------------------------------------ | ------------------ | --------- | ------ |
+| **ISS-010** | Departamentos dinámicos y asignación masiva de áreas               | Backend / Frontend | Alta      | To Do  |
+| **ISS-011** | Selección dinámica y creación al vuelo de cargos y departamentos   | Backend / Frontend | Media     | To Do  |
+| **ISS-012** | Panel visual de gestión de departamentos y asignación de líderes   | Backend / Frontend | Media     | To Do  |
+| **ISS-013** | Listado compacto y administración de certificaciones en el perfil  | Frontend           | Baja      | To Do  |
 
 ## Issues Completados (Done)
 
@@ -52,4 +57,42 @@ _No hay issues pendientes registrados._
 - **Sugerencia de Mejora**:
   Eliminar los índices TTL que apuntan a campos del modelo de usuario para evitar el borrado automático de registros. Se programa una limpieza automática de los índices en el arranque de la base de datos y se crea un resolvedor utilitario en `userHealer.ts` que escanea y vuelve a asociar automáticamente cualquier certificación huérfana por similitud de nombres y departamentos cuando los usuarios recrean sus cuentas.
 
+---
 
+### [ISS-010] Departamentos dinámicos y asignación masiva de áreas
+
+- **Código Afectado (Backend)**: [User.ts](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/backend/src/models/User.ts), [Certification.ts](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/backend/src/models/Certification.ts), [usersController.ts](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/backend/src/controllers/usersController.ts)
+- **Código Afectado (Frontend)**: [user.model.ts](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/certif-app/src/app/core/models/user.model.ts), [users-list.component.ts](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/certif-app/src/app/features/users/users-list/users-list.component.ts), [users-list.component.html](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/certif-app/src/app/features/users/users-list/users-list.component.html)
+- **Propuesta de Implementación**:
+  - **Backend**: Crear un modelo dinámico `Department` en Mongoose con campos como `name`, `code` (ID interno único e inmutable por si cambia el nombre del departamento), `leaderId` y `isActive`. Reemplazar las referencias enum de departamento en el modelo [User.ts](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/backend/src/models/User.ts) y en [Certification.ts](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/backend/src/models/Certification.ts) por referencias `ObjectId` a la colección de departamentos.
+  - **Actualización Masiva**: Crear un endpoint `PATCH /api/users/bulk-department` en [usersController.ts](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/backend/src/controllers/usersController.ts) que acepte un listado de IDs de usuario y el ID del nuevo departamento de destino.
+  - **Frontend**: Modificar [users-list.component.html](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/certif-app/src/app/features/users/users-list/users-list.component.html) para agregar checkboxes en las filas de usuarios, y una barra de herramientas flotante o botón superior para aplicar el cambio masivo de área abriendo un modal que consuma la lista de departamentos activos.
+
+---
+
+### [ISS-011] Selección dinámica y creación al vuelo de cargos y departamentos
+
+- **Código Afectado (Backend)**: [User.ts](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/backend/src/models/User.ts), [authController.ts](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/backend/src/controllers/authController.ts)
+- **Código Afectado (Frontend)**: [profile.component.ts](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/certif-app/src/app/features/profile/profile.component.ts), [profile.component.html](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/certif-app/src/app/features/profile/profile.component.html) y formularios de registro / edición de usuarios.
+- **Propuesta de Implementación**:
+  - **Backend**: Crear una colección `positions` con el modelo `Position` (`name`, `isActive`). En los endpoints de creación/actualización de usuarios en [authController.ts](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/backend/src/controllers/authController.ts), si se envía una nueva posición o departamento no registrado (bajo la opción "Otro"), crear dinámicamente el documento en la base de datos y asociar su `_id` al perfil del usuario.
+  - **Frontend**: Reemplazar los inputs de texto libre de cargo/posición y selectores estáticos de departamento por comboboxes dinámicos que se nutran de las APIs `/api/positions` y `/api/departments`. Si el usuario selecciona "Otro", habilitar un input de texto reactivo para ingresar el nuevo nombre, el cual será creado en la BD en el submit.
+
+---
+
+### [ISS-012] Panel visual de gestión de departamentos y asignación de líderes
+
+- **Código Afectado (Backend)**: [User.ts](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/backend/src/models/User.ts) (permisos, roles y relaciones de departamentos liderados), rutas de administración.
+- **Código Afectado (Frontend)**: Vistas del panel de administración (`settings`), interfaces de configuración de la organización.
+- **Propuesta de Implementación**:
+  - **Backend**: Integrar lógica bidireccional de modo que al asignar un usuario como líder de departamento en la colección `departments`, automáticamente se le asigne el rol `UserRole.LIDER` (si no posee ya privilegios superiores) y se añada dicho departamento a su campo `managedDepartments` en la colección `users`.
+  - **Frontend**: Diseñar una nueva vista de administración visual bajo el módulo `settings` donde el administrador pueda listar, crear, renombrar e inactivar departamentos, y asignar un líder de área mediante un selector autocompletable que muestre a los usuarios activos del sistema. Esta relación deberá verse reflejada de forma dinámica en todos los dashboards y filtros del sistema.
+
+---
+
+### [ISS-013] Listado compacto y administración de certificaciones en el perfil
+
+- **Código Afectado (Frontend)**: [profile.component.ts](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/certif-app/src/app/features/profile/profile.component.ts), [profile.component.html](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/certif-app/src/app/features/profile/profile.component.html)
+- **Propuesta de Implementación**:
+  - **Frontend**: En la vista de perfil de usuario, incorporar una nueva pestaña (tab) "Mis Certificaciones" contigua a las opciones actuales. Cargar las certificaciones pertenecientes al usuario actual consumiendo el servicio de certificaciones (`CertificationService.getUserCertifications`).
+  - **Diseño**: Renderizar la información en formato de tabla densa/listado compacto (optimizando espacio de pantalla). Cada fila del listado contará con columnas básicas (Título, Emisor, Fecha de Emisión/Vencimiento, Estado) y acciones rápidas utilizando iconos pequeños y limpios para ver/descargar el certificado, editar y eliminar con un diálogo modal de confirmación.
