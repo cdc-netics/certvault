@@ -154,6 +154,43 @@ export const runDatabaseMigration = async (): Promise<void> => {
       }
     }
     console.log(`✅ Migración de certificaciones completada: ${certsMigratedCount} certificaciones actualizadas.`);
+
+    // 5. Curar certificaciones huérfanas o asociadas de manera inconsistente por nombre completo
+    console.log('🩹 Iniciando rutina de auto-curación de certificaciones por nombre de usuario activo...');
+    const activeUsers = await User.find({ isActive: true });
+    let healedCertsCount = 0;
+
+    for (const u of activeUsers) {
+      const fullName = `${u.firstName} ${u.lastName}`.trim().toLowerCase();
+      if (!fullName) continue;
+
+      // Buscar certificaciones que tengan este nombre de empleado
+      const certs = await Certification.find({
+        employeeName: { $regex: new RegExp(`^${fullName.replace(/\s+/g, '\\s+')}$`, 'i') }
+      });
+
+      for (const cert of certs) {
+        const certEmployeeIdStr = cert.employeeId ? cert.employeeId.toString() : '';
+        const userObjectIdStr = u._id.toString();
+
+        if (certEmployeeIdStr !== userObjectIdStr) {
+          await Certification.updateOne(
+            { _id: cert._id },
+            { 
+              $set: { 
+                employeeId: u._id,
+                department: u.department 
+              } 
+            }
+          );
+          healedCertsCount++;
+        }
+      }
+    }
+    if (healedCertsCount > 0) {
+      console.log(`✅ Auto-curación completada: ${healedCertsCount} certificaciones vinculadas al usuario activo por coincidencia de nombre.`);
+    }
+
     console.log('🏁 Proceso de migración finalizado exitosamente.');
   } catch (error) {
     console.error('❌ Error catastrófico en la rutina de migración de base de datos:', error);
