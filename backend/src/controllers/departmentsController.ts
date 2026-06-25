@@ -102,19 +102,22 @@ export const createDepartment = async (req: AuthRequest, res: Response): Promise
     if (leaderId) {
       const leader = await User.findById(leaderId);
       if (leader) {
+        const managed = leader.managedDepartments || [];
+        if (!managed.some(d => d.toString() === newDept._id.toString())) {
+          managed.push(newDept._id as any);
+        }
+        
+        const updateFields: any = {
+          managedDepartments: managed,
+          departmentLeader: true
+        };
+        
         if (leader.role !== UserRole.ADMIN) {
-          leader.role = UserRole.LIDER;
-          leader.departmentLeader = true;
+          updateFields.role = UserRole.LIDER;
         }
-        if (!leader.managedDepartments) {
-          leader.managedDepartments = [];
-        }
-        if (!leader.managedDepartments.some(d => d.toString() === newDept._id.toString())) {
-          leader.managedDepartments.push(newDept._id as any);
-        }
-        // También actualizar el departamento principal del líder si es necesario
-        // leader.department = newDept._id;
-        await leader.save();
+        
+        // Se utiliza findByIdAndUpdate para evitar validaciones de campos no modificados en registros antiguos
+        await User.findByIdAndUpdate(leader._id, { $set: updateFields });
       }
     }
 
@@ -178,19 +181,22 @@ export const updateDepartment = async (req: AuthRequest, res: Response): Promise
     if (oldLeaderId && oldLeaderId !== newLeaderId) {
       const oldLeader = await User.findById(oldLeaderId);
       if (oldLeader) {
-        if (oldLeader.managedDepartments) {
-          oldLeader.managedDepartments = oldLeader.managedDepartments.filter(
-            d => d.toString() !== dept._id.toString()
-          );
+        const managed = (oldLeader.managedDepartments || []).filter(
+          d => d.toString() !== dept._id.toString()
+        );
+        
+        const isStillLeader = managed.length > 0;
+        const updateFields: any = {
+          managedDepartments: managed,
+          departmentLeader: isStillLeader
+        };
+        
+        if (!isStillLeader && oldLeader.role === UserRole.LIDER) {
+          updateFields.role = UserRole.READER; // degradar a lector por defecto
         }
-        // Si ya no gestiona ningún departamento, remover rol de líder
-        if (!oldLeader.managedDepartments || oldLeader.managedDepartments.length === 0) {
-          oldLeader.departmentLeader = false;
-          if (oldLeader.role === UserRole.LIDER) {
-            oldLeader.role = UserRole.READER; // degradar a lector por defecto
-          }
-        }
-        await oldLeader.save();
+        
+        // Se utiliza findByIdAndUpdate para evitar validaciones de campos no modificados en registros antiguos
+        await User.findByIdAndUpdate(oldLeader._id, { $set: updateFields });
       }
     }
 
@@ -198,17 +204,22 @@ export const updateDepartment = async (req: AuthRequest, res: Response): Promise
     if (newLeaderId && oldLeaderId !== newLeaderId) {
       const newLeader = await User.findById(newLeaderId);
       if (newLeader) {
+        const managed = newLeader.managedDepartments || [];
+        if (!managed.some(d => d.toString() === dept._id.toString())) {
+          managed.push(dept._id as any);
+        }
+        
+        const updateFields: any = {
+          managedDepartments: managed,
+          departmentLeader: true
+        };
+        
         if (newLeader.role !== UserRole.ADMIN) {
-          newLeader.role = UserRole.LIDER;
-          newLeader.departmentLeader = true;
+          updateFields.role = UserRole.LIDER;
         }
-        if (!newLeader.managedDepartments) {
-          newLeader.managedDepartments = [];
-        }
-        if (!newLeader.managedDepartments.some(d => d.toString() === dept._id.toString())) {
-          newLeader.managedDepartments.push(dept._id as any);
-        }
-        await newLeader.save();
+        
+        // Se utiliza findByIdAndUpdate para evitar validaciones de campos no modificados en registros antiguos
+        await User.findByIdAndUpdate(newLeader._id, { $set: updateFields });
       }
     }
 
@@ -242,18 +253,22 @@ export const performDepartmentCascading = async (deptId: mongoose.Types.ObjectId
   // 2. Líderes: Remover del array de managedDepartments y degradar si corresponde
   const leaders = await User.find({ managedDepartments: deptId });
   for (const leader of leaders) {
-    if (leader.managedDepartments) {
-      leader.managedDepartments = leader.managedDepartments.filter(
-        d => d.toString() !== deptId.toString()
-      );
+    const managed = (leader.managedDepartments || []).filter(
+      d => d.toString() !== deptId.toString()
+    );
+    
+    const isStillLeader = managed.length > 0;
+    const updateFields: any = {
+      managedDepartments: managed,
+      departmentLeader: isStillLeader
+    };
+    
+    if (!isStillLeader && leader.role === UserRole.LIDER) {
+      updateFields.role = UserRole.READER;
     }
-    if (!leader.managedDepartments || leader.managedDepartments.length === 0) {
-      leader.departmentLeader = false;
-      if (leader.role === UserRole.LIDER) {
-        leader.role = UserRole.READER;
-      }
-    }
-    await leader.save();
+    
+    // Se utiliza findByIdAndUpdate para evitar validaciones de campos no modificados en registros antiguos
+    await User.findByIdAndUpdate(leader._id, { $set: updateFields });
   }
 
   // 3. Certificaciones individuales: Poner department en null
