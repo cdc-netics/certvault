@@ -537,7 +537,9 @@ export class CertificationFormComponent implements OnInit {
       this.selectedFile = file;
       this.errorMessage = '';
     }
-   onSubmit(): void {
+  }
+
+  onSubmit(): void {
     if (this.certificationForm.valid) {
       this.isLoading = true;
       this.errorMessage = '';
