@@ -45,8 +45,15 @@ export class AuthService {
       .pipe(catchError(this.handleError));
   }
 
-  resetPassword(payload: { token: string; newPassword: string; email?: string }): Observable<ApiResponse<void>> {
+  // Envía la solicitud de restablecimiento con la nueva contraseña y, opcionalmente, el correo personal de respaldo configurado.
+  resetPassword(payload: { token: string; newPassword: string; email?: string; personalEmail?: string }): Observable<ApiResponse<void>> {
     return this.http.post<ApiResponse<void>>(`${this.API_URL}/reset-password`, payload)
+      .pipe(catchError(this.handleError));
+  }
+
+  // Consulta al backend para validar el token y determinar si el usuario debe proveer un correo personal.
+  verifyResetToken(payload: { token: string; email?: string }): Observable<ApiResponse<{ valid: boolean; email: string; requiresPersonalEmail: boolean }>> {
+    return this.http.post<ApiResponse<{ valid: boolean; email: string; requiresPersonalEmail: boolean }>>(`${this.API_URL}/verify-reset-token`, payload)
       .pipe(catchError(this.handleError));
   }
 
