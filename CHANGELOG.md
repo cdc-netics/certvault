@@ -20,6 +20,8 @@ El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1
 - **Filtro de Selector de Líderes**:
   - Corregido el dropdown de asignación de líder en el modal de edición de departamento para mostrar de manera exclusiva a los colaboradores marcados con el flag `departmentLeader: true`.
   - Corregido el parseo de parámetros de consulta booleanos (`isActive` y `departmentLeader`) en el controlador `getUsers` del backend, permitiendo que se procesen correctamente cuando viajan como strings desde la URL.
+- **Error 500 al Guardar Departamento con Líder en Producción**:
+  - Se reemplazaron los métodos de guardado completo `leader.save()` por actualizaciones parciales seguras con `User.findByIdAndUpdate` en el controlador de departamentos, evitando que Mongoose valide el esquema completo de usuarios antiguos en producción (los cuales pueden no cumplir con nuevas validaciones como `personalEmail` obligatorio).
 
 ## [2.3.0-beta] - 2026-06-25 17:25
 
