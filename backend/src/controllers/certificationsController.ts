@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import mongoose from 'mongoose';
 import path from 'path';
 import fs from 'fs';
 import {
@@ -50,27 +51,49 @@ export const createCertification = async (req: AuthRequest, res: Response): Prom
     const payload = req.body;
     const providerNormalized = await normalizeProviderName(payload.provider);
 
-    const certification = await Certification.create({
+    // Mejoras en RBAC: Validar privilegios para certificaciones organizacionales
+    if (payload.isOrganizational) {
+      if (req.user?.role !== UserRole.ADMIN && req.user?.role !== UserRole.LIDER) {
+        res.status(403).json({
+          success: false,
+          error: 'No tienes privilegios para crear certificaciones organizacionales (requiere rol de Administrador o Líder)'
+        });
+        return;
+      }
+    }
+
+    const certificationData: Partial<ICertification> = {
       title: payload.title,
       description: payload.description || '',
       type: payload.type,
       technology: payload.technology,
       provider: providerNormalized,
       level: payload.level,
-      employeeId: payload.employeeId || req.user?._id,
-      employeeName:
-        payload.employeeName ||
-        (req.user ? `${req.user.firstName} ${req.user.lastName}` : 'Usuario'),
-      department: payload.department || req.user?.department,
       issueDate: payload.issueDate,
       expirationDate: payload.expirationDate,
       certificateNumber: payload.certificateNumber,
       validationUrl: payload.validationUrl,
       tags: normalizeTags(payload.tags),
       status: payload.status || CertificationStatus.ACTIVE,
+      isOrganizational: Boolean(payload.isOrganizational),
+      applicableDepartments: payload.isOrganizational && Array.isArray(payload.applicableDepartments)
+        ? payload.applicableDepartments.map((id: string) => new mongoose.Types.ObjectId(id))
+        : [],
+      appliesToAllCompany: payload.isOrganizational ? Boolean(payload.appliesToAllCompany) : false,
       createdBy: req.user?._id,
       updatedBy: req.user?._id
-    } as Partial<ICertification>);
+    };
+
+    // Solo asignar campos individuales si no es una certificación organizacional
+    if (!payload.isOrganizational) {
+      certificationData.employeeId = payload.employeeId || req.user?._id;
+      certificationData.employeeName =
+        payload.employeeName ||
+        (req.user ? `${req.user.firstName} ${req.user.lastName}` : 'Usuario');
+      certificationData.department = payload.department || req.user?.department;
+    }
+
+    const certification = await Certification.create(certificationData);
 
     res.status(201).json({ success: true, data: certification });
   } catch (error) {
@@ -94,7 +117,7 @@ export const getCertifications = async (req: Request, res: Response): Promise<vo
     const page = Math.max(parseInt((req.query.page as string) || '1', 10), 1);
     const limit = Math.max(parseInt((req.query.limit as string) || '10', 10), 1);
     const search = (req.query.search as string) || '';
-    const filter: Record<string, unknown> = {};
+    const filter: any = {};
 
     if (req.query.type) filter.type = req.query.type;
     if (req.query.level) filter.level = req.query.level;
@@ -135,19 +158,24 @@ export const getCertifications = async (req: Request, res: Response): Promise<vo
     const currentUser = authReq.user;
     const userFilter: Record<string, unknown> = {};
 
+    // Mejoras en RBAC: Los administradores y líderes tienen acceso global de lectura.
+    // Solo limitamos a usuarios activos si el usuario es READER o TECNICO.
     if (!currentUser || (currentUser.role !== UserRole.ADMIN && currentUser.role !== UserRole.LIDER)) {
       userFilter.isActive = true;
-    } else if (currentUser.role === UserRole.LIDER) {
-      const allowedDepartments = [currentUser.department, ...(currentUser.managedDepartments || [])];
-      userFilter.$or = [
-        { isActive: true },
-        { isActive: false, department: { $in: allowedDepartments } }
-      ];
     }
 
     if (Object.keys(userFilter).length > 0) {
       const visibleUsers = await User.find(userFilter, { _id: 1 }).lean();
-      filter.employeeId = { $in: visibleUsers.map(user => user._id) };
+      const visibleUserIds = visibleUsers.map(user => user._id);
+      
+      // Permitir certificaciones asignadas a usuarios visibles O que sean organizacionales (sin colaborador)
+      filter.$and = filter.$and || [];
+      filter.$and.push({
+        $or: [
+          { employeeId: { $in: visibleUserIds } },
+          { isOrganizational: true }
+        ]
+      });
     }
 
     const total = await Certification.countDocuments(filter);
@@ -164,18 +192,18 @@ export const getCertifications = async (req: Request, res: Response): Promise<vo
     let missingUserReferences = 0;
 
     const certifications = certificationsRaw.map(cert => {
-      const user = userMap[cert.employeeId?.toString()];
-      if (!user) {
+      const user = cert.employeeId ? userMap[cert.employeeId.toString()] : undefined;
+      
+      // No contar como referencia faltante si es una certificación de tipo organizacional
+      if (!user && !cert.isOrganizational) {
         missingUserReferences += 1;
       }
 
       return {
         ...cert,
-        // Solo marcar inactivo cuando existe usuario y esta explicitamente desactivado.
-        // Si falta el usuario, reportar inconsistencia sin bloquear la certificacion como "No disponible".
         userIsActive: user ? user.isActive : undefined,
         userDepartment: user ? user.department : undefined,
-        userReferenceMissing: !user
+        userReferenceMissing: !user && !cert.isOrganizational
       };
     });
 
@@ -343,6 +371,35 @@ export const getCertificationFile = async (req: AuthRequest, res: Response): Pro
       return;
     }
 
+    // Mejoras en RBAC: Restringir la descarga física de certificaciones organizacionales
+    if (certification.isOrganizational) {
+      const userDeptId = req.user?.department?._id ? req.user.department._id.toString() : req.user?.department?.toString();
+      
+      const isUserInApplicableDept = certification.appliesToAllCompany || 
+        certification.applicableDepartments?.some((d: any) => {
+          const dId = d?._id ? d._id.toString() : d.toString();
+          return dId === userDeptId;
+        }) ||
+        (req.user?.managedDepartments || []).some((md: any) => {
+          const mdId = md?._id ? md._id.toString() : md.toString();
+          return certification.applicableDepartments?.some((ad: any) => {
+            const adId = ad?._id ? ad._id.toString() : ad.toString();
+            return adId === mdId;
+          });
+        });
+
+      const isAdmin = req.user?.role === UserRole.ADMIN;
+      const isCreator = certification.createdBy?.toString() === req.user?._id?.toString();
+
+      if (!isAdmin && !isCreator && !isUserInApplicableDept) {
+        res.status(403).json({
+          success: false,
+          error: 'No tienes permisos para descargar el archivo de esta certificación organizacional (acceso restringido a áreas aplicables)'
+        });
+        return;
+      }
+    }
+
     const certificateUrl = certification.certificateUrl || '';
     if (!certificateUrl.startsWith('/uploads/certificates/')) {
       res.status(404).json({ success: false, error: 'Archivo de certificado no disponible' });
@@ -439,8 +496,16 @@ export const updateCertification = async (req: AuthRequest, res: Response): Prom
     const isAdmin = req.user?.role === UserRole.ADMIN;
     const isLeaderOfSameDept =
       req.user?.role === UserRole.LIDER &&
-      (certification.department === req.user.department ||
-        (req.user.managedDepartments || []).includes(certification.department as any));
+      certification.department &&
+      (certification.department.toString() === req.user.department?.toString() ||
+        (req.user.managedDepartments || []).some((d: any) => d.toString() === certification.department?.toString()));
+
+    // ISS-015: Las certificaciones organizacionales de Compliance pueden ser editadas por cualquier líder
+    const isComplianceOrg = 
+      (certification.type === 'compliance' || req.body.type === 'compliance') &&
+      (certification.isOrganizational || req.body.isOrganizational);
+    
+    const canLeaderEditCompliance = req.user?.role === UserRole.LIDER && isComplianceOrg;
 
     // Se restringe a los usuarios Solo Lectura (reader) de actualizar certificaciones ajenas
     const isReader = req.user?.role === UserRole.READER;
@@ -452,8 +517,19 @@ export const updateCertification = async (req: AuthRequest, res: Response): Prom
       return;
     }
 
-    // Validar privilegios de edición: solo el dueño, administradores o líderes del departamento pueden actualizar
-    if (!isOwner && !isAdmin && !isLeaderOfSameDept) {
+    // Validar si intenta cambiar o definir algo organizacional
+    if (req.body.isOrganizational) {
+      if (!isAdmin && req.user?.role !== UserRole.LIDER) {
+        res.status(403).json({
+          success: false,
+          error: 'Solo Administradores o Líderes de área pueden definir certificaciones organizacionales'
+        });
+        return;
+      }
+    }
+
+    // Validar privilegios de edición: solo el dueño, administradores, líderes de su área o líderes sobre compliance org
+    if (!isOwner && !isAdmin && !isLeaderOfSameDept && !canLeaderEditCompliance) {
       res.status(403).json({
         success: false,
         error: 'No tienes privilegios para actualizar esta certificación'
@@ -466,6 +542,20 @@ export const updateCertification = async (req: AuthRequest, res: Response): Prom
       tags: normalizeTags(req.body.tags),
       updatedBy: req.user?._id
     };
+
+    // Si se marca como organizacional, limpiar campos individuales
+    if (req.body.isOrganizational !== undefined) {
+      updates.isOrganizational = Boolean(req.body.isOrganizational);
+      if (updates.isOrganizational) {
+        updates.employeeId = null;
+        updates.employeeName = null;
+        updates.department = null;
+        updates.applicableDepartments = Array.isArray(req.body.applicableDepartments)
+          ? req.body.applicableDepartments.map((id: string) => new mongoose.Types.ObjectId(id))
+          : [];
+        updates.appliesToAllCompany = Boolean(req.body.appliesToAllCompany);
+      }
+    }
 
     // Normalizar el emisor/plataforma en caso de que venga en los datos a actualizar
     if (req.body.provider !== undefined) {
@@ -499,23 +589,36 @@ export const deleteCertification = async (req: AuthRequest, res: Response): Prom
       return;
     }
 
-    // Validar privilegios: solo el dueño, administradores o el líder de área pueden eliminar la certificación
+    // Validar privilegios: solo el dueño, administradores o el líder de área pueden eliminar la certificación.
+    // ISS-015: Para certificaciones organizacionales, solo el creador original y el Administrador pueden eliminar.
+    const isAdmin = req.user?.role === UserRole.ADMIN;
     const isOwner =
       certification.employeeId?.toString() === req.user?._id?.toString() ||
       certification.createdBy?.toString() === req.user?._id?.toString();
 
-    const isAdmin = req.user?.role === UserRole.ADMIN;
-    const isLeaderOfSameDept =
-      req.user?.role === UserRole.LIDER &&
-      (certification.department === req.user.department ||
-        (req.user.managedDepartments || []).includes(certification.department as any));
+    if (certification.isOrganizational) {
+      const isCreator = certification.createdBy?.toString() === req.user?._id?.toString();
+      if (!isAdmin && !isCreator) {
+        res.status(403).json({
+          success: false,
+          error: 'La eliminación de certificaciones organizacionales está restringida exclusivamente al Administrador y al Creador de la certificación'
+        });
+        return;
+      }
+    } else {
+      const isLeaderOfSameDept =
+        req.user?.role === UserRole.LIDER &&
+        certification.department &&
+        (certification.department.toString() === req.user.department?.toString() ||
+          (req.user.managedDepartments || []).some((d: any) => d.toString() === certification.department?.toString()));
 
-    if (!isOwner && !isAdmin && !isLeaderOfSameDept) {
-      res.status(403).json({
-        success: false,
-        error: 'No tienes privilegios para eliminar esta certificación'
-      });
-      return;
+      if (!isOwner && !isAdmin && !isLeaderOfSameDept) {
+        res.status(403).json({
+          success: false,
+          error: 'No tienes privilegios para eliminar esta certificación'
+        });
+        return;
+      }
     }
 
     await Certification.findByIdAndDelete(req.params.id);

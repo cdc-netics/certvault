@@ -1,5 +1,7 @@
 import mongoose, { Document, Schema } from 'mongoose';
 import bcrypt from 'bcryptjs';
+import { IDepartment } from './Department';
+import { IPosition } from './Position';
 
 export enum UserRole {
   ADMIN = 'admin',
@@ -8,22 +10,7 @@ export enum UserRole {
   LIDER = 'lider'
 }
 
-export enum Department {
-  ADMINISTRACION = 'Administracion',
-  INFRAESTRUCTURA = 'Infraestructura',
-  PROYECTOS = 'Proyectos',
-  TI = 'TI',
-  RRHH = 'RRHH',
-  FINANZAS = 'Finanzas',
-  OPERACIONES = 'Operaciones',
-  VENTAS = 'Ventas',
-  MARKETING = 'Marketing',
-  INGENIERIA = 'Ingenieria',
-  CALIDAD = 'Calidad',
-  SEGURIDAD = 'Seguridad',
-  LEGAL = 'Legal',
-  CIBERSEGURIDAD = 'Ciberseguridad'
-}
+
 
 export enum Permission {
   CREATE_USERS = 'create_users',
@@ -50,8 +37,8 @@ export interface IUser extends Document {
   firstName: string;
   lastName: string;
   role: UserRole;
-  department: Department;
-  position: string;
+  department: mongoose.Types.ObjectId | IDepartment;
+  position: mongoose.Types.ObjectId | IPosition;
   phone?: string;
   avatarUrl?: string;
   avatar?: string;
@@ -64,7 +51,7 @@ export interface IUser extends Document {
   verificationExpires?: Date;
   isVerified?: boolean;
   departmentLeader?: boolean;
-  managedDepartments?: Department[];
+  managedDepartments?: (mongoose.Types.ObjectId | IDepartment)[];
   permissions?: Permission[];
   createdBy?: mongoose.Types.ObjectId;
   createdAt: Date;
@@ -76,7 +63,7 @@ export interface IUser extends Document {
   comparePassword(candidatePassword: string): Promise<boolean>;
   fullName: string;
   hasPermission(permission: Permission): boolean;
-  canManageDepartment(department: Department): boolean;
+  canManageDepartment(department: any): boolean;
 }
 
 const userSchema = new Schema<IUser>(
@@ -136,15 +123,14 @@ const userSchema = new Schema<IUser>(
       required: true
     },
     department: {
-      type: String,
-      enum: Object.values(Department),
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Department',
       required: [true, 'El departamento es requerido']
     },
     position: {
-      type: String,
-      required: [true, 'El cargo es requerido'],
-      trim: true,
-      maxlength: [100, 'El cargo no puede tener mas de 100 caracteres']
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Position',
+      required: [true, 'El cargo es requerido']
     },
     phone: {
       type: String,
@@ -194,8 +180,8 @@ const userSchema = new Schema<IUser>(
     },
     managedDepartments: [
       {
-        type: String,
-        enum: Object.values(Department)
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Department'
       }
     ],
     permissions: [
@@ -301,17 +287,23 @@ userSchema.methods.hasPermission = function (permission: Permission): boolean {
   return rolePermissions[this.role as UserRole]?.includes(permission) || false;
 };
 
-userSchema.methods.canManageDepartment = function (department: Department): boolean {
+userSchema.methods.canManageDepartment = function (departmentId: any): boolean {
   if (this.role === UserRole.ADMIN) {
     return true;
   }
 
+  const myDeptId = this.department?._id ? this.department._id.toString() : this.department?.toString();
+  const targetDeptId = departmentId?._id ? departmentId._id.toString() : departmentId?.toString();
+
   if (this.role === UserRole.LIDER) {
-    if (this.department === department) {
+    if (myDeptId === targetDeptId) {
       return true;
     }
-    if (this.managedDepartments && this.managedDepartments.includes(department)) {
-      return true;
+    if (this.managedDepartments) {
+      return this.managedDepartments.some((dept: any) => {
+        const managedId = dept?._id ? dept._id.toString() : dept?.toString();
+        return managedId === targetDeptId;
+      });
     }
   }
 

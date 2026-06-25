@@ -120,6 +120,29 @@ Este documento detalla los principales endpoints de la API de **CertVault**, des
 
 ---
 
+### Asignación Masiva de Departamento
+* **Ruta:** `PATCH /api/users/bulk-department`
+* **Encabezados:** `Authorization: Bearer <Token>` (Requiere rol `admin` o `lider`)
+* **Cuerpo de la Petición:**
+  ```json
+  {
+    "userIds": [
+      "69861ca096a46d7b664e8a10",
+      "69f90c7263456e3bfd5184c5"
+    ],
+    "departmentId": "69f124b763456e3bfd51814e"
+  }
+  ```
+* **Respuesta Exitosa (200 OK):**
+  ```json
+  {
+    "success": true,
+    "message": "Departamento actualizado masivamente para los usuarios seleccionados correctamente."
+  }
+  ```
+
+---
+
 ## 3. Políticas del Sistema y Expiración (`/api/settings`)
 
 ### Configuración de Políticas de Expiración de Claves
@@ -148,6 +171,54 @@ Este documento detalla los principales endpoints de la API de **CertVault**, des
     "message": "Configuracion de seguridad actualizada exitosamente"
   }
   ```
+
+---
+
+### Gestión de Respaldos Locales (Backups en Servidor)
+Todos estos endpoints requieren privilegios de rol `admin`:
+
+* **Listar Respaldos Locales:**
+  * **Ruta:** `GET /api/settings/backup/local`
+  * **Respuesta Exitosa (200 OK):**
+    ```json
+    {
+      "success": true,
+      "data": [
+        {
+          "filename": "backup-20260625-171500.zip",
+          "sizeBytes": 1054320,
+          "createdAt": "2026-06-25T21:15:00.000Z"
+        }
+      ]
+    }
+    ```
+
+* **Crear Respaldo Manual Local:**
+  * **Ruta:** `POST /api/settings/backup/local`
+  * **Respuesta Exitosa (200 OK):**
+    ```json
+    {
+      "success": true,
+      "data": {
+        "filename": "backup-20260625-171800.zip"
+      },
+      "message": "Respaldo local generado exitosamente"
+    }
+    ```
+
+* **Descargar Respaldo Físico:**
+  * **Ruta:** `GET /api/settings/backup/local/download/:filename`
+  * **Respuesta (200 OK):** Retorna la descarga directa del archivo ZIP comprimido (Base de datos + archivos adjuntos) protegiendo el host de Path Traversal.
+
+* **Eliminar Respaldo Físico:**
+  * **Ruta:** `DELETE /api/settings/backup/local/:filename`
+  * **Respuesta Exitosa (200 OK):**
+    ```json
+    {
+      "success": true,
+      "message": "Respaldo local eliminado exitosamente"
+    }
+    ```
 
 ---
 

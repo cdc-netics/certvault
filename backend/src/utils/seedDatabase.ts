@@ -1,7 +1,8 @@
 import mongoose from 'mongoose';
-import { User, UserRole, Department, Permission } from '../models/User';
+import { User, UserRole, Permission } from '../models/User';
 import { Certification, CertificationStatus, CertificationType, CertificationLevel } from '../models/Certification';
 import bcrypt from 'bcryptjs';
+import { resolveDepartment, resolvePosition } from './resolveEntities';
 
 export const seedDatabase = async (): Promise<void> => {
   try {
@@ -43,6 +44,27 @@ export const seedDatabase = async (): Promise<void> => {
 const createSampleUsers = async () => {
   const hashedPassword = await bcrypt.hash('Password123!', 12);
 
+  // Resolver IDs de departamentos dinámicamente
+  const tiDeptId = await resolveDepartment('TI');
+  const rrhhDeptId = await resolveDepartment('Recursos Humanos');
+  const ingDeptId = await resolveDepartment('Ingeniería');
+  const ventasDeptId = await resolveDepartment('Ventas');
+  const mktDeptId = await resolveDepartment('Marketing');
+  const finDeptId = await resolveDepartment('Finanzas');
+  const opsDeptId = await resolveDepartment('Operaciones');
+
+  // Resolver IDs de cargos dinámicamente
+  const adminPosId = await resolvePosition('Administrador del Sistema');
+  const techLeadPosId = await resolvePosition('Jefe de Tecnología');
+  const hrDirPosId = await resolvePosition('Directora de Recursos Humanos');
+  const srDevPosId = await resolvePosition('Desarrollador Senior');
+  const qaEngPosId = await resolvePosition('Ingeniera de Calidad');
+  const salesExecPosId = await resolvePosition('Ejecutivo de Ventas');
+  const mktSpecPosId = await resolvePosition('Especialista en Marketing Digital');
+  const finAnalystPosId = await resolvePosition('Analista Financiero');
+  const hrAssistantPosId = await resolvePosition('Asistente de RRHH');
+  const opsSupervisorPosId = await resolvePosition('Supervisor de Operaciones');
+
   const usersData = [
     // Administrador
     {
@@ -52,8 +74,8 @@ const createSampleUsers = async () => {
       firstName: 'Administrador',
       lastName: 'del Sistema',
       role: UserRole.ADMIN,
-      department: Department.TI,
-      position: 'Administrador del Sistema',
+      department: tiDeptId,
+      position: adminPosId,
       isActive: true,
       permissions: Object.values(Permission)
     },
@@ -66,11 +88,11 @@ const createSampleUsers = async () => {
       firstName: 'Juan',
       lastName: 'Pérez',
       role: UserRole.LIDER,
-      department: Department.TI,
-      position: 'Jefe de Tecnología',
+      department: tiDeptId,
+      position: techLeadPosId,
       isActive: true,
       departmentLeader: true,
-      managedDepartments: [Department.TI],
+      managedDepartments: [tiDeptId],
       permissions: [
         Permission.READ_USERS,
         Permission.UPDATE_USERS,
@@ -91,11 +113,11 @@ const createSampleUsers = async () => {
       firstName: 'María',
       lastName: 'García',
       role: UserRole.LIDER,
-      department: Department.RRHH,
-      position: 'Directora de Recursos Humanos',
+      department: rrhhDeptId,
+      position: hrDirPosId,
       isActive: true,
       departmentLeader: true,
-      managedDepartments: [Department.RRHH],
+      managedDepartments: [rrhhDeptId],
       permissions: [
         Permission.READ_USERS,
         Permission.CREATE_USERS,
@@ -114,8 +136,8 @@ const createSampleUsers = async () => {
       firstName: 'Luis',
       lastName: 'Rodríguez',
       role: UserRole.TECNICO,
-      department: Department.TI,
-      position: 'Desarrollador Senior',
+      department: tiDeptId,
+      position: srDevPosId,
       isActive: true,
       permissions: [
         Permission.CREATE_CERTIFICATIONS,
@@ -130,8 +152,8 @@ const createSampleUsers = async () => {
       firstName: 'Ana',
       lastName: 'Sánchez',
       role: UserRole.TECNICO,
-      department: Department.INGENIERIA,
-      position: 'Ingeniera de Calidad',
+      department: ingDeptId,
+      position: qaEngPosId,
       isActive: true,
       permissions: [
         Permission.CREATE_CERTIFICATIONS,
@@ -148,8 +170,8 @@ const createSampleUsers = async () => {
       firstName: 'Carlos',
       lastName: 'López',
       role: UserRole.READER,
-      department: Department.VENTAS,
-      position: 'Ejecutivo de Ventas',
+      department: ventasDeptId,
+      position: salesExecPosId,
       isActive: true,
       permissions: [Permission.READ_CERTIFICATIONS]
     },
@@ -160,8 +182,8 @@ const createSampleUsers = async () => {
       firstName: 'Patricia',
       lastName: 'Martínez',
       role: UserRole.READER,
-      department: Department.MARKETING,
-      position: 'Especialista en Marketing Digital',
+      department: mktDeptId,
+      position: mktSpecPosId,
       isActive: true,
       permissions: [Permission.READ_CERTIFICATIONS]
     },
@@ -172,8 +194,8 @@ const createSampleUsers = async () => {
       firstName: 'Roberto',
       lastName: 'Castillo',
       role: UserRole.READER,
-      department: Department.FINANZAS,
-      position: 'Analista Financiero',
+      department: finDeptId,
+      position: finAnalystPosId,
       isActive: true,
       permissions: [Permission.READ_CERTIFICATIONS]
     },
@@ -186,8 +208,8 @@ const createSampleUsers = async () => {
       firstName: 'Elena',
       lastName: 'Herrera',
       role: UserRole.READER,
-      department: Department.RRHH,
-      position: 'Asistente de RRHH',
+      department: rrhhDeptId,
+      position: hrAssistantPosId,
       isActive: true,
       permissions: [Permission.READ_CERTIFICATIONS, Permission.READ_USERS]
     },
@@ -198,8 +220,8 @@ const createSampleUsers = async () => {
       firstName: 'Diego',
       lastName: 'González',
       role: UserRole.READER,
-      department: Department.OPERACIONES,
-      position: 'Supervisor de Operaciones',
+      department: opsDeptId,
+      position: opsSupervisorPosId,
       isActive: true,
       permissions: [Permission.READ_CERTIFICATIONS, Permission.READ_USERS]
     }

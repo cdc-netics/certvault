@@ -31,6 +31,10 @@ export const routes: Routes = [
     loadComponent: () => import('./external-api-settings/external-api-settings.component').then(m => m.ExternalApiSettingsComponent)
   },
   {
+    path: 'departments',
+    loadComponent: () => import('./departments-settings/departments-settings.component').then(m => m.DepartmentsSettingsComponent)
+  },
+  {
     path: 'security',
     loadComponent: () => import('./security-settings/security-settings.component').then(m => m.SecuritySettingsComponent)
   }

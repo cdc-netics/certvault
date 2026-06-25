@@ -1,3 +1,21 @@
+export interface Department {
+  _id: string;
+  name: string;
+  code: string;
+  leaderId?: string | User;
+  isActive: boolean;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
+export interface Position {
+  _id: string;
+  name: string;
+  isActive: boolean;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
 export interface User {
   _id?: string;
   username: string;
@@ -8,7 +26,7 @@ export interface User {
   lastName: string;
   role: UserRole;
   department: Department;
-  position: string;
+  position: Position | string;
   phone?: string;
   isActive: boolean;
   avatarUrl?: string;
@@ -32,20 +50,7 @@ export enum UserRole {
   LIDER = 'lider'
 }
 
-export enum Department {
-  ADMINISTRACION = 'Administracion',
-  INFRAESTRUCTURA = 'Infraestructura',
-  PROYECTOS = 'Proyectos',
-  TI = 'TI',
-  RRHH = 'RRHH',
-  FINANZAS = 'Finanzas',
-  OPERACIONES = 'Operaciones',
-  VENTAS = 'Ventas',
-  MARKETING = 'Marketing',
-  INGENIERIA = 'Ingenieria',
-  SEGURIDAD = 'Seguridad',
-  CIBERSEGURIDAD = 'Ciberseguridad'
-}
+// Se eliminó el enum Department para utilizar la interfaz dinámica Department de base de datos
 
 // Permisos RBAC
 export enum Permission {
@@ -92,12 +97,12 @@ export interface RegisterRequest {
   password: string;
   firstName: string;
   lastName: string;
-  department: Department;
-  position: string;
+  department: string; // ID o nombre
+  position: string; // ID o nombre
   phone?: string;
   role?: UserRole;
   departmentLeader?: boolean;
-  managedDepartments?: Department[];
+  managedDepartments?: string[];
   permissions?: Permission[];
 }
 
@@ -125,18 +130,4 @@ export const UserRoleLabels: Record<UserRole, string> = {
   [UserRole.READER]: 'Solo Lectura'
 };
 
-// Helper para obtener etiquetas de departamentos
-export const DepartmentLabels: Record<Department, string> = {
-  [Department.ADMINISTRACION]: 'Administracion',
-  [Department.INFRAESTRUCTURA]: 'Infraestructura',
-  [Department.PROYECTOS]: 'Proyectos',
-  [Department.TI]: 'Tecnologia de la Informacion',
-  [Department.RRHH]: 'Recursos Humanos',
-  [Department.FINANZAS]: 'Finanzas',
-  [Department.OPERACIONES]: 'Operaciones',
-  [Department.VENTAS]: 'Ventas',
-  [Department.MARKETING]: 'Marketing',
-  [Department.INGENIERIA]: 'Ingenieria',
-  [Department.SEGURIDAD]: 'Seguridad',
-  [Department.CIBERSEGURIDAD]: 'Ciberseguridad'
-};
+// Se eliminó el mapeo estático DepartmentLabels ya que las etiquetas de departamentos se consumen de forma dinámica desde el backend.

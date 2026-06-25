@@ -253,3 +253,89 @@ export const systemWipe = async (): Promise<void> => {
   await AuditLog.deleteMany({});
   await PublicApiClient.deleteMany({});
 };
+
+/**
+ * Genera un backup completo del sistema y lo guarda localmente en el servidor.
+ * Crea el directorio de respaldos si no existe y ejecuta la rotación de archivos.
+ * @returns Promesa con el nombre del archivo ZIP generado
+ */
+export const runLocalBackup = async (): Promise<string> => {
+  const backupsDir = path.join(__dirname, '../../backups');
+  
+  // Asegurar que el directorio de respaldos exista
+  if (!fs.existsSync(backupsDir)) {
+    fs.mkdirSync(backupsDir, { recursive: true });
+  }
+
+  // Obtener el buffer del backup completo
+  const backupBuffer = await generateFullBackup();
+
+  // Generar nombre de archivo único basado en la fecha y hora actual (YYYYMMDD-HHmmss)
+  const now = new Date();
+  const formatNum = (n: number) => n.toString().padStart(2, '0');
+  const timestamp = `${now.getFullYear()}${formatNum(now.getMonth() + 1)}${formatNum(now.getDate())}-${formatNum(now.getHours())}${formatNum(now.getMinutes())}${formatNum(now.getSeconds())}`;
+  const filename = `backup-${timestamp}.zip`;
+  const filePath = path.join(backupsDir, filename);
+
+  // Escribir el archivo físicamente en disco
+  fs.writeFileSync(filePath, backupBuffer);
+
+  // Rotar respaldos para mantener un máximo de 10
+  await rotateLocalBackups(backupsDir);
+
+  return filename;
+};
+
+/**
+ * Mantiene únicamente los 10 respaldos locales más recientes, eliminando los más antiguos.
+ * @param backupsDir Ruta del directorio de respaldos
+ */
+export const rotateLocalBackups = async (backupsDir: string): Promise<void> => {
+  if (!fs.existsSync(backupsDir)) return;
+
+  const files = fs.readdirSync(backupsDir);
+  const backupFiles = files
+    .filter(file => file.startsWith('backup-') && file.endsWith('.zip'))
+    .map(file => {
+      const filePath = path.join(backupsDir, file);
+      const stat = fs.statSync(filePath);
+      return { file, mtime: stat.mtime };
+    })
+    .sort((a, b) => b.mtime.getTime() - a.mtime.getTime()); // Ordenar del más reciente al más antiguo
+
+  // Eliminar los archivos que excedan los 10 permitidos
+  if (backupFiles.length > 10) {
+    const filesToDelete = backupFiles.slice(10);
+    for (const item of filesToDelete) {
+      const filePath = path.join(backupsDir, item.file);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    }
+  }
+};
+
+/**
+ * Obtiene la lista de todos los respaldos locales disponibles en el disco.
+ * @returns Lista de objetos con metadatos del respaldo
+ */
+export const getLocalBackupsList = async (): Promise<Array<{ filename: string; sizeBytes: number; createdAt: Date }>> => {
+  const backupsDir = path.join(__dirname, '../../backups');
+  if (!fs.existsSync(backupsDir)) {
+    return [];
+  }
+
+  const files = fs.readdirSync(backupsDir);
+  return files
+    .filter(file => file.startsWith('backup-') && file.endsWith('.zip'))
+    .map(file => {
+      const filePath = path.join(backupsDir, file);
+      const stat = fs.statSync(filePath);
+      return {
+        filename: file,
+        sizeBytes: stat.size,
+        createdAt: stat.mtime
+      };
+    })
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()); // Del más reciente al más antiguo
+};

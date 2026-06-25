@@ -1,4 +1,5 @@
-﻿import mongoose, { Document, Schema } from 'mongoose';
+import mongoose, { Document, Schema } from 'mongoose';
+import { IDepartment } from './Department';
 
 export enum CertificationType {
   TECHNICAL = 'technical',
@@ -34,9 +35,9 @@ export interface ICertification extends Document {
   technology: string;
   provider: string;
   level: CertificationLevel;
-  employeeId: mongoose.Types.ObjectId;
-  employeeName: string;
-  department: string;
+  employeeId?: mongoose.Types.ObjectId;
+  employeeName?: string;
+  department?: mongoose.Types.ObjectId | IDepartment;
   issueDate: Date;
   expirationDate?: Date;
   certificateNumber: string;
@@ -55,6 +56,9 @@ export interface ICertification extends Document {
   daysUntilExpiration: number | null;
   isExpired: boolean;
   isExpiringSoon: boolean;
+  isOrganizational?: boolean;
+  applicableDepartments?: (mongoose.Types.ObjectId | IDepartment)[];
+  appliesToAllCompany?: boolean;
 }
 
 const certificationSchema = new Schema<ICertification>(
@@ -97,18 +101,26 @@ const certificationSchema = new Schema<ICertification>(
     employeeId: {
       type: Schema.Types.ObjectId,
       ref: 'User',
-      required: [true, 'El ID del empleado es requerido']
+      required: [
+        function(this: any) { return !this.isOrganizational; },
+        'El ID del empleado es requerido para certificaciones individuales'
+      ]
     },
     employeeName: {
       type: String,
-      required: [true, 'El nombre del empleado es requerido'],
+      required: [
+        function(this: any) { return !this.isOrganizational; },
+        'El nombre del empleado es requerido para certificaciones individuales'
+      ],
       trim: true
     },
     department: {
-      type: String,
-      required: [true, 'El departamento es requerido'],
-      trim: true,
-      maxlength: [100, 'El departamento no puede tener más de 100 caracteres']
+      type: Schema.Types.ObjectId,
+      ref: 'Department',
+      required: [
+        function(this: any) { return !this.isOrganizational; },
+        'El departamento es requerido para certificaciones individuales'
+      ]
     },
     issueDate: {
       type: Date,
@@ -181,6 +193,18 @@ const certificationSchema = new Schema<ICertification>(
     updatedBy: {
       type: Schema.Types.ObjectId,
       ref: 'User'
+    },
+    isOrganizational: {
+      type: Boolean,
+      default: false
+    },
+    applicableDepartments: [{
+      type: Schema.Types.ObjectId,
+      ref: 'Department'
+    }],
+    appliesToAllCompany: {
+      type: Boolean,
+      default: false
     }
   },
   {

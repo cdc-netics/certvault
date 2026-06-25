@@ -94,6 +94,7 @@
           <button 
             type="button"
             class="list-group-item list-group-item-action"
+            [class.active]="activeTab === 'profile'"
             (click)="setActiveTab('profile')">
             <i class="fas fa-edit me-2"></i>
             Editar Perfil
@@ -101,6 +102,7 @@
           <button 
             type="button"
             class="list-group-item list-group-item-action"
+            [class.active]="activeTab === 'password'"
             (click)="setActiveTab('password')">
             <i class="fas fa-key me-2"></i>
             Cambiar Contrasena
@@ -108,6 +110,15 @@
           <button 
             type="button"
             class="list-group-item list-group-item-action"
+            [class.active]="activeTab === 'certifications'"
+            (click)="setActiveTab('certifications')">
+            <i class="fas fa-certificate me-2"></i>
+            Mis Certificaciones
+          </button>
+          <button 
+            type="button"
+            class="list-group-item list-group-item-action"
+            [class.active]="activeTab === 'activity'"
             (click)="setActiveTab('activity')">
             <i class="fas fa-history me-2"></i>
             Ver Actividad
@@ -136,6 +147,15 @@
             (click)="setActiveTab('password')">
             <i class="fas fa-lock me-2"></i>
             Seguridad
+          </button>
+        </li>
+        <li class="nav-item">
+          <button 
+            class="nav-link" 
+            [class.active]="activeTab === 'certifications'"
+            (click)="setActiveTab('certifications')">
+            <i class="fas fa-certificate me-2"></i>
+            Mis Certificaciones
           </button>
         </li>
         <li class="nav-item">
@@ -514,6 +534,236 @@
           </div>
         </div>
       </div>
+
+      <!-- Tab: Mis Certificaciones -->
+      <div class="tab-content" *ngIf="activeTab === 'certifications'">
+        <div class="card">
+          <div class="card-header d-flex justify-content-between align-items-center">
+            <h6 class="mb-0">
+              <i class="fas fa-certificate me-2"></i>
+              Mis Certificaciones
+            </h6>
+            <button class="btn btn-sm btn-primary" routerLink="/certifications/new">
+              <i class="fas fa-plus me-1"></i>
+              Nueva Certificacion
+            </button>
+          </div>
+          <div class="card-body">
+            <!-- Cargando -->
+            <div class="text-center py-4" *ngIf="isLoadingCertifications">
+              <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Cargando...</span>
+              </div>
+              <p class="mt-2 text-muted">Cargando certificaciones...</p>
+            </div>
+
+            <!-- Error -->
+            <div class="alert alert-danger" *ngIf="certificationsError">
+              <i class="fas fa-exclamation-circle me-2"></i>
+              {{ certificationsError }}
+            </div>
+
+            <!-- Tabla densa/compacta -->
+            <div class="table-responsive" *ngIf="!isLoadingCertifications && userCertifications.length > 0">
+              <table class="table table-sm table-hover table-striped align-middle">
+                <thead>
+                  <tr class="table-light">
+                    <th>Título</th>
+                    <th>Emisor/Proveedor</th>
+                    <th>Nivel</th>
+                    <th>Fecha Emision</th>
+                    <th>Fecha Vencimiento</th>
+                    <th>Estado</th>
+                    <th class="text-end">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let cert of userCertifications">
+                    <td>
+                      <strong>{{ cert.title }}</strong>
+                    </td>
+                    <td>{{ cert.provider }}</td>
+                    <td>
+                      <span class="badge bg-secondary text-uppercase" style="font-size: 0.75rem;">
+                        {{ getLevelLabel(cert.level) }}
+                      </span>
+                    </td>
+                    <td>{{ cert.issueDate | date:'yyyy-MM-dd' }}</td>
+                    <td>
+                      <span *ngIf="cert.expirationDate; else noVence">
+                        {{ cert.expirationDate | date:'yyyy-MM-dd' }}
+                      </span>
+                      <ng-template #noVence><span class="text-muted">No vence</span></ng-template>
+                    </td>
+                    <td>
+                      <span class="badge" [ngClass]="getStatusClass(cert.status)">
+                        {{ getStatusLabel(cert.status) }}
+                      </span>
+                    </td>
+                    <td class="text-end">
+                      <div class="btn-group btn-group-sm">
+                        <!-- Detalle -->
+                        <button 
+                          type="button" 
+                          class="btn btn-outline-info" 
+                          title="Ver detalle completo"
+                          (click)="openCertificationDetails(cert)">
+                          <i class="fas fa-info-circle"></i>
+                        </button>
+                        
+                        <!-- Descargar / Ver documento si existe -->
+                        <ng-container *ngIf="cert.certificateUrl">
+                          <button 
+                            type="button" 
+                            class="btn btn-outline-secondary" 
+                            title="Descargar archivo"
+                            (click)="downloadCertificate(cert)">
+                            <i class="fas fa-download"></i>
+                          </button>
+                          <button 
+                            type="button" 
+                            class="btn btn-outline-primary" 
+                            title="Ver en linea"
+                            (click)="openCertificate(cert)">
+                            <i class="fas fa-eye"></i>
+                          </button>
+                        </ng-container>
+
+                        <!-- Editar si tiene permiso -->
+                        <a 
+                          *ngIf="canEditCertification(cert)"
+                          [routerLink]="['/certifications/edit', cert._id]" 
+                          class="btn btn-outline-warning" 
+                          title="Editar certificacion">
+                          <i class="fas fa-pen"></i>
+                        </a>
+
+                        <!-- Eliminar si tiene permiso -->
+                        <button 
+                          *ngIf="canDeleteCertification(cert)"
+                          type="button" 
+                          class="btn btn-outline-danger" 
+                          title="Eliminar certificacion"
+                          (click)="deleteCertification(cert)">
+                          <i class="fas fa-trash"></i>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Estado vacio -->
+            <div class="text-center py-4" *ngIf="!isLoadingCertifications && userCertifications.length === 0">
+              <div class="mb-3">
+                <i class="fas fa-certificate fa-2x text-muted"></i>
+              </div>
+              <h6 class="text-muted">No tienes certificaciones registradas</h6>
+              <p class="text-muted small">Registra tus certificaciones para que formen parte de tu perfil profesional.</p>
+              <button class="btn btn-sm btn-primary" routerLink="/certifications/new">
+                <i class="fas fa-plus me-1"></i>
+                Registrar Mi Primera Certificacion
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Modal de Detalle de Certificacion -->
+      <div class="modal fade show" tabindex="-1" role="dialog" style="display: block; background: rgba(0,0,0,0.5);" *ngIf="showDetailsModal && selectedCertification">
+        <div class="modal-dialog modal-dialog-centered" role="document">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title">
+                <i class="fas fa-certificate me-2 text-primary"></i>
+                Detalle de Certificacion
+              </h5>
+              <button type="button" class="btn-close" aria-label="Close" (click)="closeCertificationDetails()"></button>
+            </div>
+            <div class="modal-body">
+              <div class="row mb-3">
+                <div class="col-12">
+                  <h6 class="text-primary mb-3">{{ selectedCertification.title }}</h6>
+                </div>
+                <div class="col-md-6 mb-2">
+                  <p class="mb-1 small text-muted">Emisor / Proveedor</p>
+                  <p class="mb-2"><strong>{{ selectedCertification.provider }}</strong></p>
+                  
+                  <p class="mb-1 small text-muted">Nivel</p>
+                  <p class="mb-2">
+                    <span class="badge bg-secondary text-uppercase">{{ getLevelLabel(selectedCertification.level) }}</span>
+                  </p>
+                  
+                  <p class="mb-1 small text-muted">Tipo de Certificacion</p>
+                  <p class="mb-2"><span class="badge bg-light text-dark border">{{ selectedCertification.type }}</span></p>
+                </div>
+                <div class="col-md-6 mb-2">
+                  <p class="mb-1 small text-muted">Fecha de Emision</p>
+                  <p class="mb-2"><strong>{{ selectedCertification.issueDate | date:'yyyy-MM-dd' }}</strong></p>
+                  
+                  <p class="mb-1 small text-muted">Fecha de Vencimiento</p>
+                  <p class="mb-2">
+                    <strong *ngIf="selectedCertification.expirationDate; else modalNoVence">
+                      {{ selectedCertification.expirationDate | date:'yyyy-MM-dd' }}
+                    </strong>
+                    <ng-template #modalNoVence><span class="text-muted">No vence</span></ng-template>
+                  </p>
+                  
+                  <p class="mb-1 small text-muted">Estado</p>
+                  <p class="mb-2">
+                    <span class="badge" [ngClass]="getStatusClass(selectedCertification.status)">
+                      {{ getStatusLabel(selectedCertification.status) }}
+                    </span>
+                  </p>
+                </div>
+              </div>
+
+              <div class="mb-3" *ngIf="selectedCertification.certificateNumber">
+                <p class="mb-1 small text-muted">Número de Certificado</p>
+                <p class="mb-2"><code>{{ selectedCertification.certificateNumber }}</code></p>
+              </div>
+
+              <div class="mb-3" *ngIf="selectedCertification.description">
+                <p class="mb-1 small text-muted">Descripción</p>
+                <p class="mb-2 text-muted small" style="white-space: pre-line;">{{ selectedCertification.description }}</p>
+              </div>
+
+              <div class="mb-3" *ngIf="selectedCertification.validationUrl">
+                <p class="mb-1 small text-muted">Enlace de Validación</p>
+                <p class="mb-2">
+                  <a [href]="selectedCertification.validationUrl" target="_blank" rel="noopener" class="text-decoration-none">
+                    <i class="fas fa-external-link-alt me-1"></i>
+                    Verificar credencial en emisor
+                  </a>
+                </p>
+              </div>
+
+              <div class="mb-3" *ngIf="selectedCertification.tags && selectedCertification.tags.length > 0">
+                <p class="mb-1 small text-muted">Tags / Habilidades</p>
+                <div class="d-flex flex-wrap gap-1">
+                  <span class="badge bg-light text-secondary border" *ngFor="let tag of selectedCertification.tags">
+                    {{ tag }}
+                  </span>
+                </div>
+              </div>
+
+              <div class="d-flex gap-2 mt-3 pt-3 border-top" *ngIf="selectedCertification.certificateUrl">
+                <button class="btn btn-sm btn-outline-primary" type="button" (click)="openCertificate(selectedCertification!)">
+                  <i class="fas fa-eye me-1"></i> Ver Certificado
+                </button>
+                <button class="btn btn-sm btn-outline-secondary" type="button" (click)="downloadCertificate(selectedCertification!)">
+                  <i class="fas fa-download me-1"></i> Descargar
+                </button>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-sm btn-secondary" (click)="closeCertificationDetails()">Cerrar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-backdrop fade show" *ngIf="showDetailsModal"></div>
     </div>
   </div>
 </div>

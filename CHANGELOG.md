@@ -3,6 +3,44 @@
 Todos los cambios notables en este proyecto serán documentados en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y este proyecto se encuentra actualmente en fase de **versiones Beta**.
 
+## [2.3.0-beta] - 2026-06-25 17:25
+
+### Añadido
+- **ISS-010 y ISS-011: Departamentos y Cargos Dinámicos:**
+  - Creación del modelo independiente `Department` y el modelo `Position` (Cargos) en Mongoose con referencias de `ObjectId` en usuarios y certificaciones en reemplazo de strings estáticos.
+  - Implementación de la utilidad `resolveEntities` para buscar o crear dinámicamente departamentos y cargos al vuelo de forma case-insensitive.
+  - Endpoint `PATCH /api/users/bulk-department` para asignación de departamentos masiva.
+  - Script de migración automática de datos ejecutado al arrancar el servidor backend para normalizar registros previos.
+- **ISS-012: Panel de Gestión de Departamentos:**
+  - Pestaña CRUD interactiva en `/settings/departments` con tarjetas visuales, estados activos/inactivos y selección de líderes.
+  - Lógica bidireccional de promoción a rol `LIDER` e inclusión/remoción automática en el array `managedDepartments` al actualizar directores de área.
+- **ISS-013: Vista de Certificaciones en Perfil:**
+  - Pestaña "Mis Certificaciones" en la vista `/profile` con listado compacto, modal interactivo de detalles y descarga de adjuntos en línea.
+- **ISS-014 e ISS-015: Certificaciones Organizacionales y de Compliance:**
+  - Propiedades `isOrganizational`, `applicableDepartments` y `appliesToAllCompany` en certificaciones, con validación condicional de Mongoose (opcionalidad de empleado si aplica a la organización).
+  - Formularios de creación y edición actualizados en el frontend con switches de alcance y selección múltiple de departamentos.
+  - Control de accesos de descarga física de adjuntos restringido a administradores, creadores o miembros de áreas aplicables.
+  - Habilitada actualización de compliance global para todos los líderes de departamentos del sistema.
+- **ISS-016: Flexibilidad en Departamentos sin Líderes:**
+  - Permitida la desvinculación a nulo (`leaderId: null`) de líderes, degradando al usuario anterior automáticamente a rol `reader` si ya no gestiona más áreas.
+- **ISS-017: Respaldos Locales Automáticos y Rotativos:**
+  - Rutina cron diaria para la creación física de respaldos ZIP completos (Base de datos + archivos adjuntos) en `backend/backups/`.
+  - Rotación física automatizada en disco del servidor reteniendo únicamente los últimos 10 archivos.
+  - Endpoints del administrador para listar, descargar (con protección rigurosa ante Path Traversal) y eliminar respaldos físicos del servidor.
+  - Panel visual de auto-backup en el frontend (`/settings/backups`) con switch, frecuencia configurable, metadatos y tabla interactiva.
+- **Suite de Verificación y QA:**
+  - Diseñado e implementado el script de QA y verificación automatizada `backend/src/scripts/qa-verify.ts` que valida de forma empírica todas las reglas de negocio del backend y base de datos con un 100% de éxito.
+
+### Modificado
+- **Control de Eliminación Organizacional:**
+  - Borrado de certificaciones de área restringido estrictamente al creador del registro y a administradores de CertVault.
+- **Tipado del Frontend:**
+  - Modificado el modelo de datos `certification.model.ts` en Angular para soportar las nuevas propiedades de alcance corporativo.
+
+### Corregido
+- **Validaciones de TypeScript:**
+  - Corregidos errores de tipos y de asignación en los controladores y servicios del backend y frontend garantizando una compilación libre de warnings.
+
 ## [2.2.1-beta] - 2026-05-31 16:30
 
 ### Modificado

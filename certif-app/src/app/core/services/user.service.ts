@@ -6,11 +6,11 @@ import {
   User, 
   UserRole, 
   Department, 
+  Position,
   Permission, 
   RegisterRequest, 
   UserPermissions,
-  UserRoleLabels,
-  DepartmentLabels 
+  UserRoleLabels
 } from '../models/user.model';
 import { ApiResponse } from '../models/common.model';
 
@@ -39,15 +39,20 @@ export interface UsersQuery {
   limit?: number;
   search?: string;
   role?: UserRole;
-  department?: Department;
+  department?: string;
   isActive?: boolean;
   departmentLeader?: boolean;
 }
 
 export interface DepartmentOption {
   key: string;
-  value: Department;
+  value: string;
   label: string;
+  _id?: string;
+  name?: string;
+  code?: string;
+  leaderId?: any;
+  isActive?: boolean;
 }
 
 export interface RoleOption {
@@ -129,6 +134,43 @@ export class UserService {
       .pipe(catchError(this.handleError));
   }
 
+  // Obtener posiciones disponibles (cargos)
+  getPositions(): Observable<ApiResponse<Position[]>> {
+    return this.http.get<ApiResponse<Position[]>>('/api/positions')
+      .pipe(catchError(this.handleError));
+  }
+
+  // Actualizar masivamente el departamento de una lista de usuarios
+  bulkUpdateDepartment(userIds: string[], departmentId: string): Observable<ApiResponse<void>> {
+    return this.http.patch<ApiResponse<void>>(`${this.API_URL}/bulk-department`, { userIds, departmentId })
+      .pipe(catchError(this.handleError));
+  }
+
+  // Obtener lista completa de departamentos (incluyendo inactivos si no se indica activeOnly)
+  getDepartmentsList(activeOnly = false): Observable<ApiResponse<any[]>> {
+    const params = new HttpParams().set('activeOnly', activeOnly.toString());
+    return this.http.get<ApiResponse<any[]>>('/api/departments', { params })
+      .pipe(catchError(this.handleError));
+  }
+
+  // Crear departamento
+  createDepartment(dept: { name: string, leaderId?: string }): Observable<ApiResponse<any>> {
+    return this.http.post<ApiResponse<any>>('/api/departments', dept)
+      .pipe(catchError(this.handleError));
+  }
+
+  // Actualizar departamento
+  updateDepartment(id: string, dept: { name: string, leaderId?: string, isActive?: boolean }): Observable<ApiResponse<any>> {
+    return this.http.put<ApiResponse<any>>(`/api/departments/${id}`, dept)
+      .pipe(catchError(this.handleError));
+  }
+
+  // Inactivar departamento
+  deleteDepartment(id: string): Observable<ApiResponse<void>> {
+    return this.http.delete<ApiResponse<void>>(`/api/departments/${id}`)
+      .pipe(catchError(this.handleError));
+  }
+
   // Helper: Obtener permisos de usuario
   getUserPermissions(user: User): UserPermissions {
     // Simulaci�n de verificaci�n de permisos basada en rol
@@ -201,27 +243,37 @@ export class UserService {
   }
 
   // Helper: Obtener etiqueta del departamento
-  getDepartmentLabel(department: Department): string {
-    return DepartmentLabels[department] || department;
+  getDepartmentLabel(department: any): string {
+    if (!department) return '';
+    if (typeof department === 'object') {
+      return department.name || '';
+    }
+    return department;
   }
 
   // Helper: Verificar si puede gestionar un departamento
-  canManageDepartment(user: User, department: Department): boolean {
+  canManageDepartment(user: User, department: any): boolean {
     // El admin puede gestionar cualquier departamento
     if (user.role === UserRole.ADMIN) {
       return true;
     }
 
-    // Los l�deres pueden gestionar su propio departamento
+    const myDeptId = user.department?._id ? user.department._id.toString() : user.department?.toString();
+    const targetDeptId = department?._id ? department._id.toString() : department?.toString();
+
+    // Los líderes pueden gestionar su propio departamento
     if (user.role === UserRole.LIDER) {
       // Puede gestionar su departamento principal
-      if (user.department === department) {
+      if (myDeptId === targetDeptId) {
         return true;
       }
 
       // Puede gestionar departamentos adicionales asignados
-      if (user.managedDepartments?.includes(department)) {
-        return true;
+      if (user.managedDepartments) {
+        return user.managedDepartments.some((d: any) => {
+          const managedId = d?._id ? d._id.toString() : d?.toString();
+          return managedId === targetDeptId;
+        });
       }
     }
 

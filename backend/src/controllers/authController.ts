@@ -7,6 +7,7 @@ import { saveBase64Avatar } from '../utils/avatar';
 import { sendPasswordResetEmail, sendVerificationEmail } from '../services/emailService';
 import { AuditLog } from '../models/AuditLog';
 import { SecuritySettings } from '../models/SecuritySettings';
+import { resolveDepartment, resolvePosition } from '../utils/resolveEntities';
 
 interface RegisterData {
   username: string;
@@ -113,6 +114,9 @@ export const register = async (req: AuthRequest, res: Response): Promise<void> =
     const { username, email, personalEmail, password, firstName, lastName, department, position, phone }: RegisterData =
       req.body;
 
+    const resolvedDeptId = await resolveDepartment(department);
+    const resolvedPosId = await resolvePosition(position || 'Colaborador');
+
     const normalizedEmail = normalizeEmail(email);
     const normalizedPersonalEmail = normalizeEmail(personalEmail);
 
@@ -139,8 +143,8 @@ export const register = async (req: AuthRequest, res: Response): Promise<void> =
       password,
       firstName,
       lastName,
-      department,
-      position: position || 'Colaborador',
+      department: resolvedDeptId,
+      position: resolvedPosId,
       phone,
       role: UserRole.READER,
       isActive: true,

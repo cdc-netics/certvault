@@ -40,6 +40,10 @@ export interface SecuritySettingsData {
   ldapBaseDN?: string;
   ldapBindDN?: string;
   ldapBindPassword?: string;
+  // Propiedades de auto-backup
+  autoBackupEnabled: boolean;
+  autoBackupIntervalDays: number;
+  lastAutoBackupAt?: string | Date;
 }
 
 export interface PublicApiClient {
@@ -224,6 +228,30 @@ export class SettingsService {
   // Probar la configuración de Active Directory (Azure o LDAP) en el backend
   testAdSettings(payload: SecuritySettingsData): Observable<ApiResponse<any>> {
     return this.http.post<ApiResponse<any>>(`${this.API_URL}/security/test-ad`, payload)
+      .pipe(catchError(this.handleError));
+  }
+
+  // Obtener lista de backups locales en el disco del servidor
+  getLocalBackups(): Observable<ApiResponse<any[]>> {
+    return this.http.get<ApiResponse<any[]>>(`${this.API_URL}/backup/local`)
+      .pipe(catchError(this.handleError));
+  }
+
+  // Generar de forma manual un backup en el servidor local
+  createManualLocalBackup(): Observable<ApiResponse<any>> {
+    return this.http.post<ApiResponse<any>>(`${this.API_URL}/backup/local`, {})
+      .pipe(catchError(this.handleError));
+  }
+
+  // Descargar archivo de backup local específico
+  downloadLocalBackup(filename: string): Observable<Blob> {
+    return this.http.get(`${this.API_URL}/backup/local/download/${filename}`, { responseType: 'blob' })
+      .pipe(catchError(this.handleError));
+  }
+
+  // Eliminar archivo de backup local del disco
+  deleteLocalBackup(filename: string): Observable<ApiResponse<void>> {
+    return this.http.delete<ApiResponse<void>>(`${this.API_URL}/backup/local/${filename}`)
       .pipe(catchError(this.handleError));
   }
 
