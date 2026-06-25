@@ -156,6 +156,31 @@ const connectDB = async (): Promise<void> => {
     console.log('Inicializando conexion a MongoDB...');
     await database.connect();
     console.log('Conexion a MongoDB establecida exitosamente');
+
+    // Eliminar los índices TTL problemáticos que borraban a los usuarios al expirar sus tokens
+    try {
+      const db = mongoose.connection.db;
+      if (db) {
+        const collections = await db.listCollections({ name: 'users' }).toArray();
+        if (collections.length > 0) {
+          const indexes = await db.collection('users').listIndexes().toArray();
+          const indexesToDrop = ['passwordResetExpires_1', 'verificationExpires_1'];
+          for (const indexName of indexesToDrop) {
+            if (indexes.some(idx => idx.name === indexName)) {
+              await db.collection('users').dropIndex(indexName);
+              console.log(`[Base de Datos] Se eliminó el índice TTL obsoleto de la colección de usuarios: ${indexName}`);
+            }
+          }
+        }
+      }
+    } catch (indexError) {
+      console.error('Error limpiando índices TTL obsoletos en MongoDB:', indexError);
+    }
+
+    // Iniciar la rutina de curación para volver a asociar certificaciones huérfanas
+    const { healOrphanedCertifications } = await import('./utils/userHealer');
+    await healOrphanedCertifications();
+
     await createDefaultAdminAndSeed();
   } catch (error) {
     console.error('Error conectando a MongoDB:', error);
@@ -202,7 +227,8 @@ const createDefaultAdminAndSeed = async (): Promise<void> => {
       );
     }
 
-    const adminExists = await User.findOne({ role: UserRole.ADMIN }).select('+password');
+    const envAdminEmail = (process.env.ADMIN_EMAIL || 'admin@empresa.com').toLowerCase().trim();
+    const adminExists = await User.findOne({ email: envAdminEmail }).select('+password');
 
     if (!adminExists) {
       console.log('Creando usuario administrador por defecto...');

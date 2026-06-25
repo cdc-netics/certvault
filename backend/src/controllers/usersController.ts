@@ -255,6 +255,14 @@ export const createUser = async (req: AuthRequest, res: Response): Promise<void>
 
     await newUser.save();
 
+    // Re-asociar de forma inmediata cualquier certificación huérfana para el usuario recién creado
+    try {
+      const { healOrphanedCertifications } = await import('../utils/userHealer');
+      await healOrphanedCertifications();
+    } catch (healError) {
+      console.error('Error al curar certificaciones huérfanas tras creación de usuario:', healError);
+    }
+
     let emailWarning = '';
     try {
       await sendVerificationEmail({

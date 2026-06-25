@@ -324,7 +324,9 @@ userSchema.index({ isActive: 1 });
 userSchema.index({ departmentLeader: 1 });
 userSchema.index({ managedDepartments: 1 });
 userSchema.index({ createdBy: 1 });
-userSchema.index({ passwordResetExpires: 1 }, { expireAfterSeconds: 0 });
-userSchema.index({ verificationExpires: 1 }, { expireAfterSeconds: 0 });
+
+// Se eliminaron los índices TTL de expiración en esta colección debido a que MongoDB eliminaba
+// el documento del usuario de forma completa al expirar sus respectivos tokens de validación.
+// La comprobación de vencimiento de tokens se ejecuta por completo a nivel lógico en el backend.
 
 export const User = mongoose.model<IUser>('User', userSchema);
