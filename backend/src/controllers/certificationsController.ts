@@ -9,6 +9,7 @@ import {
 } from '../models/Certification';
 import { AuthRequest } from '../middleware/auth';
 import { User, UserRole } from '../models/User';
+import { Department } from '../models/Department';
 
 const canAccessCertification = (certification: ICertification, user: any): boolean => {
   // Se permite el acceso de lectura y descarga de archivos a cualquier usuario autenticado en la plataforma.
@@ -145,13 +146,23 @@ export const getCertifications = async (req: Request, res: Response): Promise<vo
     if (search) {
       // Se escapan caracteres especiales para prevenir ataques de inyección de expresiones regulares (ReDoS)
       const escapedSearch = search.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+      
+      // Buscar IDs de departamentos que coincidan con el término de búsqueda
+      const matchingDepts = await Department.find({
+        name: { $regex: escapedSearch, $options: 'i' }
+      }).select('_id').lean();
+      const matchingDeptIds = matchingDepts.map(d => d._id);
+
       filter.$or = [
         { title: { $regex: escapedSearch, $options: 'i' } },
         { employeeName: { $regex: escapedSearch, $options: 'i' } },
         { technology: { $regex: escapedSearch, $options: 'i' } },
-        { provider: { $regex: escapedSearch, $options: 'i' } },
-        { department: { $regex: escapedSearch, $options: 'i' } }
+        { provider: { $regex: escapedSearch, $options: 'i' } }
       ];
+
+      if (matchingDeptIds.length > 0) {
+        filter.$or.push({ department: { $in: matchingDeptIds } });
+      }
     }
 
     const authReq = req as any;
@@ -690,7 +701,21 @@ export const getExpiringCertifications = async (req: Request, res: Response): Pr
 
 export const getUserCertifications = async (req: Request, res: Response): Promise<void> => {
   try {
-    const certifications = await Certification.find({ employeeId: req.params.userId }).sort({
+    const userId = typeof req.params.userId === 'string' ? req.params.userId : '';
+    if (!userId) {
+      res.status(400).json({ success: false, error: 'ID de usuario inválido' });
+      return;
+    }
+
+    const queryConditions: any[] = [{ employeeId: userId }];
+
+    if (mongoose.Types.ObjectId.isValid(userId)) {
+      queryConditions.push({ employeeId: new mongoose.Types.ObjectId(userId) });
+    }
+
+    const certifications = await Certification.find({
+      $or: queryConditions
+    }).sort({
       issueDate: -1
     });
     res.json({ success: true, data: certifications });
@@ -733,14 +758,25 @@ export const searchCertifications = async (req: Request, res: Response): Promise
     // Se escapan caracteres especiales de expresiones regulares para evitar inyección y caídas del backend
     const escapedQ = q.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
     const regex = new RegExp(escapedQ, 'i');
+
+    const matchingDepts = await Department.find({
+      name: regex
+    }).select('_id').lean();
+    const matchingDeptIds = matchingDepts.map(d => d._id);
+
+    const searchConditions: any[] = [
+      { title: regex },
+      { employeeName: regex },
+      { technology: regex },
+      { provider: regex }
+    ];
+
+    if (matchingDeptIds.length > 0) {
+      searchConditions.push({ department: { $in: matchingDeptIds } });
+    }
+
     const certifications = await Certification.find({
-      $or: [
-        { title: regex },
-        { employeeName: regex },
-        { technology: regex },
-        { provider: regex },
-        { department: regex }
-      ]
+      $or: searchConditions
     }).limit(20);
 
     res.json({ success: true, data: certifications });

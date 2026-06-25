@@ -1170,3 +1170,22 @@ export const adLogin = async (req: Request, res: Response): Promise<void> => {
     res.status(500).json({ success: false, error: 'Error del sistema al procesar el inicio de sesión único.' });
   }
 };
+
+export const getAdConfig = async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const settings = await SecuritySettings.findOne().sort({ updatedAt: -1 });
+    res.json({
+      success: true,
+      data: {
+        adLoginEnabled: settings ? settings.adLoginEnabled : false,
+        adProvider: settings ? settings.adProvider : 'azure'
+      }
+    });
+  } catch (error) {
+    console.error('Error al obtener la configuración de AD:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Error al obtener la configuración de AD'
+    });
+  }
+};
