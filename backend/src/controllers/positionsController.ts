@@ -1,5 +1,6 @@
 import { Response } from 'express';
 import { Position } from '../models/Position';
+import { User } from '../models/User';
 import { AuthRequest } from '../middleware/auth';
 import { recordAuditLog } from '../services/auditService';
 import { AuditAction } from '../models/AuditLog';
@@ -70,3 +71,98 @@ export const createPosition = async (req: AuthRequest, res: Response): Promise<v
     res.status(500).json({ success: false, error: 'Error al crear cargo' });
   }
 };
+
+// Actualizar cargo existente
+export const updatePosition = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const { name, isActive } = req.body;
+
+    const position = await Position.findById(id);
+    if (!position) {
+      res.status(404).json({ success: false, error: 'Cargo no encontrado' });
+      return;
+    }
+
+    // Si se provee nombre y es diferente al actual, verificar duplicidad
+    if (name && name.trim() !== position.name) {
+      const existing = await Position.findOne({
+        _id: { $ne: position._id },
+        name: { $regex: new RegExp(`^${name.trim()}$`, 'i') }
+      });
+      if (existing) {
+        res.status(400).json({ success: false, error: 'Ya existe otro cargo con ese nombre' });
+        return;
+      }
+      position.name = name.trim();
+    }
+
+    // Actualizar estado de actividad si viene definido
+    if (isActive !== undefined) {
+      position.isActive = isActive;
+    }
+
+    await position.save();
+
+    // Registrar en auditoría
+    await recordAuditLog({
+      action: AuditAction.UPDATE,
+      resource: 'positions',
+      resourceId: position._id.toString(),
+      userId: req.user?._id,
+      userEmail: req.user?.email,
+      userRole: req.user?.role,
+      ip: req.ip,
+      message: `Actualizado el cargo ${position.name} (Activo: ${position.isActive})`
+    });
+
+    res.json({
+      success: true,
+      data: position,
+      message: 'Cargo actualizado exitosamente'
+    });
+  } catch (error) {
+    console.error('Error al actualizar cargo:', error);
+    res.status(500).json({ success: false, error: 'Error al actualizar cargo' });
+  }
+};
+
+// Eliminar cargo físicamente y limpiar la referencia en usuarios
+export const deletePosition = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const position = await Position.findById(id);
+
+    if (!position) {
+      res.status(404).json({ success: false, error: 'Cargo no encontrado' });
+      return;
+    }
+
+    // Limpiar la referencia a este cargo en los usuarios del sistema
+    await User.updateMany({ position: id }, { $set: { position: null as any } });
+
+    // Borrado físico
+    await Position.findByIdAndDelete(position._id);
+
+    // Registrar auditoría
+    await recordAuditLog({
+      action: AuditAction.DELETE,
+      resource: 'positions',
+      resourceId: position._id.toString(),
+      userId: req.user?._id,
+      userEmail: req.user?.email,
+      userRole: req.user?.role,
+      ip: req.ip,
+      message: `Eliminado permanentemente el cargo ${position.name}`
+    });
+
+    res.json({
+      success: true,
+      message: 'Cargo eliminado permanentemente'
+    });
+  } catch (error) {
+    console.error('Error al eliminar cargo:', error);
+    res.status(500).json({ success: false, error: 'Error al eliminar cargo' });
+  }
+};
+

@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import mongoose from 'mongoose';
 import path from 'path';
 import fs from 'fs';
+import AdmZip from 'adm-zip';
 import {
   Certification,
   ICertification,
@@ -128,6 +129,7 @@ export const getCertifications = async (req: Request, res: Response): Promise<vo
     }
     if (req.query.department) filter.department = req.query.department;
     if (req.query.status) filter.status = req.query.status;
+    if (req.query.employeeId) filter.employeeId = req.query.employeeId;
 
     if (req.query.dateFrom || req.query.dateTo) {
       filter.issueDate = {};
@@ -190,8 +192,20 @@ export const getCertifications = async (req: Request, res: Response): Promise<vo
     }
 
     const total = await Certification.countDocuments(filter);
+    
+    // Configurar orden dinámico. El orden predeterminado prioriza el vencimiento más cercano.
+    const sortBy = (req.query.sortBy as string) || 'expirationDate';
+    const sortOrder = (req.query.sortOrder as string) === 'desc' ? -1 : 1;
+    const sortObj: any = {};
+    if (sortBy === 'expirationDate') {
+      sortObj.expirationDate = sortOrder; // 1 para vencimiento más próximo primero
+      sortObj.createdAt = -1;             // Orden secundario por fecha de creación desc
+    } else {
+      sortObj[sortBy] = sortOrder;
+    }
+
     const certificationsRaw = await Certification.find(filter)
-      .sort({ createdAt: -1 })
+      .sort(sortObj)
       .skip((page - 1) * limit)
       .limit(limit)
       .lean();
@@ -723,6 +737,116 @@ export const getUserCertifications = async (req: Request, res: Response): Promis
     res.status(500).json({
       success: false,
       error: 'Error al obtener certificaciones del usuario'
+    });
+  }
+};
+
+export const downloadAllUserCertifications = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const currentUser = req.user!;
+    const userId = typeof req.params.userId === 'string' ? req.params.userId : '';
+    if (!userId) {
+      res.status(400).json({ success: false, error: 'ID de usuario inválido' });
+      return;
+    }
+
+    // Validar permisos del solicitante (propietario, admin o líder de su departamento)
+    const isSelf = currentUser._id?.toString() === userId;
+    const isAdmin = currentUser.role === UserRole.ADMIN;
+    let isLeaderWithAccess = false;
+
+    if (currentUser.role === UserRole.LIDER) {
+      const employee = await User.findById(userId);
+      if (employee) {
+        isLeaderWithAccess = currentUser.canManageDepartment(employee.department);
+      }
+    }
+
+    if (!isSelf && !isAdmin && !isLeaderWithAccess) {
+      res.status(403).json({
+        success: false,
+        error: 'No tienes permisos para descargar las certificaciones de este usuario'
+      });
+      return;
+    }
+
+    // Buscar certificaciones del usuario que tengan un archivo asignado
+    const queryConditions: any[] = [{ employeeId: userId }];
+    if (mongoose.Types.ObjectId.isValid(userId)) {
+      queryConditions.push({ employeeId: new mongoose.Types.ObjectId(userId) });
+    }
+
+    const certifications = await Certification.find({
+      $or: queryConditions,
+      certificateUrl: { $exists: true, $nin: [null, ''] }
+    });
+
+    if (!certifications || certifications.length === 0) {
+      res.status(404).json({
+        success: false,
+        error: 'No se encontraron archivos de certificaciones disponibles para este usuario'
+      });
+      return;
+    }
+
+    const zip = new AdmZip();
+    const uploadsRoot = path.resolve(__dirname, '../../uploads/certificates');
+    const addedNames = new Set<string>();
+
+    for (const cert of certifications) {
+      const certificateUrl = cert.certificateUrl || '';
+      if (!certificateUrl.startsWith('/uploads/certificates/')) {
+        continue;
+      }
+
+      const fileName = path.basename(certificateUrl);
+      const filePath = path.resolve(uploadsRoot, fileName);
+
+      // Comprobar existencia y evitar path traversal
+      const relativePath = path.relative(uploadsRoot, filePath);
+      if (relativePath.startsWith('..') || path.isAbsolute(relativePath) || !fs.existsSync(filePath)) {
+        continue;
+      }
+
+      // Generar nombre descriptivo y seguro para el archivo en el ZIP
+      let baseZipName = `${cert.certificateNumber || cert.title || 'certificado'}`;
+      baseZipName = baseZipName.replace(/[^a-zA-Z0-9_-]/g, '_');
+      const ext = path.extname(fileName);
+      let zipEntryName = `${baseZipName}${ext}`;
+
+      // Manejar nombres duplicados agregando un índice incremental
+      let counter = 1;
+      while (addedNames.has(zipEntryName)) {
+        zipEntryName = `${baseZipName}_${counter}${ext}`;
+        counter++;
+      }
+      addedNames.add(zipEntryName);
+
+      // Agregar archivo al ZIP
+      zip.addLocalFile(filePath, undefined, zipEntryName);
+    }
+
+    if (zip.getEntries().length === 0) {
+      res.status(404).json({
+        success: false,
+        error: 'Los archivos de las certificaciones no están físicamente en el servidor'
+      });
+      return;
+    }
+
+    // Obtener datos del empleado para nombrar el archivo comprimido
+    const targetUser = await User.findById(userId);
+    const userSuffix = targetUser ? `${targetUser.firstName}_${targetUser.lastName}`.replace(/\s+/g, '_') : userId;
+
+    const zipBuffer = zip.toBuffer();
+    res.setHeader('Content-Disposition', `attachment; filename="certificaciones_${userSuffix}.zip"`);
+    res.setHeader('Content-Type', 'application/zip');
+    res.send(zipBuffer);
+  } catch (error) {
+    console.error('Error al empaquetar certificaciones en ZIP:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Error al generar la descarga consolidada en ZIP'
     });
   }
 };

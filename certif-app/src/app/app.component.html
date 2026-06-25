@@ -1,8 +1,9 @@
 <div class="layout" [class.collapsed]="sidebarCollapsed" *ngIf="!isLoginPage(); else loginOutlet">
   <aside class="sidebar">
     <div class="sidebar-header d-flex align-items-center justify-content-between">
-      <div class="brand" [class.collapsed-brand]="sidebarCollapsed">
-        <h5 class="mb-0 text-white brand-title">CertiVault</h5>
+      <div class="brand d-flex align-items-center gap-2" [class.collapsed-brand]="sidebarCollapsed">
+        <img *ngIf="sidebarLogo" [src]="sidebarLogo" alt="Logo" class="brand-logo" style="max-height: 25px; max-width: 100%; object-fit: contain;">
+        <h5 class="mb-0 text-white brand-title" *ngIf="!sidebarCollapsed">{{ appName || 'CertiVault' }}</h5>
       </div>
       <button class="btn btn-sm btn-outline-light" (click)="toggleSidebar()" [attr.aria-expanded]="!sidebarCollapsed">
         <i class="fas" [class.fa-chevron-left]="!sidebarCollapsed" [class.fa-chevron-right]="sidebarCollapsed"></i>

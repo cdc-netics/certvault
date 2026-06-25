@@ -1,0 +1,166 @@
+<div class="container-fluid pt-3 pb-4">
+  <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-3 border-bottom">
+    <h1 class="h2">
+      <i class="fas fa-cogs me-2 text-primary"></i>
+      Configuración del Sistema
+    </h1>
+  </div>
+
+  <!-- Navegación de configuración -->
+  <app-settings-nav></app-settings-nav>
+
+  <!-- Mensajes de Estado -->
+  <div class="alert alert-danger shadow-sm border-0 d-flex align-items-center mb-3" *ngIf="errorMessage">
+    <i class="fas fa-exclamation-triangle fa-lg me-2"></i>
+    <span>{{ errorMessage }}</span>
+  </div>
+  <div class="alert alert-success shadow-sm border-0 d-flex align-items-center mb-3" *ngIf="successMessage">
+    <i class="fas fa-check-circle fa-lg me-2"></i>
+    <span>{{ successMessage }}</span>
+  </div>
+
+  <!-- Contenedor Principal de Cargos -->
+  <div class="card border-0 shadow-sm-custom">
+    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center border-bottom-0">
+      <div class="d-flex align-items-center gap-3">
+        <h5 class="mb-0 text-dark fw-bold">
+          <i class="fas fa-user-tag text-primary me-2"></i>
+          Gestión de Cargos/Posiciones
+        </h5>
+        
+        <!-- Filtro rápido de activos -->
+        <div class="form-check form-switch mb-0 ms-3">
+          <input 
+            class="form-check-input border-2 cursor-pointer" 
+            type="checkbox" 
+            id="activeOnlyFilter" 
+            [(ngModel)]="showActiveOnly">
+          <label class="form-check-label text-muted small fw-semibold cursor-pointer" for="activeOnlyFilter">
+            Mostrar solo activos
+          </label>
+        </div>
+      </div>
+      <button class="btn btn-primary btn-sm px-3 fw-semibold shadow-sm" (click)="openCreateModal()" [disabled]="loading">
+        <i class="fas fa-plus me-1"></i>
+        Nuevo Cargo
+      </button>
+    </div>
+    
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light text-secondary">
+            <tr>
+              <th scope="col" class="ps-4">Nombre del Cargo</th>
+              <th scope="col">Estado</th>
+              <th scope="col" class="text-end pe-4">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let pos of getFilteredPositions()" [class.table-light]="!pos.isActive">
+              <td class="ps-4 fw-semibold text-dark">
+                {{ pos.name }}
+              </td>
+              <td>
+                <span [class]="pos.isActive ? 'badge bg-success-soft text-success' : 'badge bg-danger-soft text-danger'">
+                  <i [class]="pos.isActive ? 'fas fa-check-circle me-1' : 'fas fa-times-circle me-1'"></i>
+                  {{ pos.isActive ? 'Activo' : 'Inactivo' }}
+                </span>
+              </td>
+              <td class="text-end pe-4">
+                <div class="btn-group btn-group-sm shadow-sm" role="group">
+                  <button 
+                    type="button" 
+                    class="btn btn-outline-primary border-2" 
+                    title="Editar"
+                    (click)="openEditModal(pos)"
+                    [disabled]="loading">
+                    <i class="fas fa-edit"></i>
+                  </button>
+                  <button 
+                    type="button" 
+                    class="btn btn-outline-warning border-2" 
+                    [title]="pos.isActive ? 'Inactivar' : 'Activar'"
+                    (click)="togglePositionActive(pos)"
+                    [disabled]="loading">
+                    <i [class]="pos.isActive ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
+                  </button>
+                  <button 
+                    type="button" 
+                    class="btn btn-outline-danger border-2" 
+                    title="Eliminar permanentemente"
+                    (click)="deletePosition(pos)"
+                    [disabled]="loading">
+                    <i class="fas fa-trash-alt"></i>
+                  </button>
+                </div>
+              </td>
+            </tr>
+            <tr *ngIf="!loading && getFilteredPositions().length === 0">
+              <td colspan="3" class="text-center py-5 text-muted">
+                <i class="fas fa-user-tag fa-3x mb-3 text-secondary"></i>
+                <h5>No se encontraron cargos registrados</h5>
+                <p class="small mb-0">Comienza registrando un cargo nuevo para asignar a tus colaboradores.</p>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading Overlay -->
+  <div class="text-center py-5" *ngIf="loading">
+    <div class="spinner-border text-primary" role="status">
+      <span class="visually-hidden">Procesando...</span>
+    </div>
+    <p class="mt-2 text-muted">Actualizando información...</p>
+  </div>
+
+  <!-- Modal de Formulario de Cargo -->
+  <div class="modal fade show d-block" tabindex="-1" style="background: rgba(0,0,0,0.5);" *ngIf="showModal">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content border-0 shadow-lg">
+        <div class="modal-header bg-primary text-white border-bottom-0">
+          <h5 class="modal-title fw-bold">
+            <i class="fas fa-user-tag me-2"></i>
+            {{ isEditMode ? 'Editar Cargo' : 'Nuevo Cargo' }}
+          </h5>
+          <button type="button" class="btn-close btn-close-white" (click)="closeModal()"></button>
+        </div>
+        <form [formGroup]="positionForm" (ngSubmit)="onSubmit()" novalidate>
+          <div class="modal-body p-4">
+            <div class="mb-3">
+              <label for="posName" class="form-label fw-semibold text-secondary">Nombre del Cargo</label>
+              <input 
+                type="text" 
+                class="form-control border-2" 
+                id="posName" 
+                formControlName="name"
+                [class.is-invalid]="positionForm.get('name')?.invalid && positionForm.get('name')?.touched"
+                placeholder="Ej: Analista de Seguridad SOC">
+              <div class="invalid-feedback" *ngIf="positionForm.get('name')?.invalid && positionForm.get('name')?.touched">
+                <small>El nombre es requerido (máx. 100 caracteres)</small>
+              </div>
+            </div>
+
+            <div class="form-check form-switch mb-2" *ngIf="isEditMode">
+              <input 
+                class="form-check-input border-2" 
+                type="checkbox" 
+                id="posStatus" 
+                formControlName="isActive">
+              <label class="form-check-label fw-semibold text-secondary" for="posStatus">Cargo Activo</label>
+            </div>
+          </div>
+          <div class="modal-footer bg-light border-top-0">
+            <button type="button" class="btn btn-outline-secondary px-3" (click)="closeModal()">Cancelar</button>
+            <button type="submit" class="btn btn-primary px-4 fw-bold" [disabled]="positionForm.invalid || loading">
+              Guardar Cambios
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>

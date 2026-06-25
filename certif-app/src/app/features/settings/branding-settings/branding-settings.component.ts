@@ -124,6 +124,10 @@ export class BrandingSettingsComponent implements OnInit {
         this.form.patchValue(response.data || {});
         this.successMessage = response.message || 'Branding actualizado';
         this.saving = false;
+        if (response.data) {
+          // Aplicar inmediatamente los cambios visuales en el DOM
+          this.settingsService.applyBranding(response.data);
+        }
       },
       error: (error) => {
         this.errorMessage = error.message;

@@ -86,16 +86,27 @@ const userSchema = new Schema<IUser>(
     },
     personalEmail: {
       type: String,
-      required: [true, 'El correo personal es requerido'],
       lowercase: true,
       trim: true,
-      match: [/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/, 'Correo personal invalido'],
       validate: {
         validator: function(this: any, val: string) {
-          // El correo personal no puede ser igual al corporativo
+          // Si viene vacío o nulo, es válido a nivel de esquema (se valida dinámicamente en el controlador)
+          if (!val || val.trim() === '') {
+            return true;
+          }
+          // Validar formato
+          const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+          if (!emailRegex.test(val)) {
+            return false;
+          }
+          // El correo personal no puede ser igual al corporativo, excepto para el administrador inicial
+          const envAdminEmail = (process.env.ADMIN_EMAIL || 'admin@empresa.com').toLowerCase().trim();
+          if (this.email && this.email.toLowerCase().trim() === envAdminEmail) {
+            return true;
+          }
           return this.email ? this.email.toLowerCase().trim() !== val.toLowerCase().trim() : true;
         },
-        message: 'El correo personal no puede ser igual al correo de la empresa'
+        message: 'El correo personal es inválido o no puede ser igual al correo de la empresa'
       }
     },
     password: {

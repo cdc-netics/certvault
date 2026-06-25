@@ -14,6 +14,8 @@ export interface SmtpProfileInput {
   fromEmail: string;
   rejectUnauthorized?: boolean;
   connectionTimeout?: number;
+  sendBackupOnDelete?: boolean;
+  requirePersonalEmail?: boolean;
 }
 
 export interface MailerContext {
@@ -140,6 +142,8 @@ export const toSafeSmtpProfile = (profile: ISmtpProfile) => ({
   isActive: profile.isActive,
   rejectUnauthorized: profile.rejectUnauthorized,
   connectionTimeout: profile.connectionTimeout,
+  sendBackupOnDelete: profile.sendBackupOnDelete !== false,
+  requirePersonalEmail: profile.requirePersonalEmail !== false,
   lastTestAt: profile.lastTestAt,
   lastTestSuccess: profile.lastTestSuccess,
   lastTestMessage: profile.lastTestMessage,

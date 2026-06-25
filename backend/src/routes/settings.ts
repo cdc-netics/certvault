@@ -7,7 +7,8 @@ import {
   deleteSmtpProfile,
   getSmtpProfiles,
   testSmtpProfile,
-  updateSmtpProfile
+  updateSmtpProfile,
+  getActiveSmtpPolicy
 } from '../controllers/smtpProfilesController';
 import {
   exportBackup,
@@ -48,6 +49,8 @@ router.get('/health', (_req, res) => {
     status: 'ok'
   });
 });
+
+router.get('/smtp-policy', authenticate, getActiveSmtpPolicy);
 
 router.use(authenticate, adminOnly);
 

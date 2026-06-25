@@ -15,6 +15,8 @@ export interface ISmtpProfile extends Document {
   lastTestAt?: Date;
   lastTestSuccess?: boolean;
   lastTestMessage?: string;
+  sendBackupOnDelete: boolean;
+  requirePersonalEmail: boolean;
   createdBy?: Schema.Types.ObjectId;
   updatedBy?: Schema.Types.ObjectId;
   createdAt: Date;
@@ -78,6 +80,14 @@ const smtpProfileSchema = new Schema<ISmtpProfile>(
       default: 15000,
       min: [3000, 'El timeout minimo es 3000 ms'],
       max: [60000, 'El timeout maximo es 60000 ms']
+    },
+    sendBackupOnDelete: {
+      type: Boolean,
+      default: true
+    },
+    requirePersonalEmail: {
+      type: Boolean,
+      default: true
     },
     lastTestAt: Date,
     lastTestSuccess: Boolean,

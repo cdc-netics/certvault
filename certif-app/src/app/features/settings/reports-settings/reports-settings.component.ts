@@ -5,6 +5,8 @@ import { BackButtonComponent } from '../../../shared/components/back-button/back
 import { SettingsService } from '../../../core/services/settings.service';
 import { SettingsNavComponent } from '../settings-nav.component';
 
+import { UserService } from '../../../core/services/user.service';
+
 interface ReportFilters {
   department: string;
   status: string;
@@ -32,7 +34,12 @@ interface ReportFilters {
           <div class="row g-2 align-items-end">
             <div class="col-md-3">
               <label class="form-label">Departamento</label>
-              <input class="form-control" [(ngModel)]="filters.department">
+              <select class="form-select" [(ngModel)]="filters.department">
+                <option value="">Todos los departamentos</option>
+                <option *ngFor="let dept of departments" [value]="dept._id">
+                  {{ dept.name }}
+                </option>
+              </select>
             </div>
             <div class="col-md-3">
               <label class="form-label">Estado</label>
@@ -96,8 +103,12 @@ export class ReportsSettingsComponent implements OnInit {
   report: any = {};
   errorMessage = '';
   filters: ReportFilters = { department: '', status: '', from: '', to: '' };
+  departments: any[] = []; // Listado de departamentos activos para el select
 
-  constructor(private readonly settingsService: SettingsService) {}
+  constructor(
+    private readonly settingsService: SettingsService,
+    private readonly userService: UserService
+  ) {}
 
   get totals() {
     const totals = this.report.totals || {};
@@ -122,6 +133,19 @@ export class ReportsSettingsComponent implements OnInit {
 
   ngOnInit(): void {
     this.loadReport();
+    this.loadDepartments();
+  }
+
+  loadDepartments(): void {
+    // Obtener únicamente los departamentos activos
+    this.userService.getDepartmentsList(true).subscribe({
+      next: (response) => {
+        if (response.success && response.data) {
+          this.departments = response.data.sort((a, b) => a.name.localeCompare(b.name));
+        }
+      },
+      error: (err) => console.error('Error al cargar departamentos:', err)
+    });
   }
 
   loadReport(): void {
@@ -133,7 +157,7 @@ export class ReportsSettingsComponent implements OnInit {
   }
 
   exportCsv(): void {
-    this.settingsService.exportReport().subscribe({
+    this.settingsService.exportReport({ ...this.filters }).subscribe({
       next: (blob) => this.downloadBlob(blob, `certificaciones-reporte-${Date.now()}.csv`),
       error: (error) => this.errorMessage = error.message
     });
