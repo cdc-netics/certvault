@@ -171,6 +171,18 @@ export class UserService {
       .pipe(catchError(this.handleError));
   }
 
+  // Eliminar departamentos en lote (Masivo)
+  bulkDeleteDepartments(ids: string[]): Observable<ApiResponse<any>> {
+    return this.http.post<ApiResponse<any>>('/api/departments/bulk-delete', { ids })
+      .pipe(catchError(this.handleError));
+  }
+
+  // Inactivar departamentos en lote (Masivo)
+  bulkInactivateDepartments(ids: string[]): Observable<ApiResponse<any>> {
+    return this.http.post<ApiResponse<any>>('/api/departments/bulk-inactivate', { ids })
+      .pipe(catchError(this.handleError));
+  }
+
   // Helper: Obtener permisos de usuario
   getUserPermissions(user: User): UserPermissions {
     // Simulaci�n de verificaci�n de permisos basada en rol

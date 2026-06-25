@@ -22,11 +22,23 @@
   <!-- Contenedor Principal de Departamentos -->
   <div class="card border-0 shadow-sm-custom">
     <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center border-bottom-0">
-      <h5 class="mb-0 text-dark fw-bold">
-        <i class="fas fa-sitemap text-primary me-2"></i>
-        Gestión de Departamentos/Áreas
-      </h5>
-      <button class="btn btn-primary btn-sm px-3 fw-semibold shadow-sm" (click)="openCreateModal()">
+      <div class="d-flex align-items-center gap-3 flex-wrap">
+        <h5 class="mb-0 text-dark fw-bold">
+          <i class="fas fa-sitemap text-primary me-2"></i>
+          Gestión de Departamentos/Áreas
+        </h5>
+        <!-- Panel de Acciones Masivas -->
+        <div class="d-flex align-items-center gap-2 border-start ps-3 flex-wrap" *ngIf="selectedDeptIds.size > 0">
+          <span class="text-muted small fw-semibold me-1">{{ selectedDeptIds.size }} seleccionados:</span>
+          <button class="btn btn-outline-warning btn-sm fw-semibold shadow-sm px-3" (click)="bulkInactivate()" [disabled]="loading">
+            <i class="fas fa-eye-slash me-1"></i> Inactivar
+          </button>
+          <button class="btn btn-outline-danger btn-sm fw-semibold shadow-sm px-3" (click)="bulkDelete()" [disabled]="loading">
+            <i class="fas fa-trash-alt me-1"></i> Borrar
+          </button>
+        </div>
+      </div>
+      <button class="btn btn-primary btn-sm px-3 fw-semibold shadow-sm" (click)="openCreateModal()" [disabled]="loading">
         <i class="fas fa-plus me-1"></i>
         Nuevo Departamento
       </button>
@@ -37,7 +49,15 @@
         <table class="table table-hover align-middle mb-0">
           <thead class="table-light text-secondary">
             <tr>
-              <th scope="col" class="ps-4">Código</th>
+              <th scope="col" class="ps-4" style="width: 50px;">
+                <input 
+                  type="checkbox" 
+                  class="form-check-input border-2 cursor-pointer"
+                  [checked]="isAllSelected && departments.length > 0"
+                  (change)="toggleSelectAll()"
+                  [disabled]="loading || departments.length === 0">
+              </th>
+              <th scope="col">Código</th>
               <th scope="col">Nombre del Departamento</th>
               <th scope="col">Líder Asignado</th>
               <th scope="col">Estado</th>
@@ -47,6 +67,14 @@
           <tbody>
             <tr *ngFor="let dept of departments" [class.table-light]="!dept.isActive">
               <td class="ps-4">
+                <input 
+                  type="checkbox" 
+                  class="form-check-input border-2 cursor-pointer"
+                  [checked]="selectedDeptIds.has(dept._id)"
+                  (change)="toggleSelect(dept._id)"
+                  [disabled]="loading">
+              </td>
+              <td>
                 <span class="badge bg-secondary px-2 py-1.5 text-uppercase fw-bold font-monospace">
                   {{ dept.code }}
                 </span>
@@ -72,22 +100,31 @@
                     type="button" 
                     class="btn btn-outline-primary border-2" 
                     title="Editar"
-                    (click)="openEditModal(dept)">
+                    (click)="openEditModal(dept)"
+                    [disabled]="loading">
                     <i class="fas fa-edit"></i>
                   </button>
                   <button 
                     type="button" 
+                    class="btn btn-outline-warning border-2" 
+                    [title]="dept.isActive ? 'Inactivar' : 'Activar'"
+                    (click)="toggleDeptActive(dept)"
+                    [disabled]="loading">
+                    <i [class]="dept.isActive ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
+                  </button>
+                  <button 
+                    type="button" 
                     class="btn btn-outline-danger border-2" 
-                    title="Inactivar"
-                    [disabled]="!dept.isActive"
-                    (click)="deleteDept(dept)">
+                    title="Eliminar permanentemente"
+                    (click)="deleteDept(dept)"
+                    [disabled]="loading">
                     <i class="fas fa-trash-alt"></i>
                   </button>
                 </div>
               </td>
             </tr>
             <tr *ngIf="!loading && departments.length === 0">
-              <td colspan="5" class="text-center py-5 text-muted">
+              <td colspan="6" class="text-center py-5 text-muted">
                 <i class="fas fa-sitemap fa-3x mb-3 text-secondary"></i>
                 <h5>No se encontraron departamentos registrados</h5>
                 <p class="small mb-0">Comienza registrando un área nueva para tu organización.</p>

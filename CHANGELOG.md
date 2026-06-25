@@ -3,6 +3,24 @@
 Todos los cambios notables en este proyecto serán documentados en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y este proyecto se encuentra actualmente en fase de **versiones Beta**.
 
+## [2.3.1-beta] - 2026-06-25 17:54
+
+### Añadido
+- **ISS-018: Gestión Física y Masiva de Departamentos**:
+  - Implementación de eliminación física real (`findByIdAndDelete`) en el backend.
+  - Creación del helper seguro `performDepartmentCascading` para realizar desvinculaciones en cascada de las colecciones de usuarios, roles de líderes, certificaciones individuales y aplicabilidad en certificaciones organizacionales.
+  - Endpoints masivos `/api/departments/bulk-delete` y `/api/departments/bulk-inactivate` en el backend para operaciones en lote restringidas al administrador.
+  - Barra superior de acciones masivas flotante en el frontend con soporte para selección múltiple mediante casillas de verificación (checkboxes).
+
+### Modificado
+- **Exclusión de Archivos de Respaldo locales**:
+  - Agregado `backend/backups/` al archivo `.gitignore` en la raíz del proyecto para evitar que los respaldos ZIP se trackeen o suban a Git por error.
+
+### Corregido
+- **Filtro de Selector de Líderes**:
+  - Corregido el dropdown de asignación de líder en el modal de edición de departamento para mostrar de manera exclusiva a los colaboradores marcados con el flag `departmentLeader: true`.
+  - Corregido el parseo de parámetros de consulta booleanos (`isActive` y `departmentLeader`) en el controlador `getUsers` del backend, permitiendo que se procesen correctamente cuando viajan como strings desde la URL.
+
 ## [2.3.0-beta] - 2026-06-25 17:25
 
 ### Añadido

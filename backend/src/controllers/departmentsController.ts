@@ -5,6 +5,7 @@ import { User, UserRole } from '../models/User';
 import { AuthRequest } from '../middleware/auth';
 import { recordAuditLog } from '../services/auditService';
 import { AuditAction } from '../models/AuditLog';
+import { Certification } from '../models/Certification';
 
 // Helper para generar el código del departamento
 const generateCode = async (name: string): Promise<string> => {
@@ -233,7 +234,39 @@ export const updateDepartment = async (req: AuthRequest, res: Response): Promise
   }
 };
 
-// Inactivar/Eliminar departamento
+// Helper para realizar el borrado en cascada seguro del departamento
+export const performDepartmentCascading = async (deptId: mongoose.Types.ObjectId): Promise<void> => {
+  // 1. Usuarios: Limpiar el departamento del usuario
+  await User.updateMany({ department: deptId }, { $set: { department: null as any } });
+
+  // 2. Líderes: Remover del array de managedDepartments y degradar si corresponde
+  const leaders = await User.find({ managedDepartments: deptId });
+  for (const leader of leaders) {
+    if (leader.managedDepartments) {
+      leader.managedDepartments = leader.managedDepartments.filter(
+        d => d.toString() !== deptId.toString()
+      );
+    }
+    if (!leader.managedDepartments || leader.managedDepartments.length === 0) {
+      leader.departmentLeader = false;
+      if (leader.role === UserRole.LIDER) {
+        leader.role = UserRole.READER;
+      }
+    }
+    await leader.save();
+  }
+
+  // 3. Certificaciones individuales: Poner department en null
+  await Certification.updateMany({ department: deptId }, { $set: { department: null as any } });
+
+  // 4. Certificaciones organizacionales: Sacar de la lista de departments aplicables
+  await Certification.updateMany(
+    { applicableDepartments: deptId },
+    { $pull: { applicableDepartments: deptId } }
+  );
+};
+
+// Eliminar departamento (Borrado Físico Real con Cascada)
 export const deleteDepartment = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
@@ -244,30 +277,11 @@ export const deleteDepartment = async (req: AuthRequest, res: Response): Promise
       return;
     }
 
-    // En lugar de borrar físicamente, se inactiva el departamento
-    dept.isActive = false;
-    await dept.save();
+    // Ejecutar borrado en cascada seguro
+    await performDepartmentCascading(dept._id as mongoose.Types.ObjectId);
 
-    // Desasociar líder si existía
-    if (dept.leaderId) {
-      const leader = await User.findById(dept.leaderId);
-      if (leader) {
-        if (leader.managedDepartments) {
-          leader.managedDepartments = leader.managedDepartments.filter(
-            d => d.toString() !== dept._id.toString()
-          );
-        }
-        if (!leader.managedDepartments || leader.managedDepartments.length === 0) {
-          leader.departmentLeader = false;
-          if (leader.role === UserRole.LIDER) {
-            leader.role = UserRole.READER;
-          }
-        }
-        await leader.save();
-      }
-      dept.leaderId = undefined;
-      await dept.save();
-    }
+    // Borrado físico
+    await Department.findByIdAndDelete(dept._id);
 
     await recordAuditLog({
       action: AuditAction.DELETE,
@@ -277,15 +291,122 @@ export const deleteDepartment = async (req: AuthRequest, res: Response): Promise
       userEmail: req.user?.email,
       userRole: req.user?.role,
       ip: req.ip,
-      message: `Inactivado el departamento ${dept.name}`
+      message: `Eliminado físicamente el departamento ${dept.name} (${dept.code})`
     });
 
     res.json({
       success: true,
-      message: 'Departamento inactivado correctamente'
+      message: 'Departamento eliminado permanentemente'
     });
   } catch (error) {
-    console.error('Error al inactivar departamento:', error);
-    res.status(500).json({ success: false, error: 'Error al inactivar departamento' });
+    console.error('Error al eliminar departamento:', error);
+    res.status(500).json({ success: false, error: 'Error al eliminar departamento' });
+  }
+};
+
+// Eliminar departamentos en lote (Masivo)
+export const bulkDeleteDepartments = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { ids } = req.body;
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      res.status(400).json({ success: false, error: 'Lista de IDs de departamentos requerida' });
+      return;
+    }
+
+    let deletedCount = 0;
+    for (const id of ids) {
+      if (mongoose.Types.ObjectId.isValid(id)) {
+        const deptId = new mongoose.Types.ObjectId(id);
+        const dept = await Department.findById(deptId);
+        if (dept) {
+          await performDepartmentCascading(deptId);
+          await Department.findByIdAndDelete(deptId);
+          deletedCount++;
+        }
+      }
+    }
+
+    await recordAuditLog({
+      action: AuditAction.DELETE,
+      resource: 'departments',
+      resourceId: 'bulk',
+      userId: req.user?._id,
+      userEmail: req.user?.email,
+      userRole: req.user?.role,
+      ip: req.ip,
+      message: `Eliminados físicamente ${deletedCount} departamentos en lote`
+    });
+
+    res.json({
+      success: true,
+      message: `Se eliminaron permanentemente ${deletedCount} departamentos`
+    });
+  } catch (error) {
+    console.error('Error al eliminar departamentos en lote:', error);
+    res.status(500).json({ success: false, error: 'Error al eliminar departamentos en lote' });
+  }
+};
+
+// Inactivar departamentos en lote (Masivo)
+export const bulkInactivateDepartments = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { ids } = req.body;
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      res.status(400).json({ success: false, error: 'Lista de IDs de departamentos requerida' });
+      return;
+    }
+
+    let inactivatedCount = 0;
+    for (const id of ids) {
+      if (mongoose.Types.ObjectId.isValid(id)) {
+        const deptId = new mongoose.Types.ObjectId(id);
+        const dept = await Department.findById(deptId);
+        if (dept && dept.isActive) {
+          dept.isActive = false;
+          
+          // Desasociar líder de forma bidireccional si existía
+          if (dept.leaderId) {
+            const leader = await User.findById(dept.leaderId);
+            if (leader) {
+              if (leader.managedDepartments) {
+                leader.managedDepartments = leader.managedDepartments.filter(
+                  d => d.toString() !== deptId.toString()
+                );
+              }
+              if (!leader.managedDepartments || leader.managedDepartments.length === 0) {
+                leader.departmentLeader = false;
+                if (leader.role === UserRole.LIDER) {
+                  leader.role = UserRole.READER;
+                }
+              }
+              await leader.save();
+            }
+            dept.leaderId = undefined;
+          }
+          
+          await dept.save();
+          inactivatedCount++;
+        }
+      }
+    }
+
+    await recordAuditLog({
+      action: AuditAction.UPDATE,
+      resource: 'departments',
+      resourceId: 'bulk',
+      userId: req.user?._id,
+      userEmail: req.user?.email,
+      userRole: req.user?.role,
+      ip: req.ip,
+      message: `Inactivados ${inactivatedCount} departamentos en lote`
+    });
+
+    res.json({
+      success: true,
+      message: `Se inactivaron ${inactivatedCount} departamentos`
+    });
+  } catch (error) {
+    console.error('Error al inactivar departamentos en lote:', error);
+    res.status(500).json({ success: false, error: 'Error al inactivar departamentos en lote' });
   }
 };
