@@ -38,6 +38,8 @@ El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1
   - Modificado el modelo de datos `certification.model.ts` en Angular para soportar las nuevas propiedades de alcance corporativo.
 
 ### Corregido
+- **Error de Sintaxis en Formulario de Certificación (certification-form.component.ts):**
+  - Se corrigió la llave de cierre omitida en el método `onFileSelected()` que anidaba de forma errónea a `onSubmit()` y provocaba fallos encadenados en el build de Angular (TS2339, TS2552, TS1005, TS1136, etc.).
 - **Validaciones de TypeScript:**
   - Corregidos errores de tipos y de asignación en los controladores y servicios del backend y frontend garantizando una compilación libre de warnings.
 
