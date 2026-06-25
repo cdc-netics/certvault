@@ -493,15 +493,26 @@ export const updateUser = async (req: AuthRequest, res: Response): Promise<void>
       return;
     }
 
-    userToUpdate.set({
+    // Construir los campos del usuario actualizados de forma segura
+    const setPayload: any = {
       ...updateData,
-      email: updateData.email ? updateData.email.toLowerCase() : userToUpdate.email,
-      personalEmail: updateData.personalEmail !== undefined
-        ? (updateData.personalEmail ? updateData.personalEmail.toLowerCase().trim() : '')
-        : userToUpdate.personalEmail
-    });
+      email: updateData.email ? updateData.email.toLowerCase() : userToUpdate.email
+    };
 
-    await userToUpdate.save();
+    // Solo modificar personalEmail si viene explícitamente en la petición
+    if (updateData.personalEmail !== undefined) {
+      setPayload.personalEmail = updateData.personalEmail
+        ? updateData.personalEmail.toLowerCase().trim()
+        : (requirePersonalEmail ? '' : userToUpdate.personalEmail);
+    } else {
+      // Si no viene en el payload, mantener el valor actual sin tocarlo
+      delete setPayload.personalEmail;
+    }
+
+    userToUpdate.set(setPayload);
+
+    // Usar validateBeforeSave: false para evitar rechazos en usuarios legacy sin personalEmail
+    await userToUpdate.save({ validateBeforeSave: false });
 
     const updatedUser = await User.findById(id)
       .select('-password -refreshToken')

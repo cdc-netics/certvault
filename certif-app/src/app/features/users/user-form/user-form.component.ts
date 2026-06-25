@@ -60,22 +60,31 @@ export class UserFormComponent implements OnInit, OnDestroy {
 
     this.initializeForm();
 
-    // Obtener políticas SMTP y ajustar validación
+    // Obtener políticas SMTP y ajustar validación del correo personal dinámicamente
     this.settingsService.getActiveSmtpPolicy()
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (response) => {
           if (response.success && response.data) {
             this.requirePersonalEmail = response.data.requirePersonalEmail;
-            if (!this.requirePersonalEmail) {
-              const personalEmailCtrl = this.userForm.get('personalEmail');
-              personalEmailCtrl?.clearValidators();
-              personalEmailCtrl?.setValidators([Validators.email, this.emailsDifferentValidator.bind(this)]);
-              personalEmailCtrl?.updateValueAndValidity();
-            }
           }
+          // Aplicar validators según la política resuelta
+          const personalEmailCtrl = this.userForm.get('personalEmail');
+          if (this.requirePersonalEmail) {
+            personalEmailCtrl?.setValidators([Validators.required, Validators.email, this.emailsDifferentValidator.bind(this)]);
+          } else {
+            personalEmailCtrl?.clearValidators();
+            personalEmailCtrl?.setValidators([Validators.email, this.emailsDifferentValidator.bind(this)]);
+          }
+          personalEmailCtrl?.updateValueAndValidity();
         },
-        error: (err) => console.error('Error al obtener politicas SMTP:', err)
+        error: (err) => {
+          console.error('Error al obtener politicas SMTP:', err);
+          // En caso de error, asumir que es requerido por defecto y aplicar validators
+          const personalEmailCtrl = this.userForm.get('personalEmail');
+          personalEmailCtrl?.setValidators([Validators.required, Validators.email, this.emailsDifferentValidator.bind(this)]);
+          personalEmailCtrl?.updateValueAndValidity();
+        }
       });
 
     this.applyFieldLocks();
@@ -188,10 +197,11 @@ export class UserFormComponent implements OnInit, OnDestroy {
   }
 
   private initializeForm(): void {
+    // Inicializar sin Validators.required en personalEmail para evitar race condition con la policy async
     this.userForm = this.fb.group({
       username: ['', [Validators.required, Validators.minLength(3), Validators.maxLength(20)]],
       email: ['', [Validators.required, Validators.email]],
-      personalEmail: ['', [Validators.required, Validators.email, this.emailsDifferentValidator.bind(this)]],
+      personalEmail: ['', [Validators.email, this.emailsDifferentValidator.bind(this)]],
       password: [''],
       confirmPassword: [''],
       firstName: ['', [Validators.required, Validators.maxLength(50)]],
@@ -377,6 +387,11 @@ export class UserFormComponent implements OnInit, OnDestroy {
     delete (formData as any).customDepartment;
     delete (formData as any).customPosition;
     delete (formData as any).confirmPassword;
+
+    // Si la política no requiere correo personal, omitir el campo del payload para no enviar cadenas vacías
+    if (!this.requirePersonalEmail && (!formData.personalEmail || !formData.personalEmail.trim())) {
+      delete (formData as any).personalEmail;
+    }
 
     if (this.isEditMode && this.userId) {
       if (!formData.password) {
