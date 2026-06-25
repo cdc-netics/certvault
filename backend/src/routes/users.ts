@@ -9,7 +9,8 @@ import {
   getUserStats,
   getDepartments,
   getRoles,
-  forcePasswordChange
+  forcePasswordChange,
+  bulkUpdateDepartment
 } from '../controllers/usersController';
 
 const router = Router();
@@ -26,6 +27,7 @@ router.get('/stats', getUserStats);
 router.get('/', getUsers);
 router.post('/', createUser);
 router.post('/force-password-change', forcePasswordChange);
+router.patch('/bulk-department', bulkUpdateDepartment);
 router.get('/:id', getUserById);
 router.put('/:id', updateUser);
 router.delete('/:id', deleteUser);

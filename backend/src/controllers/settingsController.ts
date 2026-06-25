@@ -12,7 +12,15 @@ import { toSafeSmtpProfile } from '../services/smtpProfileService';
 import { clearApiKeyCache } from '../middleware/apiKey';
 import crypto from 'crypto';
 import fs from 'fs';
-import { generateConfigBackup, generateFullBackup, restoreBackup, systemWipe as performSystemWipe } from '../services/backupService';
+import path from 'path';
+import { 
+  generateConfigBackup, 
+  generateFullBackup, 
+  restoreBackup, 
+  systemWipe as performSystemWipe,
+  getLocalBackupsList,
+  runLocalBackup
+} from '../services/backupService';
 
 const getDateRange = (req: Request) => {
   const from = req.query.from ? new Date(req.query.from as string) : undefined;
@@ -584,7 +592,9 @@ export const updateSecuritySettings = async (req: AuthRequest, res: Response): P
       ldapUrl,
       ldapBaseDN,
       ldapBindDN,
-      ldapBindPassword
+      ldapBindPassword,
+      autoBackupEnabled,
+      autoBackupIntervalDays
     } = req.body;
 
     if (passwordExpirationEnabled !== undefined) {
@@ -595,6 +605,12 @@ export const updateSecuritySettings = async (req: AuthRequest, res: Response): P
     }
     if (certificateExpirationAlertsEnabled !== undefined) {
       settings.certificateExpirationAlertsEnabled = Boolean(certificateExpirationAlertsEnabled);
+    }
+    if (autoBackupEnabled !== undefined) {
+      settings.autoBackupEnabled = Boolean(autoBackupEnabled);
+    }
+    if (autoBackupIntervalDays !== undefined) {
+      settings.autoBackupIntervalDays = Number(autoBackupIntervalDays);
     }
 
     // Configuraciones de Directorio Activo (SSO)
@@ -762,5 +778,161 @@ export const testAdSettings = async (req: AuthRequest, res: Response): Promise<v
   } catch (error: any) {
     console.error('Error al probar configuración de AD:', error);
     res.status(500).json({ success: false, error: `Error durante la prueba de conexión: ${error.message}` });
+  }
+};
+
+/**
+ * Lista todos los archivos de respaldo locales disponibles en el disco del servidor.
+ */
+export const listLocalBackups = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const backups = await getLocalBackupsList();
+    res.json({
+      success: true,
+      data: backups
+    });
+  } catch (error: any) {
+    console.error('Error al listar respaldos locales:', error);
+    res.status(500).json({ success: false, error: 'Error al listar los respaldos locales' });
+  }
+};
+
+/**
+ * Genera de forma manual e inmediata un respaldo local en el servidor.
+ */
+export const createManualLocalBackup = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const filename = await runLocalBackup();
+    
+    // Registrar auditoría de creación de backup local
+    await recordAuditLog({
+      action: AuditAction.CREATE,
+      resource: 'backup',
+      resourceId: filename,
+      userId: req.user?._id,
+      userEmail: req.user?.email,
+      userRole: req.user?.role,
+      method: req.method,
+      path: req.originalUrl,
+      ip: req.ip,
+      userAgent: req.headers['user-agent'],
+      statusCode: 200,
+      message: `Respaldo local creado manualmente con éxito: ${filename}`
+    });
+
+    res.json({
+      success: true,
+      data: { filename },
+      message: 'Respaldo local generado exitosamente'
+    });
+  } catch (error: any) {
+    console.error('Error al crear respaldo local:', error);
+    res.status(500).json({ success: false, error: 'Error al crear el respaldo local' });
+  }
+};
+
+/**
+ * Descarga un archivo de respaldo específico, validando contra Path Traversal.
+ */
+export const downloadLocalBackup = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const filename = req.params.filename;
+
+    // Validar tipo del nombre de archivo y sanitizar contra Path Traversal
+    if (typeof filename !== 'string' || !filename.startsWith('backup-') || !filename.endsWith('.zip') || filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
+      res.status(400).json({ success: false, error: 'Nombre de archivo de respaldo inválido o inseguro.' });
+      return;
+    }
+
+    const backupsDir = path.join(__dirname, '../../backups');
+    const filePath = path.resolve(backupsDir, filename);
+
+    // Asegurar que el archivo final resuelto se encuentre estrictamente dentro de backupsDir
+    if (!filePath.startsWith(path.resolve(backupsDir))) {
+      res.status(400).json({ success: false, error: 'Acceso denegado al archivo especificado.' });
+      return;
+    }
+
+    if (!fs.existsSync(filePath)) {
+      res.status(404).json({ success: false, error: 'El archivo de respaldo solicitado no existe.' });
+      return;
+    }
+
+    // Registrar auditoría de descarga de backup
+    await recordAuditLog({
+      action: AuditAction.DOWNLOAD,
+      resource: 'backup',
+      resourceId: filename,
+      userId: req.user?._id,
+      userEmail: req.user?.email,
+      userRole: req.user?.role,
+      method: req.method,
+      path: req.originalUrl,
+      ip: req.ip,
+      userAgent: req.headers['user-agent'],
+      statusCode: 200,
+      message: `Descarga de respaldo local iniciada: ${filename}`
+    });
+
+    res.download(filePath, filename);
+  } catch (error: any) {
+    console.error('Error al descargar respaldo local:', error);
+    res.status(500).json({ success: false, error: 'Error al descargar el respaldo local' });
+  }
+};
+
+/**
+ * Elimina manualmente un archivo de respaldo local del disco.
+ */
+export const deleteLocalBackup = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const filename = req.params.filename;
+
+    // Validar tipo del nombre de archivo y sanitizar contra Path Traversal
+    if (typeof filename !== 'string' || !filename.startsWith('backup-') || !filename.endsWith('.zip') || filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
+      res.status(400).json({ success: false, error: 'Nombre de archivo de respaldo inválido.' });
+      return;
+    }
+
+    const backupsDir = path.join(__dirname, '../../backups');
+    const filePath = path.resolve(backupsDir, filename);
+
+    // Validar ubicación física
+    if (!filePath.startsWith(path.resolve(backupsDir))) {
+      res.status(400).json({ success: false, error: 'Acceso denegado.' });
+      return;
+    }
+
+    if (!fs.existsSync(filePath)) {
+      res.status(404).json({ success: false, error: 'El respaldo no existe.' });
+      return;
+    }
+
+    // Eliminar físicamente el archivo
+    fs.unlinkSync(filePath);
+
+    // Registrar auditoría de eliminación exitosa
+    await recordAuditLog({
+      action: AuditAction.DELETE,
+      resource: 'backup',
+      resourceId: filename,
+      userId: req.user?._id,
+      userEmail: req.user?.email,
+      userRole: req.user?.role,
+      method: req.method,
+      path: req.originalUrl,
+      ip: req.ip,
+      userAgent: req.headers['user-agent'],
+      statusCode: 200,
+      message: `Respaldo local eliminado físicamente del servidor: ${filename}`
+    });
+
+    res.json({
+      success: true,
+      message: 'Respaldo local eliminado exitosamente'
+    });
+  } catch (error: any) {
+    console.error('Error al eliminar respaldo local:', error);
+    res.status(500).json({ success: false, error: 'Error al eliminar el respaldo local' });
   }
 };

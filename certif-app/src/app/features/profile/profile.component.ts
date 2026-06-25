@@ -7,7 +7,9 @@ import { takeUntil } from 'rxjs/operators';
 
 import { AuthService } from '../../core/services/auth.service';
 import { UserService } from '../../core/services/user.service';
+import { CertificationService } from '../../core/services/certification.service';
 import { User, Department, UserRole } from '../../core/models/user.model';
+import { Certification } from '../../core/models/certification.model';
 import { BackButtonComponent } from '../../shared/components/back-button/back-button.component';
 
 @Component({
@@ -21,8 +23,8 @@ export class ProfileComponent implements OnInit, OnDestroy {
   currentUser: User | null = null;
   profileForm!: FormGroup;
   passwordForm!: FormGroup;
-  departmentOptions: { label: string; value: Department }[] = [];
-  roleOptions: { label: string; value: UserRole }[] = [];
+  departmentOptions: any[] = [];
+  roleOptions: any[] = [];
   avatarPreview: string | null = null;
   avatarError = '';
   avatarFileName = '';
@@ -39,17 +41,25 @@ export class ProfileComponent implements OnInit, OnDestroy {
   passwordError = '';
   
   // Control de pestanas
-  activeTab: 'profile' | 'password' | 'activity' = 'profile';
+  activeTab: 'profile' | 'password' | 'activity' | 'certifications' = 'profile';
   
   // Actividad reciente
   recentActivity: any[] = [];
+
+  // Certificaciones del usuario
+  userCertifications: Certification[] = [];
+  isLoadingCertifications = false;
+  certificationsError = '';
+  selectedCertification: Certification | null = null;
+  showDetailsModal = false;
   
   private readonly destroy$ = new Subject<void>();
 
   constructor(
     private readonly fb: FormBuilder,
     private readonly authService: AuthService,
-    private readonly userService: UserService
+    private readonly userService: UserService,
+    private readonly certificationService: CertificationService
   ) {}
 
   ngOnInit(): void {
@@ -95,17 +105,25 @@ export class ProfileComponent implements OnInit, OnDestroy {
 
   loadUserData(): void {
     if (this.currentUser) {
+      const deptVal = this.currentUser.department && typeof this.currentUser.department === 'object'
+        ? (this.currentUser.department as any)._id
+        : this.currentUser.department;
+      
+      const positionName = typeof this.currentUser.position === 'object' && this.currentUser.position
+        ? (this.currentUser.position as any).name || ''
+        : this.currentUser.position || '';
+
       this.profileForm.patchValue({
         firstName: this.currentUser.firstName,
         lastName: this.currentUser.lastName,
         email: this.currentUser.email,
         personalEmail: this.currentUser.personalEmail || '',
         phone: this.currentUser.phone || '',
-        position: this.currentUser.position || '',
-      department: this.currentUser.department,
-      role: this.currentUser.role,
-      avatar: this.currentUser.avatar || this.currentUser.avatarUrl || ''
-    });
+        position: positionName,
+        department: deptVal,
+        role: this.currentUser.role,
+        avatar: this.currentUser.avatar || this.currentUser.avatarUrl || ''
+      });
       // Rol bloqueado para todos
       this.roleLockedForSelf = true;
       this.profileForm.get('role')?.disable();
@@ -238,13 +256,256 @@ export class ProfileComponent implements OnInit, OnDestroy {
       });
   }
 
-  setActiveTab(tab: 'profile' | 'password' | 'activity'): void {
+  setActiveTab(tab: 'profile' | 'password' | 'activity' | 'certifications'): void {
     this.activeTab = tab;
     // Limpiar mensajes al cambiar de pestana
     this.profileError = '';
     this.profileSuccess = '';
     this.passwordError = '';
     this.passwordSuccess = '';
+    this.certificationsError = '';
+
+    if (tab === 'certifications') {
+      this.loadUserCertifications();
+    }
+  }
+
+  /**
+   * Carga las certificaciones pertenecientes al usuario actual desde el servidor.
+   */
+  loadUserCertifications(): void {
+    if (!this.currentUser?._id) return;
+    
+    this.isLoadingCertifications = true;
+    this.certificationsError = '';
+    
+    this.certificationService.getUserCertifications(this.currentUser._id)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (response) => {
+          if (response.success && response.data) {
+            this.userCertifications = response.data;
+          } else {
+            this.userCertifications = [];
+          }
+          this.isLoadingCertifications = false;
+        },
+        error: (error) => {
+          this.certificationsError = error.message || 'Error al cargar las certificaciones';
+          this.isLoadingCertifications = false;
+        }
+      });
+  }
+
+  /**
+   * Elimina una certificacion previa confirmacion del usuario.
+   * @param cert Certificacion a eliminar
+   */
+  deleteCertification(cert: Certification): void {
+    if (!cert._id || !this.canDeleteCertification(cert)) return;
+    
+    const confirmado = confirm(`¿Está seguro de que desea eliminar la certificación "${cert.title}"? Esta acción no se puede deshacer.`);
+    if (!confirmado) return;
+    
+    this.isLoadingCertifications = true;
+    this.certificationService.deleteCertification(cert._id)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: () => {
+          this.loadUserCertifications();
+        },
+        error: (error) => {
+          this.certificationsError = error.message || 'No se pudo eliminar la certificación';
+          this.isLoadingCertifications = false;
+        }
+      });
+  }
+
+  /**
+   * Determina si el usuario actual tiene permisos para eliminar una certificacion.
+   */
+  canDeleteCertification(cert: Certification): boolean {
+    if (!this.currentUser) return false;
+    // El propietario de la certificacion, el administrador y el lider del departamento pueden eliminar
+    const esPropietario = cert.employeeId === this.currentUser._id || cert.createdBy === this.currentUser._id;
+    const mismoDepartamento = cert.department === this.currentUser.department || 
+      (this.currentUser.managedDepartments || []).includes(cert.department as any);
+      
+    if (this.isAdmin) return true;
+    if (this.isLeader && mismoDepartamento) return true;
+    
+    return esPropietario;
+  }
+
+  /**
+   * Determina si el usuario actual tiene permisos para editar una certificacion.
+   */
+  canEditCertification(cert: Certification): boolean {
+    if (!this.currentUser) return false;
+    // El propietario de la certificacion, el administrador y el lider del departamento pueden editar
+    const esPropietario = cert.employeeId === this.currentUser._id || cert.createdBy === this.currentUser._id;
+    const mismoDepartamento = cert.department === this.currentUser.department || 
+      (this.currentUser.managedDepartments || []).includes(cert.department as any);
+      
+    if (this.isAdmin) return true;
+    if (this.isLeader && mismoDepartamento) return true;
+    
+    return esPropietario;
+  }
+
+  /**
+   * Descarga el archivo de certificacion asociado de forma segura.
+   */
+  downloadCertificate(cert: Certification): void {
+    if (!cert._id || !this.isInternalCertificateUrl(cert.certificateUrl)) {
+      this.certificationsError = 'La descarga segura solo está disponible para certificados guardados localmente';
+      return;
+    }
+
+    this.certificationService.getCertificationFile(cert._id, true)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (blob) => {
+          const urlObj = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = urlObj;
+          link.download = this.getDownloadFileName(cert);
+          link.click();
+          URL.revokeObjectURL(urlObj);
+        },
+        error: () => {
+          this.certificationsError = 'No se pudo descargar el archivo de certificación';
+        }
+      });
+  }
+
+  /**
+   * Abre el archivo de certificacion o badge en una nueva pestana del navegador.
+   */
+  openCertificate(cert: Certification): void {
+    if (!cert._id) return;
+
+    if (!this.isInternalCertificateUrl(cert.certificateUrl)) {
+      const url = this.getCertificateUrl(cert);
+      if (url.startsWith('https://')) {
+        window.open(url, '_blank', 'noopener');
+        return;
+      }
+      this.certificationsError = 'El enlace externo no es seguro. Debe utilizar HTTPS.';
+      return;
+    }
+
+    this.certificationService.getCertificationFile(cert._id)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (blob) => {
+          const urlObj = URL.createObjectURL(blob);
+          window.open(urlObj, '_blank', 'noopener');
+          setTimeout(() => URL.revokeObjectURL(urlObj), 60000);
+        },
+        error: () => {
+          this.certificationsError = 'No se pudo abrir el archivo de certificación';
+        }
+      });
+  }
+
+  /**
+   * Resuelve y limpia la URL del certificado para su correcto acceso.
+   */
+  getCertificateUrl(cert: Certification): string {
+    if (!cert.certificateUrl) return '';
+    const rawUrl = cert.certificateUrl.trim();
+
+    if (rawUrl.startsWith('/uploads/')) return rawUrl;
+
+    if (rawUrl.startsWith('http')) {
+      try {
+        const parsed = new URL(rawUrl);
+        if (parsed.pathname.startsWith('/uploads/')) {
+          return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+        }
+      } catch {
+        return rawUrl;
+      }
+      return rawUrl;
+    }
+
+    return rawUrl.startsWith('/') ? rawUrl : `/${rawUrl}`;
+  }
+
+  /**
+   * Verifica si la URL pertenece a un archivo local de la plataforma.
+   */
+  private isInternalCertificateUrl(url?: string): boolean {
+    if (!url) return false;
+    return this.getCertificateUrl({ certificateUrl: url } as Certification).startsWith('/uploads/certificates/');
+  }
+
+  /**
+   * Construye un nombre de archivo descriptivo para la descarga del certificado.
+   */
+  private getDownloadFileName(cert: Certification): string {
+    const baseName = cert.certificateNumber || cert.title || 'certificado';
+    const extension = cert.certificateUrl?.match(/\.[a-z0-9]+(?:$|\?)/i)?.[0]?.replace('?', '') || '.pdf';
+    return `${baseName}${extension}`;
+  }
+
+  /**
+   * Abre el modal para ver los detalles de una certificacion.
+   */
+  openCertificationDetails(cert: Certification): void {
+    this.selectedCertification = cert;
+    this.showDetailsModal = true;
+  }
+
+  /**
+   * Cierra el modal de detalles de la certificacion.
+   */
+  closeCertificationDetails(): void {
+    this.showDetailsModal = false;
+    this.selectedCertification = null;
+  }
+
+  /**
+   * Devuelve la etiqueta amigable del nivel de la certificacion.
+   */
+  getLevelLabel(level: string): string {
+    switch (level) {
+      case 'beginner': return 'Principiante';
+      case 'intermediate': return 'Intermedio';
+      case 'advanced': return 'Avanzado';
+      case 'expert': return 'Experto';
+      case 'academic': return 'Académico';
+      default: return level;
+    }
+  }
+
+  /**
+   * Devuelve la clase de Bootstrap CSS adecuada para el estado de la certificacion.
+   */
+  getStatusClass(status: string): string {
+    switch (status) {
+      case 'active': return 'bg-success';
+      case 'expired': return 'bg-danger';
+      case 'expiring_soon': return 'bg-warning text-dark';
+      case 'pending': return 'bg-info text-dark';
+      case 'revoked': return 'bg-secondary';
+      default: return 'bg-primary';
+    }
+  }
+
+  /**
+   * Devuelve la etiqueta traducida para el estado de la certificacion.
+   */
+  getStatusLabel(status: string): string {
+    switch (status) {
+      case 'active': return 'Activa';
+      case 'expired': return 'Expirada';
+      case 'expiring_soon': return 'Por Expirar';
+      case 'pending': return 'Pendiente';
+      case 'revoked': return 'Revocada';
+      default: return status;
+    }
   }
 
   private markFormGroupTouched(formGroup: FormGroup): void {
@@ -344,13 +605,30 @@ export class ProfileComponent implements OnInit, OnDestroy {
   }
 
   private buildOptions(): void {
-    this.departmentOptions = Object.values(Department).map(value => ({
-      value,
-      label: this.userService.getDepartmentLabel(value)
-    }));
-    this.roleOptions = Object.values(UserRole).map(value => ({
-      value,
-      label: this.userService.getRoleLabel(value)
-    }));
+    this.userService.getRoles()
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (response) => {
+          if (response.success && response.data) {
+            this.roleOptions = response.data.map(r => ({
+              value: r.value,
+              label: r.label
+            }));
+          }
+        }
+      });
+
+    this.userService.getDepartments()
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (response) => {
+          if (response.success && response.data) {
+            this.departmentOptions = response.data.map(d => ({
+              value: d.value,
+              label: d.label
+            }));
+          }
+        }
+      });
   }
 }

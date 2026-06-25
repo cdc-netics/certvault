@@ -3,13 +3,15 @@ import { Response } from 'express';
 import fs from 'fs';
 import path from 'path';
 import mongoose from 'mongoose';
-import { User, UserRole, Department, Permission } from '../models/User';
+import { User, UserRole, Permission } from '../models/User';
 import { Certification } from '../models/Certification';
 import { AuthRequest } from '../middleware/auth';
 import { saveBase64Avatar } from '../utils/avatar';
 import { sendVerificationEmail, sendUserCertificationsArchiveEmail } from '../services/emailService';
 import { recordAuditLog } from '../services/auditService';
 import { AuditAction } from '../models/AuditLog';
+import { resolveDepartment, resolvePosition } from '../utils/resolveEntities';
+import { Department } from '../models/Department';
 
 interface CreateUserRequest {
   username: string;
@@ -19,13 +21,13 @@ interface CreateUserRequest {
   firstName: string;
   lastName: string;
   role: UserRole;
-  department: Department;
-  position: string;
+  department: any;
+  position: any;
   phone?: string;
   avatarUrl?: string;
   avatar?: string;
   departmentLeader?: boolean;
-  managedDepartments?: Department[];
+  managedDepartments?: any[];
   permissions?: Permission[];
 }
 
@@ -36,14 +38,14 @@ interface UpdateUserRequest {
   firstName?: string;
   lastName?: string;
   role?: UserRole;
-  department?: Department;
-  position?: string;
+  department?: any;
+  position?: any;
   phone?: string;
   avatarUrl?: string;
   avatar?: string;
   isActive?: boolean;
   departmentLeader?: boolean;
-  managedDepartments?: Department[];
+  managedDepartments?: any[];
   permissions?: Permission[];
   password?: string;
 }
@@ -53,7 +55,7 @@ interface UsersQuery {
   limit?: number;
   search?: string;
   role?: UserRole;
-  department?: Department;
+  department?: any;
   isActive?: boolean;
   departmentLeader?: boolean;
 }
@@ -87,9 +89,9 @@ export const getUsers = async (req: AuthRequest, res: Response): Promise<void> =
     const filter: any = {};
 
     if (currentUser.role === UserRole.LIDER && !currentUser.hasPermission(Permission.SYSTEM_ADMIN)) {
-      const allowedDepartments = [currentUser.department];
+      const allowedDepartments = [currentUser.department?._id || currentUser.department];
       if (currentUser.managedDepartments) {
-        allowedDepartments.push(...currentUser.managedDepartments);
+        allowedDepartments.push(...currentUser.managedDepartments.map((d: any) => d._id || d));
       }
       filter.department = { $in: allowedDepartments };
     }
@@ -113,6 +115,9 @@ export const getUsers = async (req: AuthRequest, res: Response): Promise<void> =
     const users = await User.find(filter)
       .select('-password -refreshToken')
       .populate('createdBy', 'firstName lastName email')
+      .populate('department')
+      .populate('managedDepartments')
+      .populate('position')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(Number(limit));
@@ -154,7 +159,12 @@ export const getUserById = async (req: AuthRequest, res: Response): Promise<void
       return;
     }
 
-    const user = await User.findById(id).select('-password -refreshToken').populate('createdBy', 'firstName lastName email');
+    const user = await User.findById(id)
+      .select('-password -refreshToken')
+      .populate('createdBy', 'firstName lastName email')
+      .populate('department')
+      .populate('managedDepartments')
+      .populate('position');
 
     if (!user) {
       res.status(404).json({
@@ -165,12 +175,15 @@ export const getUserById = async (req: AuthRequest, res: Response): Promise<void
     }
 
     if (currentUser.role === UserRole.LIDER && !currentUser.hasPermission(Permission.SYSTEM_ADMIN)) {
-      const allowedDepartments = [currentUser.department];
+      const myDeptId = currentUser.department?._id ? currentUser.department._id.toString() : currentUser.department?.toString();
+      const userDeptId = user.department?._id ? user.department._id.toString() : user.department?.toString();
+      
+      const allowedDeptIds = [myDeptId];
       if (currentUser.managedDepartments) {
-        allowedDepartments.push(...currentUser.managedDepartments);
+        allowedDeptIds.push(...currentUser.managedDepartments.map((d: any) => d._id ? d._id.toString() : d.toString()));
       }
 
-      if (!allowedDepartments.includes(user.department)) {
+      if (!allowedDeptIds.includes(userDeptId)) {
         res.status(403).json({
           success: false,
           error: 'No tienes permisos para ver este usuario'
@@ -205,13 +218,20 @@ export const createUser = async (req: AuthRequest, res: Response): Promise<void>
       return;
     }
 
+    // Resolver al vuelo departamento y cargo
+    const resolvedDeptId = await resolveDepartment(userData.department as any);
+    const resolvedPosId = await resolvePosition(userData.position || 'Colaborador');
+
     if (currentUser.role === UserRole.LIDER && !currentUser.hasPermission(Permission.SYSTEM_ADMIN)) {
-      const allowedDepartments = [currentUser.department];
+      const myDeptId = currentUser.department?._id ? currentUser.department._id.toString() : currentUser.department?.toString();
+      const targetDeptId = resolvedDeptId.toString();
+
+      const allowedDeptIds = [myDeptId];
       if (currentUser.managedDepartments) {
-        allowedDepartments.push(...currentUser.managedDepartments);
+        allowedDeptIds.push(...currentUser.managedDepartments.map((d: any) => d._id ? d._id.toString() : d.toString()));
       }
 
-      if (!allowedDepartments.includes(userData.department)) {
+      if (!allowedDeptIds.includes(targetDeptId)) {
         res.status(403).json({
           success: false,
           error: 'No puedes crear usuarios en este departamento'
@@ -247,6 +267,8 @@ export const createUser = async (req: AuthRequest, res: Response): Promise<void>
       ...userData,
       email: userData.email.toLowerCase(),
       personalEmail: userData.personalEmail.toLowerCase(),
+      department: resolvedDeptId,
+      position: resolvedPosId,
       isVerified: false,
       verificationToken: hashedVerificationToken,
       verificationExpires: new Date(Date.now() + VERIFY_TOKEN_EXP_MINUTES * 60 * 1000),
@@ -278,7 +300,10 @@ export const createUser = async (req: AuthRequest, res: Response): Promise<void>
 
     const userResponse = await User.findById(newUser._id)
       .select('-password -refreshToken')
-      .populate('createdBy', 'firstName lastName email');
+      .populate('createdBy', 'firstName lastName email')
+      .populate('department')
+      .populate('managedDepartments')
+      .populate('position');
 
     res.status(201).json({
       success: true,
@@ -341,13 +366,31 @@ export const updateUser = async (req: AuthRequest, res: Response): Promise<void>
       return;
     }
 
+    // Resolver al vuelo departamento, posición y departamentos gestionados
+    if (updateData.department) {
+      updateData.department = await resolveDepartment(String(updateData.department));
+    }
+    if (updateData.position) {
+      updateData.position = await resolvePosition(String(updateData.position));
+    }
+    if (updateData.managedDepartments && Array.isArray(updateData.managedDepartments)) {
+      const resolvedManagedDepts: any[] = [];
+      for (const dept of updateData.managedDepartments) {
+        resolvedManagedDepts.push(await resolveDepartment(String(dept)));
+      }
+      updateData.managedDepartments = resolvedManagedDepts;
+    }
+
     if (currentUser.role === UserRole.LIDER && !currentUser.hasPermission(Permission.SYSTEM_ADMIN)) {
-      const allowedDepartments = [currentUser.department];
+      const myDeptId = currentUser.department?._id ? currentUser.department._id.toString() : currentUser.department?.toString();
+      const userToUpdateDeptId = userToUpdate.department?._id ? userToUpdate.department._id.toString() : userToUpdate.department?.toString();
+      
+      const allowedDeptIds = [myDeptId];
       if (currentUser.managedDepartments) {
-        allowedDepartments.push(...currentUser.managedDepartments);
+        allowedDeptIds.push(...currentUser.managedDepartments.map((d: any) => d._id ? d._id.toString() : d.toString()));
       }
 
-      if (!allowedDepartments.includes(userToUpdate.department)) {
+      if (!allowedDeptIds.includes(userToUpdateDeptId)) {
         res.status(403).json({
           success: false,
           error: 'No puedes actualizar usuarios de este departamento'
@@ -363,12 +406,15 @@ export const updateUser = async (req: AuthRequest, res: Response): Promise<void>
         return;
       }
 
-      if (updateData.department && !allowedDepartments.includes(updateData.department)) {
-        res.status(403).json({
-          success: false,
-          error: 'No puedes mover usuarios a este departamento'
-        });
-        return;
+      if (updateData.department) {
+        const targetDeptId = updateData.department.toString();
+        if (!allowedDeptIds.includes(targetDeptId)) {
+          res.status(403).json({
+            success: false,
+            error: 'No puedes mover usuarios a este departamento'
+          });
+          return;
+        }
       }
     }
 
@@ -418,7 +464,10 @@ export const updateUser = async (req: AuthRequest, res: Response): Promise<void>
 
     const updatedUser = await User.findById(id)
       .select('-password -refreshToken')
-      .populate('createdBy', 'firstName lastName email');
+      .populate('createdBy', 'firstName lastName email')
+      .populate('department')
+      .populate('managedDepartments')
+      .populate('position');
 
     res.json({
       success: true,
@@ -465,12 +514,15 @@ export const deleteUser = async (req: AuthRequest, res: Response): Promise<void>
     }
 
     if (currentUser.role === UserRole.LIDER && !currentUser.hasPermission(Permission.SYSTEM_ADMIN)) {
-      const allowedDepartments = [currentUser.department];
+      const myDeptId = currentUser.department?._id ? currentUser.department._id.toString() : currentUser.department?.toString();
+      const userToDeleteDeptId = userToDelete.department?._id ? userToDelete.department._id.toString() : userToDelete.department?.toString();
+      
+      const allowedDeptIds = [myDeptId];
       if (currentUser.managedDepartments) {
-        allowedDepartments.push(...currentUser.managedDepartments);
+        allowedDeptIds.push(...currentUser.managedDepartments.map((d: any) => d._id ? d._id.toString() : d.toString()));
       }
 
-      if (!allowedDepartments.includes(userToDelete.department)) {
+      if (!allowedDeptIds.includes(userToDeleteDeptId)) {
         res.status(403).json({
           success: false,
           error: 'No puedes eliminar usuarios de este departamento'
@@ -680,15 +732,21 @@ export const getUserStats = async (req: AuthRequest, res: Response): Promise<voi
 
 export const getDepartments = async (_req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const departments = Object.entries(Department).map(([key, value]) => ({
-      key,
-      value,
-      label: value
+    const departments = await Department.find({ isActive: true });
+    const formatted = departments.map(d => ({
+      key: d._id.toString(),
+      value: d._id.toString(),
+      label: d.name,
+      _id: d._id.toString(),
+      name: d.name,
+      code: d.code,
+      leaderId: d.leaderId,
+      isActive: d.isActive
     }));
 
     res.json({
       success: true,
-      data: departments
+      data: formatted
     });
   } catch (error) {
     console.error('Error obteniendo departamentos:', error);
@@ -779,6 +837,47 @@ export const forcePasswordChange = async (req: AuthRequest, res: Response): Prom
     }
   } catch (error) {
     console.error('Error forzando cambio masivo de contraseñas:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Error interno del servidor'
+    });
+  }
+};
+
+export const bulkUpdateDepartment = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const currentUser = req.user!;
+    const { userIds, departmentId } = req.body as { userIds?: string[]; departmentId?: string };
+
+    if (!currentUser.hasPermission(Permission.SYSTEM_ADMIN) && currentUser.role !== UserRole.ADMIN) {
+      res.status(403).json({
+        success: false,
+        error: 'No tienes permisos para actualizar departamentos masivamente'
+      });
+      return;
+    }
+
+    if (!userIds || !Array.isArray(userIds) || userIds.length === 0 || !departmentId) {
+      res.status(400).json({
+        success: false,
+        error: 'Debe especificar los usuarios y el departamento de destino.'
+      });
+      return;
+    }
+
+    const resolvedDeptId = await resolveDepartment(departmentId);
+
+    const result = await User.updateMany(
+      { _id: { $in: userIds.map(id => new mongoose.Types.ObjectId(id)) } },
+      { $set: { department: resolvedDeptId } }
+    );
+
+    res.json({
+      success: true,
+      message: `Se actualizó el departamento para ${result.modifiedCount} usuarios.`
+    });
+  } catch (error) {
+    console.error('Error en actualización masiva de departamentos:', error);
     res.status(500).json({
       success: false,
       error: 'Error interno del servidor'

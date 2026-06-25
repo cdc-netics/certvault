@@ -25,6 +25,9 @@ export class UserFormComponent implements OnInit, OnDestroy {
 
   availableRoles: RoleOption[] = [];
   availableDepartments: DepartmentOption[] = [];
+  availablePositions: any[] = [];
+  showCustomDept = false;
+  showCustomPos = false;
   targetUserIsAdmin = false;
   // Bandera para indicar si el usuario actual puede editar campos clave de un administrador
   canEditAdminFields = false;
@@ -66,6 +69,7 @@ export class UserFormComponent implements OnInit, OnDestroy {
 
     this.loadRoles();
     this.loadDepartments();
+    this.loadPositions();
 
     this.route.params.pipe(takeUntil(this.destroy$)).subscribe(params => {
       if (params['id']) {
@@ -77,6 +81,33 @@ export class UserFormComponent implements OnInit, OnDestroy {
         }
       }
     });
+
+    // Escuchar cambios para mostrar campos condicionales
+    this.userForm.get('department')?.valueChanges
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(val => {
+        this.showCustomDept = val === 'OTHER';
+        const ctrl = this.userForm.get('customDepartment');
+        if (this.showCustomDept) {
+          ctrl?.setValidators([Validators.required, Validators.maxLength(100)]);
+        } else {
+          ctrl?.clearValidators();
+        }
+        ctrl?.updateValueAndValidity({ emitEvent: false });
+      });
+
+    this.userForm.get('position')?.valueChanges
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(val => {
+        this.showCustomPos = val === 'OTHER';
+        const ctrl = this.userForm.get('customPosition');
+        if (this.showCustomPos) {
+          ctrl?.setValidators([Validators.required, Validators.maxLength(100)]);
+        } else {
+          ctrl?.clearValidators();
+        }
+        ctrl?.updateValueAndValidity({ emitEvent: false });
+      });
   }
 
   ngOnDestroy(): void {
@@ -145,7 +176,9 @@ export class UserFormComponent implements OnInit, OnDestroy {
       lastName: ['', [Validators.required, Validators.maxLength(50)]],
       role: [UserRole.READER, Validators.required],
       department: ['', Validators.required],
-      position: ['', [Validators.required, Validators.maxLength(100)]],
+      customDepartment: [''],
+      position: ['', Validators.required],
+      customPosition: [''],
       phone: [''],
       isActive: [true],
       departmentLeader: [false],
@@ -204,6 +237,10 @@ export class UserFormComponent implements OnInit, OnDestroy {
           if (response.success && response.data) {
             const target = response.data;
             this.targetUserIsAdmin = target.role === UserRole.ADMIN;
+            
+            const deptVal = target.department && typeof target.department === 'object' ? (target.department as any)._id : target.department;
+            const posVal = target.position && typeof target.position === 'object' ? (target.position as any)._id : target.position;
+
             this.userForm.patchValue({
               username: target.username,
               email: target.email,
@@ -211,12 +248,12 @@ export class UserFormComponent implements OnInit, OnDestroy {
               firstName: target.firstName,
               lastName: target.lastName,
               role: target.role,
-              department: target.department,
-              position: target.position,
+              department: deptVal,
+              position: posVal,
               phone: target.phone || '',
               isActive: target.isActive,
               departmentLeader: target.departmentLeader || false,
-              managedDepartments: target.managedDepartments || [],
+              managedDepartments: (target.managedDepartments || []).map((d: any) => d._id || d),
               permissions: target.permissions || []
             });
 
@@ -259,19 +296,42 @@ export class UserFormComponent implements OnInit, OnDestroy {
       .subscribe({
         next: (response) => {
           if (response.success && response.data) {
+            let list = [];
             if (this.currentUser?.role === UserRole.LIDER) {
+              const myDeptId = this.currentUser.department?._id ? this.currentUser.department._id.toString() : this.currentUser.department?.toString();
               const allowed = [
-                this.currentUser.department,
-                ...(this.currentUser.managedDepartments || [])
+                myDeptId,
+                ...(this.currentUser.managedDepartments || []).map((d: any) => d._id ? d._id.toString() : d.toString())
               ];
-              this.availableDepartments = response.data.filter(d => allowed.includes(d.value));
+              list = response.data.filter(d => allowed.includes(d.value));
             } else {
-              this.availableDepartments = response.data;
+              list = response.data;
             }
+            this.availableDepartments = [...list, { key: 'OTHER', value: 'OTHER', label: 'Otro (Crear al vuelo)' }];
           }
         },
         error: (error) => {
           console.error('Error cargando departamentos:', error);
+        }
+      });
+  }
+
+  private loadPositions(): void {
+    this.userService.getPositions()
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (response) => {
+          if (response.success && response.data) {
+            const list = response.data.map((p: any) => ({
+              key: p._id,
+              value: p._id,
+              label: p.name
+            }));
+            this.availablePositions = [...list, { key: 'OTHER', value: 'OTHER', label: 'Otro (Crear al vuelo)' }];
+          }
+        },
+        error: (error) => {
+          console.error('Error cargando cargos:', error);
         }
       });
   }
@@ -283,8 +343,17 @@ export class UserFormComponent implements OnInit, OnDestroy {
     }
 
     this.loading = true;
-    const formData = this.userForm.value;
+    const formData = { ...this.userForm.value };
 
+    if (formData.department === 'OTHER') {
+      formData.department = formData.customDepartment;
+    }
+    if (formData.position === 'OTHER') {
+      formData.position = formData.customPosition;
+    }
+
+    delete (formData as any).customDepartment;
+    delete (formData as any).customPosition;
     delete (formData as any).confirmPassword;
 
     if (this.isEditMode && this.userId) {

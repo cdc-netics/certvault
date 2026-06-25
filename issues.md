@@ -6,14 +6,6 @@ Este documento registra los problemas, vulnerabilidades, mejoras y tareas técni
 
 | ID          | Título                                                             | Componente         | Prioridad | Estado |
 | ----------- | ------------------------------------------------------------------ | ------------------ | --------- | ------ |
-| **ISS-010** | Departamentos dinámicos y asignación masiva de áreas               | Backend / Frontend | Alta      | To Do  |
-| **ISS-011** | Selección dinámica y creación al vuelo de cargos y departamentos   | Backend / Frontend | Media     | To Do  |
-| **ISS-012** | Panel visual de gestión de departamentos y asignación de líderes   | Backend / Frontend | Media     | To Do  |
-| **ISS-013** | Listado compacto y administración de certificaciones en el perfil  | Frontend           | Baja      | To Do  |
-| **ISS-014** | Mejoras en RBAC: Acceso de lectura global y certificaciones de área| Backend / Frontend | Alta      | To Do  |
-| **ISS-015** | Subida y gestión de certificaciones de Compliance por Líderes      | Backend / Frontend | Media     | To Do  |
-| **ISS-016** | Flexibilidad en Departamentos: Creación inicial sin Líder de Área  | Backend / Frontend | Media     | To Do  |
-| **ISS-017** | Panel y ejecución de respaldos completos automáticos y rotativos   | Backend / Frontend | Alta      | To Do  |
 | **ISS-018** | Descarga consolidada en ZIP de certificaciones desde el Perfil     | Backend / Frontend | Baja      | To Do  |
 | **ISS-019** | Corrección en motor de Branding: Renderizado y estilos dinámicos   | Frontend           | Alta      | To Do  |
 | **ISS-020** | Panel de Reportes: Selector dinámico de departamentos activos      | Frontend           | Media     | To Do  |
@@ -34,6 +26,14 @@ Este documento registra los problemas, vulnerabilidades, mejoras y tareas técni
 | **ISS-007** | Control de Accesos en Eliminación de Certificaciones | Backend / Frontend | 29/05/2026      | Se agregaron restricciones en el backend para la eliminación de certificaciones (permitiendo la acción solo al propietario, administrador o líder del área). Se aplicó la misma validación lógica en el frontend para controlar la visibilidad del botón borrar de cada certificado individualmente.          |
 | **ISS-008** | Campo de correo personal ausente al recuperar clave  | Backend / Frontend | 25/06/2026      | Se validó el token en carga de página mediante `verify-reset-token` y se añadió condicionalmente el campo "Correo personal" al formulario reactivo si el backend lo requiere. Se implementó validador de disparidad de emails. |
 | **ISS-009** | Desaparición de usuarios por expiración de tokens    | Backend            | 25/06/2026      | Se removieron los índices TTL sobre `passwordResetExpires` y `verificationExpires` en `User.ts` que eliminaban al usuario completo. Se integró eliminación automática de estos índices al conectar a la DB y rutina utilitaria de auto-recuperación de certificaciones huérfanas al crear o loguear usuarios. |
+| **ISS-010** | Departamentos dinámicos y asignación masiva de áreas               | Backend / Frontend | 25/06/2026      | Creado modelo Department e integradas referencias ObjectId nativas en BD. Implementado endpoint bulk-department y modal visual para reasignación múltiple. |
+| **ISS-011** | Selección dinámica y creación al vuelo de cargos y departamentos   | Backend / Frontend | 25/06/2026      | Incorporado modelo Position. Formularios de creación y registro cargan selectores dinámicos y resuelven la opción "Otro" creándola al vuelo en la base de datos de manera case-insensitive. |
+| **ISS-012** | Panel visual de gestión de departamentos y asignación de líderes   | Backend / Frontend | 25/06/2026      | Implementado CRUD completo /settings/departments con tarjetas interactivas y lógica de asignación/promoción automática bidireccional a rol LIDER. |
+| **ISS-013** | Listado compacto y administración de certificaciones en el perfil  | Frontend           | 25/06/2026      | Añadida pestaña de certificaciones propias en /profile con visualización interactiva y accesos rápidos de descarga, edición y borrado. |
+| **ISS-014** | Mejoras en RBAC: Acceso de lectura global y certificaciones de área| Backend / Frontend | 25/06/2026      | Habilitada lectura global de líderes, soporte para campos organizacionales en Certificaciones con Mongoose, y descarga protegida de archivos basada en departamentos aplicables. |
+| **ISS-015** | Subida y gestión de certificaciones de Compliance por Líderes      | Backend / Frontend | 25/06/2026      | Formularios frontend dinámicos con alcance organizacional/checks de áreas aplicables. Edición de compliance habilitada a cualquier líder y borrado corporativo restringido a creador/admin. |
+| **ISS-016** | Flexibilidad en Departamentos: Creación inicial sin Líder de Área  | Backend / Frontend | 25/06/2026      | Permitida desvinculación a nulo de líderes, eliminando la asociación en managedDepartments y degradándolo automáticamente si no gestiona otras áreas. |
+| **ISS-017** | Panel y ejecución de respaldos completos automáticos y rotativos   | Backend / Frontend | 25/06/2026      | Programado cron de respaldo diario comprimido en backend/backups/ con rotación física de hasta 10 archivos. Creada interfaz visual de configuración y control de backups locales. |
 
 
 ---

@@ -2,6 +2,7 @@ import { User } from '../models/User';
 import { SecuritySettings } from '../models/SecuritySettings';
 import { Certification } from '../models/Certification';
 import { sendPasswordExpirationWarningEmail, sendCertificateExpirationWarningEmail } from './emailService';
+import { runLocalBackup } from './backupService';
 
 // Función para revisar de forma asíncrona la expiración de contraseñas de todos los usuarios
 export const checkPasswordExpirationAlerts = async (): Promise<void> => {
@@ -106,6 +107,33 @@ export const checkCertificateExpirationAlerts = async (): Promise<void> => {
   }
 };
 
+// Función para revisar y ejecutar respaldos automáticos locales
+export const checkAutoBackup = async (): Promise<void> => {
+  try {
+    const settings = await SecuritySettings.findOne().sort({ updatedAt: -1 });
+    if (!settings || !settings.autoBackupEnabled) {
+      return; // Respaldos automáticos deshabilitados, omitir
+    }
+
+    const intervalMs = settings.autoBackupIntervalDays * 24 * 60 * 60 * 1000;
+    const lastBackupTime = settings.lastAutoBackupAt ? new Date(settings.lastAutoBackupAt).getTime() : 0;
+    const today = new Date().getTime();
+
+    // Evaluar si transcurrió el intervalo configurado
+    if (today - lastBackupTime >= intervalMs) {
+      console.log('[Cron] Iniciando respaldo automático programado...');
+      const filename = await runLocalBackup();
+      console.log(`[Cron] Respaldo automático creado con éxito: ${filename}`);
+
+      // Actualizar fecha del último respaldo automático
+      settings.lastAutoBackupAt = new Date();
+      await settings.save();
+    }
+  } catch (error) {
+    console.error('[Cron] Error en la rutina de respaldo automático:', error);
+  }
+};
+
 // Configura y arranca todos los servicios recurrentes evaluando cada 24 horas
 export const startCronServices = (): void => {
   console.log('[Cron] Configurando servicios diarios de control de vencimientos y claves...');
@@ -113,11 +141,13 @@ export const startCronServices = (): void => {
   // Ejecutar inmediatamente al arrancar el servidor
   void checkPasswordExpirationAlerts();
   void checkCertificateExpirationAlerts();
+  void checkAutoBackup();
 
   // Programar evaluación recurrente cada 24 horas
   const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
   setInterval(() => {
     void checkPasswordExpirationAlerts();
     void checkCertificateExpirationAlerts();
+    void checkAutoBackup();
   }, TWENTY_FOUR_HOURS_MS);
 };

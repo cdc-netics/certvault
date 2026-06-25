@@ -13,6 +13,7 @@ import fs from 'fs';
 // Importar configuracion de base de datos y seed
 import { database } from './config/database';
 import { seedDatabase } from './utils/seedDatabase';
+import { runDatabaseMigration } from './utils/migration';
 
 // Importar rutas
 import authRoutes from './routes/auth';
@@ -20,6 +21,8 @@ import userRoutes from './routes/users';
 import certificationRoutes from './routes/certifications';
 import dashboardRoutes from './routes/dashboard';
 import settingsRoutes from './routes/settings';
+import departmentRoutes from './routes/departments';
+import positionRoutes from './routes/positions';
 
 // Importar middleware
 import { errorHandler } from './middleware/errorHandler';
@@ -133,6 +136,8 @@ app.use('/api/users', userRoutes);
 app.use('/api/certifications', certificationRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/settings', settingsRoutes);
+app.use('/api/departments', departmentRoutes);
+app.use('/api/positions', positionRoutes);
 
 // Ruta de salud con informacion de base de datos
 app.get('/api/health', (req, res) => {
@@ -156,6 +161,9 @@ const connectDB = async (): Promise<void> => {
     console.log('Inicializando conexion a MongoDB...');
     await database.connect();
     console.log('Conexion a MongoDB establecida exitosamente');
+
+    // Ejecutar migración de datos para departamentos y cargos dinámicos
+    await runDatabaseMigration();
 
     // Eliminar los índices TTL problemáticos que borraban a los usuarios al expirar sus tokens
     try {
@@ -191,7 +199,8 @@ const connectDB = async (): Promise<void> => {
 // Crear usuario administrador por defecto y datos de ejemplo
 const createDefaultAdminAndSeed = async (): Promise<void> => {
   try {
-    const { User, UserRole, Department, Permission } = await import('./models/User');
+    const { User, UserRole, Permission } = await import('./models/User');
+    const { resolveDepartment, resolvePosition } = await import('./utils/resolveEntities');
 
     const backfillPersonalEmailResult = await User.updateMany(
       {
@@ -232,6 +241,9 @@ const createDefaultAdminAndSeed = async (): Promise<void> => {
 
     if (!adminExists) {
       console.log('Creando usuario administrador por defecto...');
+      const adminDeptId = await resolveDepartment('TI');
+      const adminPositionId = await resolvePosition('Administrador del Sistema');
+
       const adminUser = new User({
         username: process.env.ADMIN_USERNAME || 'admin',
         email: process.env.ADMIN_EMAIL || 'admin@empresa.com',
@@ -240,8 +252,8 @@ const createDefaultAdminAndSeed = async (): Promise<void> => {
         firstName: 'Administrador',
         lastName: 'del Sistema',
         role: UserRole.ADMIN,
-        department: Department.TI,
-        position: 'Administrador del Sistema',
+        department: adminDeptId,
+        position: adminPositionId,
         isActive: true,
         termsAccepted: false, // Requerir aceptación de términos al ingresar por primera vez
         permissions: Object.values(Permission)

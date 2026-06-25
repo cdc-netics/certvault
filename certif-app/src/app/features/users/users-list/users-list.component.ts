@@ -20,6 +20,8 @@ import { User, UserRole, Department } from '../../../core/models/user.model';
 export class UsersListComponent implements OnInit, OnDestroy {
   selectedUser: User | null = null;
   showUserModal = false;
+  showBulkDeptModal = false;
+  bulkDepartmentId = '';
   users: User[] = [];
   loading = false;
   errorMessage = '';
@@ -331,6 +333,42 @@ export class UsersListComponent implements OnInit, OnDestroy {
         error: (error) => {
           console.error('Error al forzar cambio de contraseña:', error);
           this.errorMessage = error.message || 'Error al forzar el cambio de contraseña';
+          this.loading = false;
+        }
+      });
+  }
+
+  openBulkDepartmentModal(): void {
+    this.showBulkDeptModal = true;
+  }
+
+  closeBulkDeptModal(): void {
+    this.showBulkDeptModal = false;
+    this.bulkDepartmentId = '';
+  }
+
+  applyBulkDepartmentChange(): void {
+    if (!this.bulkDepartmentId || this.selectedUserIds.length === 0) return;
+
+    this.loading = true;
+    this.errorMessage = '';
+
+    this.userService.bulkUpdateDepartment(this.selectedUserIds, this.bulkDepartmentId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (response) => {
+          if (response.success) {
+            alert('Se ha actualizado el departamento para los usuarios seleccionados correctamente.');
+            this.selectedUserIds = [];
+            this.closeBulkDeptModal();
+            this.loadUsers();
+            this.loadStats();
+          }
+          this.loading = false;
+        },
+        error: (error) => {
+          console.error('Error al cambiar departamentos masivamente:', error);
+          this.errorMessage = error.message || 'Error al cambiar de departamento';
           this.loading = false;
         }
       });
