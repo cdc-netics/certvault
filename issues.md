@@ -10,6 +10,15 @@ Este documento registra los problemas, vulnerabilidades, mejoras y tareas técni
 | **ISS-011** | Selección dinámica y creación al vuelo de cargos y departamentos   | Backend / Frontend | Media     | To Do  |
 | **ISS-012** | Panel visual de gestión de departamentos y asignación de líderes   | Backend / Frontend | Media     | To Do  |
 | **ISS-013** | Listado compacto y administración de certificaciones en el perfil  | Frontend           | Baja      | To Do  |
+| **ISS-014** | Mejoras en RBAC: Acceso de lectura global y certificaciones de área| Backend / Frontend | Alta      | To Do  |
+| **ISS-015** | Subida y gestión de certificaciones de Compliance por Líderes      | Backend / Frontend | Media     | To Do  |
+| **ISS-016** | Flexibilidad en Departamentos: Creación inicial sin Líder de Área  | Backend / Frontend | Media     | To Do  |
+| **ISS-017** | Panel y ejecución de respaldos completos automáticos y rotativos   | Backend / Frontend | Alta      | To Do  |
+| **ISS-018** | Descarga consolidada en ZIP de certificaciones desde el Perfil     | Backend / Frontend | Baja      | To Do  |
+| **ISS-019** | Corrección en motor de Branding: Renderizado y estilos dinámicos   | Frontend           | Alta      | To Do  |
+| **ISS-020** | Panel de Reportes: Selector dinámico de departamentos activos      | Frontend           | Media     | To Do  |
+| **ISS-021** | Descarga de Reportes: Corrección de filtros de fecha en exportación| Backend            | Alta      | To Do  |
+| **ISS-022** | Listado de Certificaciones: Filtro por usuario y orden prioritario  | Backend / Frontend | Media     | To Do  |
 
 ## Issues Completados (Done)
 
@@ -96,3 +105,93 @@ Este documento registra los problemas, vulnerabilidades, mejoras y tareas técni
 - **Propuesta de Implementación**:
   - **Frontend**: En la vista de perfil de usuario, incorporar una nueva pestaña (tab) "Mis Certificaciones" contigua a las opciones actuales. Cargar las certificaciones pertenecientes al usuario actual consumiendo el servicio de certificaciones (`CertificationService.getUserCertifications`).
   - **Diseño**: Renderizar la información en formato de tabla densa/listado compacto (optimizando espacio de pantalla). Cada fila del listado contará con columnas básicas (Título, Emisor, Fecha de Emisión/Vencimiento, Estado) y acciones rápidas utilizando iconos pequeños y limpios para ver/descargar el certificado, editar y eliminar con un diálogo modal de confirmación.
+
+---
+
+### [ISS-014] Mejoras en RBAC: Acceso de lectura global y certificaciones de área
+
+- **Código Afectado (Backend)**: [User.ts](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/backend/src/models/User.ts), [Certification.ts](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/backend/src/models/Certification.ts), [certificationsController.ts](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/backend/src/controllers/certificationsController.ts)
+- **Propuesta de Implementación**:
+  - **RBAC Global**: Ajustar las consultas en [certificationsController.ts](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/backend/src/controllers/certificationsController.ts) para que los usuarios con rol `LIDER` tengan permisos de lectura global sobre todas las certificaciones (permitiendo ver las de otros departamentos), pero restringiendo las acciones de edición y eliminación exclusivamente a sus propios departamentos o creadas por ellos.
+  - **Certificaciones Organizacionales**: Añadir en el esquema de certificaciones los campos `isOrganizational: boolean` (para marcar certificaciones del área o empresa como SOC2, sin dueño individual) y `applicableDepartments: ObjectId[]` / `appliesToAllCompany: boolean` para definir su alcance.
+  - **Restricción de Acciones**: Permitir la subida y modificación de estas certificaciones organizacionales únicamente a los Líderes de área y Administradores. Configurar el endpoint de descarga de archivos para que otros departamentos puedan ver los datos de cumplimiento, pero sin opción de descargar el archivo original o modificarlo (permitido solo a nivel de visualización).
+
+---
+
+### [ISS-015] Subida y gestión de certificaciones de Compliance por Líderes
+
+- **Código Afectado (Backend)**: [certificationsController.ts](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/backend/src/controllers/certificationsController.ts), [certifications.ts](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/backend/src/routes/certifications.ts)
+- **Código Afectado (Frontend)**: Formularios de subida y edición de certificaciones.
+- **Propuesta de Implementación**:
+  - **Permisos de Gestión**: En el backend, las certificaciones organizacionales bajo la categoría de `compliance` (cumplimiento normativo) podrán ser modificadas por cualquier líder de área para mantenerlas actualizadas. Sin embargo, para evitar pérdidas de datos, la eliminación estará restringida únicamente al líder creador (`createdBy`) y al Administrador.
+  - **Formulario de Carga**: En el frontend, al seleccionar una certificación de tipo organizacional/compliance, desplegar una sección visual con checkboxes dinámicos (obtenidos de la API de departamentos) para asociar el cumplimiento a departamentos específicos o marcar la opción global "Toda la Empresa" (ISO 9001).
+
+---
+
+### [ISS-016] Flexibilidad en Departamentos: Creación inicial sin Líder de Área
+
+- **Código Afectado (Backend)**: Modelo de Departamentos (`Department`), controlador de departamentos.
+- **Código Afectado (Frontend)**: Vistas de gestión de departamentos en el módulo `settings`.
+- **Propuesta de Implementación**:
+  - **Backend**: Establecer el campo `leaderId` en el esquema de Mongoose del departamento como opcional (`required: false`) o permitir valores nulos. Ajustar las validaciones del backend para autorizar la creación o modificación de departamentos sin un líder de área asignado.
+  - **Frontend**: Permitir que el selector de líder en el formulario de departamentos tenga una opción vacía ("Sin Líder Asignado" o "Asignar más tarde"), de manera que el administrador pueda registrar el área inmediatamente y vincular su líder en una edición posterior.
+
+---
+
+### [ISS-017] Panel y ejecución de respaldos completos automáticos y rotativos
+
+- **Código Afectado (Backend)**: [backupService.ts](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/backend/src/services/backupService.ts), [settingsController.ts](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/backend/src/controllers/settingsController.ts), [settings.ts](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/backend/src/routes/settings.ts)
+- **Código Afectado (Frontend)**: Pantalla de administración `/settings/backup`.
+- **Propuesta de Implementación**:
+  - **Configuración y Almacenamiento**: Crear un modelo de configuración de respaldos (`BackupSettings`) o extender `SecuritySettings` para guardar los parámetros: `autoBackupEnabled` (boolean) y `autoBackupIntervalDays` (number).
+  - **Rutina Automática**: Desarrollar un servicio cron en el backend que corra diariamente. Si el backup automático está habilitado y la diferencia de días con el último respaldo es igual o mayor al intervalo configurado, generará un ZIP completo mediante [backupService.ts](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/backend/src/services/backupService.ts) y lo guardará en un directorio local dedicado en el servidor (`backend/backups/`).
+  - **Rotación y Descarga**: Implementar lógica de rotación que analice el directorio de backups, ordenando por fecha de creación y manteniendo únicamente los últimos 10 archivos (eliminando los excedentes). Habilitar endpoints seguros para listar y descargar estos respaldos locales (`/api/settings/backup/download/:filename`) validando privilegios de administrador.
+  - **Frontend**: Crear la interfaz correspondiente en la pestaña de Backup para activar el respaldo automático, fijar los días de intervalo y renderizar la tabla con la lista de los últimos 10 respaldos autogenerados para su descarga o eliminación manual.
+
+---
+
+### [ISS-018] Descarga consolidada en ZIP de certificaciones desde el Perfil
+
+- **Código Afectado (Backend)**: [certificationsController.ts](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/backend/src/controllers/certificationsController.ts), [certifications.ts](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/backend/src/routes/certifications.ts)
+- **Código Afectado (Frontend)**: [profile.component.ts](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/certif-app/src/app/features/profile/profile.component.ts), [profile.component.html](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/certif-app/src/app/features/profile/profile.component.html)
+- **Propuesta de Implementación**:
+  - **Backend**: Crear el endpoint `/api/certifications/user/:userId/download-all` en [certifications.ts](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/backend/src/routes/certifications.ts). Esta función obtendrá todas las certificaciones de un usuario que tengan archivos asociados (`certificateUrl`), los empaquetará dinámicamente en memoria utilizando `adm-zip` nombrando cada archivo con su número de certificado y título, y retornará el buffer ZIP como una descarga directa de archivo.
+  - **Frontend**: En el panel de perfil del usuario, añadir un botón de "Descargar todas mis certificaciones" (`fas fa-file-archive`) que realice la descarga de dicho archivo ZIP de manera transparente.
+
+---
+
+### [ISS-019] Corrección en motor de Branding: Renderizado y estilos dinámicos
+
+- **Código Afectado (Frontend)**: [app.ts](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/certif-app/src/app/app.ts), [app.component.html](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/certif-app/src/app/app.component.html), [login.component.ts](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/certif-app/src/app/features/auth/login/login.component.ts)
+- **Propuesta de Implementación**:
+  - **Carga Global**: Al inicializar la aplicación en [app.ts](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/certif-app/src/app/app.ts), invocar el servicio de branding para obtener la configuración guardada del backend. Almacenar el resultado en un Signal o BehaviorSubject para propagarlo a los componentes interesados.
+  - **Estilos Dinámicos**: Si existen configuraciones de color (`primaryColor` y `secondaryColor`), inyectarlas dinámicamente a través de `document.documentElement.style.setProperty('--primary-color', color)` para sobrescribir los valores fijos de CSS. Cambiar el título del sitio `document.title` al nombre de aplicación configurado.
+  - **Logos**: En [app.component.html](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/certif-app/src/app/app.component.html) (sidebar) y en [login.component.ts](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/certif-app/src/app/features/auth/login/login.component.ts), reemplazar las imágenes hardcodeadas estáticas por etiquetas `<img>` reactivas que se carguen utilizando los campos `sidebarLogo` y `loginLogo` en Base64 o URL.
+
+---
+
+### [ISS-020] Panel de Reportes: Selector dinámico de departamentos activos
+
+- **Código Afectado (Frontend)**: Vista de reportes de la organización (`reports-component` o `/settings/reports`).
+- **Propuesta de Implementación**:
+  - **Frontend**: Reemplazar la entrada de texto libre actual en los filtros del módulo de reportes por un elemento `<select>` o combobox autocompletable. Este selector debe cargarse dinámicamente llamando a la API de departamentos activos en el arranque de la vista para evitar ingresos incorrectos o inexistentes.
+
+---
+
+### [ISS-021] Descarga de Reportes: Corrección de filtros de fecha en exportación
+
+- **Código Afectado (Backend)**: [settingsController.ts](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/backend/src/controllers/settingsController.ts) (función `exportReport`).
+- **Propuesta de Implementación**:
+  - **Backend**: Corregir la consulta en `exportReport` dentro de [settingsController.ts](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/backend/src/controllers/settingsController.ts). Actualmente ejecuta una búsqueda incondicional (`Certification.find()`), omitiendo los parámetros de filtrado enviados en el request. Se modificará para capturar los Query Params de `department`, `status`, `from` y `to` (usando `getDateRange(req)`), y aplicar dicho objeto de filtro en la consulta final a Mongoose antes de construir el archivo CSV de descarga.
+
+---
+
+### [ISS-022] Listado de Certificaciones: Filtro por usuario y orden prioritario
+
+- **Código Afectado (Backend)**: [certificationsController.ts](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/backend/src/controllers/certificationsController.ts) (función `getCertifications`).
+- **Código Afectado (Frontend)**: [certifications-list.component.ts](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/certif-app/src/app/features/certifications/certifications-list/certifications-list.component.ts)
+- **Propuesta de Implementación**:
+  - **Backend (Orden predeterminado)**: Modificar la consulta principal de certificaciones en [certificationsController.ts](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/backend/src/controllers/certificationsController.ts) para cambiar el orden predeterminado a la fecha de vencimiento más próxima a la fecha actual (`expirationDate: 1`), priorizando las que requieren renovación urgente en las revisiones.
+  - **Frontend (Filtro de Usuario)**: Agregar un combobox dinámico en el formulario de filtros de [certifications-list.component.ts](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/certif-app/src/app/features/certifications/certifications-list/certifications-list.component.ts) para seleccionar a un usuario por su nombre. Este listado se poblará dinámicamente mediante el servicio de usuarios (disponible para roles con privilegios adecuados). Por defecto, el filtro se mantendrá vacío (mostrando todos los colaboradores).
+
+
