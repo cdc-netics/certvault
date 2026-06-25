@@ -74,12 +74,15 @@ export class DepartmentsSettingsComponent implements OnInit, OnDestroy {
   }
 
   private loadUsers(): void {
-    this.userService.getUsers({ limit: 100 })
+    this.userService.getUsers({ limit: 100, departmentLeader: true })
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (response) => {
           if (response.success && response.data) {
-            this.users = response.data.users;
+            // Mostrar únicamente a los usuarios marcados como líderes de departamento
+            this.users = response.data.users.filter(
+              (u: any) => u.departmentLeader === true
+            );
           }
         },
         error: (error) => {
@@ -167,8 +170,31 @@ export class DepartmentsSettingsComponent implements OnInit, OnDestroy {
     }
   }
 
+  // Selección múltiple
+  selectedDeptIds = new Set<string>();
+  isAllSelected = false;
+
+  toggleSelectAll(): void {
+    this.isAllSelected = !this.isAllSelected;
+    if (this.isAllSelected) {
+      this.departments.forEach(d => this.selectedDeptIds.add(d._id));
+    } else {
+      this.selectedDeptIds.clear();
+    }
+  }
+
+  toggleSelect(deptId: string): void {
+    if (this.selectedDeptIds.has(deptId)) {
+      this.selectedDeptIds.delete(deptId);
+    } else {
+      this.selectedDeptIds.add(deptId);
+    }
+    this.isAllSelected = this.selectedDeptIds.size === this.departments.length;
+  }
+
+  // Modificar deleteDept para borrado físico real
   deleteDept(dept: any): void {
-    if (!confirm(`¿Estás seguro de que deseas inactivar el departamento ${dept.name}?`)) {
+    if (!confirm(`¿Estás seguro de que deseas eliminar permanentemente el departamento "${dept.name}"? Esta acción borrará el departamento de forma física y desvinculará en cascada a todos los colaboradores y certificaciones asociados.`)) {
       return;
     }
 
@@ -181,15 +207,122 @@ export class DepartmentsSettingsComponent implements OnInit, OnDestroy {
       .subscribe({
         next: (response) => {
           if (response.success) {
-            this.successMessage = 'Departamento inactivado correctamente.';
+            this.successMessage = 'Departamento eliminado físicamente y relaciones desvinculadas con éxito.';
+            this.selectedDeptIds.delete(dept._id);
             this.loadDepartments();
             setTimeout(() => this.successMessage = '', 5000);
           }
           this.loading = false;
         },
         error: (error) => {
-          console.error('Error al inactivar departamento:', error);
-          this.errorMessage = error.message || 'No se pudo inactivar el departamento';
+          console.error('Error al eliminar departamento:', error);
+          this.errorMessage = error.message || 'No se pudo eliminar el departamento';
+          this.loading = false;
+        }
+      });
+  }
+
+  // Inactivar/Activar departamento individual
+  toggleDeptActive(dept: any): void {
+    const nextStatus = !dept.isActive;
+    const actionWord = nextStatus ? 'inactivar' : 'activar';
+    if (!confirm(`¿Estás seguro de que deseas ${actionWord} el departamento "${dept.name}"?`)) {
+      return;
+    }
+
+    this.loading = true;
+    this.errorMessage = '';
+    this.successMessage = '';
+
+    const payload = {
+      name: dept.name,
+      leaderId: dept.leaderId?._id || dept.leaderId || undefined,
+      isActive: nextStatus
+    };
+
+    this.userService.updateDepartment(dept._id, payload)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (response) => {
+          if (response.success) {
+            this.successMessage = `Departamento ${actionWord}do exitosamente.`;
+            this.loadDepartments();
+            setTimeout(() => this.successMessage = '', 5000);
+          }
+          this.loading = false;
+        },
+        error: (error) => {
+          console.error(`Error al ${actionWord} departamento:`, error);
+          this.errorMessage = error.message || `No se pudo ${actionWord} el departamento`;
+          this.loading = false;
+        }
+      });
+  }
+
+  // Acciones en lote (Masivo)
+  bulkDelete(): void {
+    if (this.selectedDeptIds.size === 0) return;
+
+    if (!confirm(`¿Estás seguro de que deseas eliminar permanentemente los ${this.selectedDeptIds.size} departamentos seleccionados? Esta acción los borrará físicamente de la base de datos y desvinculará a todos sus colaboradores y certificaciones.`)) {
+      return;
+    }
+
+    this.loading = true;
+    this.errorMessage = '';
+    this.successMessage = '';
+
+    const ids = Array.from(this.selectedDeptIds);
+
+    this.userService.bulkDeleteDepartments(ids)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (response) => {
+          if (response.success) {
+            this.successMessage = `Se eliminaron permanentemente ${ids.length} departamentos.`;
+            this.selectedDeptIds.clear();
+            this.isAllSelected = false;
+            this.loadDepartments();
+            setTimeout(() => this.successMessage = '', 5000);
+          }
+          this.loading = false;
+        },
+        error: (error) => {
+          console.error('Error al eliminar departamentos en lote:', error);
+          this.errorMessage = error.message || 'Error en la eliminación en lote';
+          this.loading = false;
+        }
+      });
+  }
+
+  bulkInactivate(): void {
+    if (this.selectedDeptIds.size === 0) return;
+
+    if (!confirm(`¿Estás seguro de que deseas inactivar los ${this.selectedDeptIds.size} departamentos seleccionados?`)) {
+      return;
+    }
+
+    this.loading = true;
+    this.errorMessage = '';
+    this.successMessage = '';
+
+    const ids = Array.from(this.selectedDeptIds);
+
+    this.userService.bulkInactivateDepartments(ids)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (response) => {
+          if (response.success) {
+            this.successMessage = `Se inactivaron ${ids.length} departamentos.`;
+            this.selectedDeptIds.clear();
+            this.isAllSelected = false;
+            this.loadDepartments();
+            setTimeout(() => this.successMessage = '', 5000);
+          }
+          this.loading = false;
+        },
+        error: (error) => {
+          console.error('Error al inactivar departamentos en lote:', error);
+          this.errorMessage = error.message || 'Error en la inactivación en lote';
           this.loading = false;
         }
       });

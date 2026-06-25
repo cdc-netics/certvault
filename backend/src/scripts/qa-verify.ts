@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
+import mongoose from 'mongoose';
 import { database } from '../config/database';
 import { User, UserRole } from '../models/User';
 import { Department } from '../models/Department';
@@ -8,6 +9,7 @@ import { Position } from '../models/Position';
 import { Certification, CertificationType, CertificationLevel } from '../models/Certification';
 import { runLocalBackup, getLocalBackupsList } from '../services/backupService';
 import { resolveDepartment, resolvePosition } from '../utils/resolveEntities';
+import { performDepartmentCascading } from '../controllers/departmentsController';
 
 // Cargar variables de entorno desde el directorio de backend
 const envPath = path.resolve(__dirname, '../../.env');
@@ -243,6 +245,77 @@ async function runQA() {
       `Lista de backups obtenidos: ${backupsList.map(b => b.filename).join(', ')}`
     );
 
+
+    console.log(`\n🧪  ${yellow}Ejecutando Caso QA-12: Borrado Físico en Cascada de Departamento...${reset}`);
+    
+    // Crear un departamento de prueba para cascada
+    const cascadeDept = new Department({
+      name: `Dept Cascade QA ${testSuffix}`,
+      code: `DCQA_${Date.now().toString().slice(-4)}`,
+      isActive: true
+    });
+    await cascadeDept.save();
+
+    // Crear un usuario y asociarlo a este departamento
+    const cascadeUser = new User({
+      username: `u_casc_${testSuffix}`,
+      email: `user_casc${testSuffix}@empresa.com`,
+      personalEmail: `user_casc${testSuffix}@personal.com`,
+      password: 'Password123!',
+      firstName: 'Usuario',
+      lastName: 'Cascada',
+      role: UserRole.READER,
+      department: cascadeDept._id,
+      position: tempPos._id,
+      isActive: true
+    });
+    await cascadeUser.save();
+
+    // Crear certificación individual asociada
+    const cascadeCert = new Certification({
+      title: 'Certificación Cascada QA',
+      type: CertificationType.TECHNICAL,
+      technology: 'Cloud',
+      provider: 'AWS',
+      level: CertificationLevel.BEGINNER,
+      issueDate: new Date(),
+      certificateNumber: `QA-CASC-${Date.now()}`,
+      status: 'active',
+      tags: ['cloud'],
+      employeeId: cascadeUser._id,
+      employeeName: 'Usuario Cascada',
+      department: cascadeDept._id,
+      createdBy: cascadeUser._id
+    });
+    await cascadeCert.save();
+
+    // Ejecutar desvinculación
+    await performDepartmentCascading(cascadeDept._id as mongoose.Types.ObjectId);
+    // Eliminar físicamente
+    await Department.findByIdAndDelete(cascadeDept._id);
+
+    // Verificar cascada
+    const verifiedUser = await User.findById(cascadeUser._id);
+    const verifiedCert = await Certification.findById(cascadeCert._id);
+    const verifiedDept = await Department.findById(cascadeDept._id);
+
+    assert(
+      verifiedDept === null,
+      'Eliminación física del departamento de la base de datos',
+      `El departamento aún existe: ${JSON.stringify(verifiedDept)}`
+    );
+    assert(
+      verifiedUser?.department === null,
+      'Cascada: Desvinculación del departamento en el usuario asignado',
+      `Departamento del usuario: ${verifiedUser?.department}`
+    );
+    assert(
+      verifiedCert?.department === null,
+      'Cascada: Desvinculación del departamento en la certificación individual',
+      `Departamento de la certificación: ${verifiedCert?.department}`
+    );
+
+
     // 3. Limpiar recursos de prueba creados
     console.log(`\n🧹  ${yellow}Limpiando registros de prueba de la base de datos...${reset}`);
     await User.deleteOne({ _id: testLeader._id });
@@ -252,6 +325,8 @@ async function runQA() {
     await Department.deleteOne({ _id: resolvedDeptId1 });
     await Position.deleteOne({ _id: resolvedPosId });
     await Certification.deleteOne({ _id: orgCert._id });
+    await User.deleteOne({ _id: cascadeUser._id });
+    await Certification.deleteOne({ _id: cascadeCert._id });
     
     // Limpiar el backup físico generado
     const backupFilePath = path.join(__dirname, '../../backups', backupFilename);

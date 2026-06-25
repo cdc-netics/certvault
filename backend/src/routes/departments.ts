@@ -5,7 +5,9 @@ import {
   getDepartmentById,
   createDepartment,
   updateDepartment,
-  deleteDepartment
+  deleteDepartment,
+  bulkDeleteDepartments,
+  bulkInactivateDepartments
 } from '../controllers/departmentsController';
 
 const router = Router();
@@ -13,11 +15,17 @@ const router = Router();
 // Todas las rutas requieren autenticación
 router.use(authenticate);
 
-// Listar y ver detalles (accesible por cualquier usuario autenticado)
+// Listar (accesible por cualquier usuario autenticado)
 router.get('/', getDepartments);
+
+// Acciones de administración en lote (solo accesible por administradores)
+router.post('/bulk-delete', adminOnly, bulkDeleteDepartments);
+router.post('/bulk-inactivate', adminOnly, bulkInactivateDepartments);
+
+// Ver detalles
 router.get('/:id', getDepartmentById);
 
-// Acciones de administración de departamentos (solo accesible por administradores)
+// Acciones individuales
 router.post('/', adminOnly, createDepartment);
 router.put('/:id', adminOnly, updateDepartment);
 router.delete('/:id', adminOnly, deleteDepartment);

@@ -56,8 +56,8 @@ interface UsersQuery {
   search?: string;
   role?: UserRole;
   department?: any;
-  isActive?: boolean;
-  departmentLeader?: boolean;
+  isActive?: boolean | string;
+  departmentLeader?: boolean | string;
 }
 
 const VERIFY_TOKEN_EXP_MINUTES = Number(process.env.VERIFY_EMAIL_EXPIRE_MINUTES || 60);
@@ -107,8 +107,12 @@ export const getUsers = async (req: AuthRequest, res: Response): Promise<void> =
 
     if (role) filter.role = role;
     if (department) filter.department = department;
-    if (typeof isActive === 'boolean') filter.isActive = isActive;
-    if (typeof departmentLeader === 'boolean') filter.departmentLeader = departmentLeader;
+    if (isActive !== undefined) {
+      filter.isActive = isActive === 'true' || isActive === true;
+    }
+    if (departmentLeader !== undefined) {
+      filter.departmentLeader = departmentLeader === 'true' || departmentLeader === true;
+    }
 
     const skip = (Number(page) - 1) * Number(limit);
 
