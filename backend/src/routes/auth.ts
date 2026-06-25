@@ -14,7 +14,8 @@ import {
   getMyActivity,
   verifyResetToken,
   acceptTerms,
-  adLogin
+  adLogin,
+  getAdConfig
 } from '../controllers/authController';
 import { authenticate } from '../middleware/auth';
 import { validateRequest } from '../middleware/validation';
@@ -63,6 +64,7 @@ const verifyEmailValidation = [
 router.post('/register', registerValidation, validateRequest, register);
 router.post('/login', loginValidation, validateRequest, login);
 router.post('/ad-login', adLogin);
+router.get('/ad-config', getAdConfig);
 router.post('/refresh', refreshToken);
 router.post('/forgot-password', forgotPasswordValidation, validateRequest, forgotPassword);
 router.post('/reset-password', resetPasswordValidation, validateRequest, resetPassword);

@@ -38,6 +38,10 @@ El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1
   - Modificado el modelo de datos `certification.model.ts` en Angular para soportar las nuevas propiedades de alcance corporativo.
 
 ### Corregido
+- **Endpoint Faltante de Configuración SSO (/api/auth/ad-config):**
+  - Se implementó y registró la ruta pública `/api/auth/ad-config` en el backend que expone el estado de inicio de sesión único (AD/LDAP) para resolver el error 404 del navegador.
+- **Inconsistencia de Tipos en Consulta de Certificaciones Personales:**
+  - Se actualizó el endpoint `getUserCertifications` para buscar certificaciones asociadas por `employeeId` soportando consultas híbridas (tipo String o ObjectId), asegurando la compatibilidad con registros antiguos en producción y resolviendo la pestaña vacía de certificaciones en el perfil.
 - **Error de Sintaxis en Formulario de Certificación (certification-form.component.ts):**
   - Se corrigió la llave de cierre omitida en el método `onFileSelected()` que anidaba de forma errónea a `onSubmit()` y provocaba fallos encadenados en el build de Angular (TS2339, TS2552, TS1005, TS1136, etc.).
 - **Validaciones de TypeScript:**
