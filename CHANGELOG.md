@@ -3,6 +3,27 @@
 Todos los cambios notables en este proyecto serán documentados en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y este proyecto se encuentra actualmente en fase de **versiones Beta**.
 
+## [2.4.0-beta] - 2026-06-25 20:30
+
+### Añadido
+- **Gestión CRUD de Cargos (Positions):**
+  - Panel de administración completo en `/settings/positions` con listado, creación, edición (nombre y estado activo/inactivo) y eliminación de cargos.
+  - Cascada de limpieza al eliminar un cargo: desvinculación automática de usuarios y certificaciones asociadas, con registro detallado en el módulo de auditoría.
+  - Endpoints REST: `GET /api/positions`, `POST /api/positions`, `PUT /api/positions/:id`, `DELETE /api/positions/:id`.
+- **Políticas SMTP Configurables:**
+  - Nuevo flag `sendBackupOnDelete` en la configuración SMTP que permite habilitar o deshabilitar el envío automático de respaldos ZIP con certificaciones al eliminar un usuario.
+  - Nuevo flag `requirePersonalEmail` en la configuración SMTP que permite flexibilizar o imponer la obligatoriedad del correo electrónico personal en todo el sistema.
+  - Endpoint público `GET /api/settings/smtp-policy` para consultar el estado activo de ambas políticas desde el frontend.
+  - Controles de toggle integrados en el panel de configuración SMTP (`/settings/smtp`) con descripciones contextuales para cada política.
+
+### Modificado
+- **Flexibilización del Correo Personal:**
+  - Eliminada la obligatoriedad estática del campo `personalEmail` en el esquema de Mongoose del modelo `User` (ahora se valida condicionalmente según la política SMTP activa).
+  - Adaptados los formularios de creación de usuario, edición de perfil y registro para consultar dinámicamente la política `requirePersonalEmail` y ocultar/mostrar el campo de correo personal según corresponda.
+  - Ajustada la lógica de login en `authController.ts` para omitir el flag `requiresPersonalEmailUpdate` cuando la política de correo personal está desactivada.
+- **Comportamiento Condicional de Respaldos al Borrar Usuarios:**
+  - El controlador `deleteUser` ahora consulta la política SMTP activa antes de generar y enviar el ZIP de respaldo, omitiendo el proceso completo si `sendBackupOnDelete` está desactivado.
+
 ## [2.3.1-beta] - 2026-06-25 17:54
 
 ### Añadido

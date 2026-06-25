@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http';
-import { Observable, of, throwError } from 'rxjs';
+import { Observable, of, throwError, BehaviorSubject } from 'rxjs';
 import { catchError, tap } from 'rxjs/operators';
 import { ApiResponse } from '../models/common.model';
 import { SmtpProfile, SmtpProfilePayload } from '../models/smtp-profile.model';
@@ -71,10 +71,64 @@ export class SettingsService {
   private readonly cacheTtlMs = 30000;
   private readonly cache = new Map<string, { expiresAt: number; response: ApiResponse<unknown> }>();
 
+  private readonly brandingSubject = new BehaviorSubject<BrandingSettings | null>(null);
+  public readonly branding$ = this.brandingSubject.asObservable();
+
   constructor(private readonly http: HttpClient) {}
+
+  // Aplicar colores y configuraciones de branding dinámicamente en el DOM y navegador
+  applyBranding(settings: BrandingSettings): void {
+    this.brandingSubject.next(settings);
+
+    if (settings.primaryColor) {
+      document.documentElement.style.setProperty('--primary-color', settings.primaryColor);
+      // Generar y aplicar un color de hover/active un poco más oscuro (-15% de brillo)
+      document.documentElement.style.setProperty('--primary-dark', this.adjustColorBrightness(settings.primaryColor, -15));
+    }
+    if (settings.secondaryColor) {
+      document.documentElement.style.setProperty('--secondary-color', settings.secondaryColor);
+    }
+    if (settings.appName) {
+      document.title = `${settings.appName} - Sistema de Certificaciones`;
+    }
+  }
+
+  // Cargar el branding de la base de datos y aplicarlo dinámicamente
+  loadAndApplyBranding(): Observable<ApiResponse<BrandingSettings>> {
+    return this.getBranding().pipe(
+      tap((response) => {
+        if (response.success && response.data) {
+          this.applyBranding(response.data);
+        }
+      })
+    );
+  }
+
+  // Utilidad para cambiar el brillo de un color en formato HEX
+  private adjustColorBrightness(hex: string, percent: number): string {
+    let R = parseInt(hex.substring(1, 3), 16);
+    let G = parseInt(hex.substring(3, 5), 16);
+    let B = parseInt(hex.substring(5, 7), 16);
+
+    R = Math.max(0, Math.min(255, R + (R * percent) / 100));
+    G = Math.max(0, Math.min(255, G + (G * percent) / 100));
+    B = Math.max(0, Math.min(255, B + (B * percent) / 100));
+
+    const rHex = Math.round(R).toString(16).padStart(2, '0');
+    const gHex = Math.round(G).toString(16).padStart(2, '0');
+    const bHex = Math.round(B).toString(16).padStart(2, '0');
+
+    return `#${rHex}${gHex}${bHex}`;
+  }
 
   getSmtpProfiles(): Observable<ApiResponse<SmtpProfile[]>> {
     return this.cachedGet<SmtpProfile[]>('smtp-profiles', `${this.API_URL}/smtp-profiles`);
+  }
+
+  // Obtener la política SMTP activa respecto a la obligatoriedad del correo personal
+  getActiveSmtpPolicy(): Observable<ApiResponse<{ requirePersonalEmail: boolean }>> {
+    return this.http.get<ApiResponse<{ requirePersonalEmail: boolean }>>(`${this.API_URL}/smtp-policy`)
+      .pipe(catchError(this.handleError));
   }
 
   createSmtpProfile(payload: SmtpProfilePayload): Observable<ApiResponse<SmtpProfile>> {
@@ -209,9 +263,19 @@ export class SettingsService {
     return this.cachedGet<any>(`reports-overview:${params.toString()}`, `${this.API_URL}/reports/overview`, params);
   }
 
-  exportReport(): Observable<Blob> {
-    return this.http.get(`${this.API_URL}/reports/export`, { responseType: 'blob' })
-      .pipe(catchError(this.handleError));
+  exportReport(filters?: Record<string, string>): Observable<Blob> {
+    let params = new HttpParams();
+    if (filters) {
+      for (const [key, value] of Object.entries(filters)) {
+        if (value !== undefined && value !== null && value !== '') {
+          params = params.set(key, value);
+        }
+      }
+    }
+    return this.http.get(`${this.API_URL}/reports/export`, {
+      params,
+      responseType: 'blob'
+    }).pipe(catchError(this.handleError));
   }
 
   // Obtener la configuración actual de seguridad de contraseñas

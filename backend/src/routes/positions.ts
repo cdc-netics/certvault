@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import { authenticate } from '../middleware/auth';
-import { getPositions, createPosition } from '../controllers/positionsController';
+import { authenticate, adminOnly } from '../middleware/auth';
+import { getPositions, createPosition, updatePosition, deletePosition } from '../controllers/positionsController';
 
 const router = Router();
 
@@ -8,6 +8,8 @@ const router = Router();
 router.use(authenticate);
 
 router.get('/', getPositions);
-router.post('/', createPosition);
+router.post('/', adminOnly, createPosition);
+router.put('/:id', adminOnly, updatePosition);
+router.delete('/:id', adminOnly, deletePosition);
 
 export default router;

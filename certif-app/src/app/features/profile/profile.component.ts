@@ -11,6 +11,7 @@ import { CertificationService } from '../../core/services/certification.service'
 import { User, Department, UserRole } from '../../core/models/user.model';
 import { Certification } from '../../core/models/certification.model';
 import { BackButtonComponent } from '../../shared/components/back-button/back-button.component';
+import { SettingsService } from '../../core/services/settings.service';
 
 @Component({
   selector: 'app-profile',
@@ -39,6 +40,7 @@ export class ProfileComponent implements OnInit, OnDestroy {
   profileError = '';
   passwordSuccess = '';
   passwordError = '';
+  downloadingZip = false;
   
   // Control de pestanas
   activeTab: 'profile' | 'password' | 'activity' | 'certifications' = 'profile';
@@ -52,6 +54,7 @@ export class ProfileComponent implements OnInit, OnDestroy {
   certificationsError = '';
   selectedCertification: Certification | null = null;
   showDetailsModal = false;
+  requirePersonalEmail = true;
   
   private readonly destroy$ = new Subject<void>();
 
@@ -59,13 +62,32 @@ export class ProfileComponent implements OnInit, OnDestroy {
     private readonly fb: FormBuilder,
     private readonly authService: AuthService,
     private readonly userService: UserService,
-    private readonly certificationService: CertificationService
+    private readonly certificationService: CertificationService,
+    private readonly settingsService: SettingsService
   ) {}
 
   ngOnInit(): void {
     this.currentUser = this.authService.getCurrentUser();
     this.buildOptions();
     this.initializeForms();
+
+    this.settingsService.getActiveSmtpPolicy()
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (response) => {
+          if (response.success && response.data) {
+            this.requirePersonalEmail = response.data.requirePersonalEmail;
+            if (!this.requirePersonalEmail) {
+              const personalEmailCtrl = this.profileForm.get('personalEmail');
+              personalEmailCtrl?.clearValidators();
+              personalEmailCtrl?.setValidators([Validators.email]);
+              personalEmailCtrl?.updateValueAndValidity();
+            }
+          }
+        },
+        error: (err) => console.error('Error al obtener politicas SMTP:', err)
+      });
+
     this.loadUserData();
     this.loadRecentActivity();
   }
@@ -213,6 +235,32 @@ export class ProfileComponent implements OnInit, OnDestroy {
         error: (error) => {
           this.profileError = error.message || 'Error al actualizar el perfil';
           this.loading = false;
+        }
+      });
+  }
+
+  downloadAllCertifications(): void {
+    if (!this.currentUser?._id) return;
+    this.downloadingZip = true;
+    this.certificationsError = '';
+
+    this.certificationService.downloadAllUserCertifications(this.currentUser._id)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (blob: Blob) => {
+          const url = window.URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          const userSuffix = `${this.currentUser?.firstName || 'usuario'}_${this.currentUser?.lastName || ''}`.replace(/\s+/g, '_');
+          link.download = `certificaciones_${userSuffix}.zip`;
+          link.click();
+          window.URL.revokeObjectURL(url);
+          this.downloadingZip = false;
+        },
+        error: (err) => {
+          console.error('Error al descargar ZIP de certificaciones:', err);
+          this.certificationsError = err.message || 'Error al descargar el archivo comprimido ZIP';
+          this.downloadingZip = false;
         }
       });
   }

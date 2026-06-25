@@ -12,6 +12,7 @@ import { recordAuditLog } from '../services/auditService';
 import { AuditAction } from '../models/AuditLog';
 import { resolveDepartment, resolvePosition } from '../utils/resolveEntities';
 import { Department } from '../models/Department';
+import { SmtpProfile } from '../models/SmtpProfile';
 
 interface CreateUserRequest {
   username: string;
@@ -252,6 +253,17 @@ export const createUser = async (req: AuthRequest, res: Response): Promise<void>
       }
     }
 
+    const activeSmtp = await SmtpProfile.findOne({ isActive: true });
+    const requirePersonalEmail = activeSmtp ? activeSmtp.requirePersonalEmail !== false : true;
+
+    if (requirePersonalEmail && (!userData.personalEmail || !userData.personalEmail.trim())) {
+      res.status(400).json({
+        success: false,
+        error: 'El correo personal es requerido'
+      });
+      return;
+    }
+
     const existingUser = await User.findOne({
       $or: [{ email: userData.email.toLowerCase() }, { username: userData.username }]
     });
@@ -270,7 +282,7 @@ export const createUser = async (req: AuthRequest, res: Response): Promise<void>
     const newUser = new User({
       ...userData,
       email: userData.email.toLowerCase(),
-      personalEmail: userData.personalEmail.toLowerCase(),
+      personalEmail: userData.personalEmail ? userData.personalEmail.toLowerCase().trim() : undefined,
       department: resolvedDeptId,
       position: resolvedPosId,
       isVerified: false,
@@ -314,8 +326,17 @@ export const createUser = async (req: AuthRequest, res: Response): Promise<void>
       data: userResponse,
       message: `Usuario creado exitosamente.${emailWarning}`
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error creando usuario:', error);
+    // Retornar error de validación específico de Mongoose con código 400
+    if (error && error.name === 'ValidationError') {
+      const messages = Object.values(error.errors).map((e: any) => e.message);
+      res.status(400).json({
+        success: false,
+        error: messages.join(', ')
+      });
+      return;
+    }
     res.status(500).json({
       success: false,
       error: 'Error interno del servidor'
@@ -352,6 +373,20 @@ export const updateUser = async (req: AuthRequest, res: Response): Promise<void>
         (updateData as any)[field] = req.body[field];
       }
     });
+
+    const activeSmtp = await SmtpProfile.findOne({ isActive: true });
+    const requirePersonalEmail = activeSmtp ? activeSmtp.requirePersonalEmail !== false : true;
+
+    if (requirePersonalEmail) {
+      const incomingPersonalEmail = req.body.personalEmail;
+      if (incomingPersonalEmail !== undefined && (!incomingPersonalEmail || !incomingPersonalEmail.trim())) {
+        res.status(400).json({
+          success: false,
+          error: 'El correo personal es requerido'
+        });
+        return;
+      }
+    }
 
     if (!currentUser.hasPermission(Permission.UPDATE_USERS)) {
       res.status(403).json({
@@ -461,7 +496,9 @@ export const updateUser = async (req: AuthRequest, res: Response): Promise<void>
     userToUpdate.set({
       ...updateData,
       email: updateData.email ? updateData.email.toLowerCase() : userToUpdate.email,
-      personalEmail: updateData.personalEmail ? updateData.personalEmail.toLowerCase() : userToUpdate.personalEmail
+      personalEmail: updateData.personalEmail !== undefined
+        ? (updateData.personalEmail ? updateData.personalEmail.toLowerCase().trim() : '')
+        : userToUpdate.personalEmail
     });
 
     await userToUpdate.save();
@@ -478,8 +515,17 @@ export const updateUser = async (req: AuthRequest, res: Response): Promise<void>
       data: updatedUser,
       message: 'Usuario actualizado exitosamente'
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error actualizando usuario:', error);
+    // Retornar error de validación específico de Mongoose con código 400
+    if (error && error.name === 'ValidationError') {
+      const messages = Object.values(error.errors).map((e: any) => e.message);
+      res.status(400).json({
+        success: false,
+        error: messages.join(', ')
+      });
+      return;
+    }
     res.status(500).json({
       success: false,
       error: 'Error interno del servidor'
@@ -554,44 +600,49 @@ export const deleteUser = async (req: AuthRequest, res: Response): Promise<void>
     }).sort({ issueDate: -1 });
 
     if (certifications.length > 0) {
-      try {
-        await sendUserCertificationsArchiveEmail({
-          to: userToDelete.personalEmail,
-          name: `${userToDelete.firstName} ${userToDelete.lastName}`,
-          companyEmail: userToDelete.email,
-          certifications: certifications.map((cert: any) => ({
-            title: cert.title,
-            provider: cert.provider,
-            technology: cert.technology,
-            level: cert.level,
-            certificateNumber: cert.certificateNumber,
-            issueDate: cert.issueDate,
-            expirationDate: cert.expirationDate,
-            status: cert.status,
-            certificateUrl: cert.certificateUrl
-          }))
-        });
+      const activeSmtp = await SmtpProfile.findOne({ isActive: true });
+      const sendBackup = activeSmtp ? activeSmtp.sendBackupOnDelete !== false : true;
 
-        // Registrar en auditoría el éxito del envío del correo de respaldo
-        await recordAuditLog({
-          action: AuditAction.DELETE,
-          resource: 'users',
-          resourceId: id as string,
-          userId: currentUser._id,
-          userEmail: currentUser.email,
-          userRole: currentUser.role,
-          method: req.method,
-          path: req.originalUrl,
-          ip: req.ip,
-          userAgent: req.get('user-agent'),
-          statusCode: 200,
-          message: `Respaldo de certificaciones enviado exitosamente a ${userToDelete.personalEmail || userToDelete.email} al eliminar el usuario.`,
-          metadata: {
-            recipient: userToDelete.personalEmail || userToDelete.email,
-            certificationsCount: certifications.length,
-            titles: certifications.map(c => c.title)
-          }
-        });
+      try {
+        if (sendBackup) {
+          await sendUserCertificationsArchiveEmail({
+            to: userToDelete.personalEmail,
+            name: `${userToDelete.firstName} ${userToDelete.lastName}`,
+            companyEmail: userToDelete.email,
+            certifications: certifications.map((cert: any) => ({
+              title: cert.title,
+              provider: cert.provider,
+              technology: cert.technology,
+              level: cert.level,
+              certificateNumber: cert.certificateNumber,
+              issueDate: cert.issueDate,
+              expirationDate: cert.expirationDate,
+              status: cert.status,
+              certificateUrl: cert.certificateUrl
+            }))
+          });
+
+          // Registrar en auditoría el éxito del envío del correo de respaldo
+          await recordAuditLog({
+            action: AuditAction.DELETE,
+            resource: 'users',
+            resourceId: id as string,
+            userId: currentUser._id,
+            userEmail: currentUser.email,
+            userRole: currentUser.role,
+            method: req.method,
+            path: req.originalUrl,
+            ip: req.ip,
+            userAgent: req.get('user-agent'),
+            statusCode: 200,
+            message: `Respaldo de certificaciones enviado exitosamente a ${userToDelete.personalEmail || userToDelete.email} al eliminar el usuario.`,
+            metadata: {
+              recipient: userToDelete.personalEmail || userToDelete.email,
+              certificationsCount: certifications.length,
+              titles: certifications.map(c => c.title)
+            }
+          });
+        }
 
         // Eliminar archivos físicos de certificados del disco usando process.cwd() para entornos dist/
         for (const cert of certifications) {

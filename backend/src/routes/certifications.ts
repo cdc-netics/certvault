@@ -15,6 +15,7 @@ import {
   getCertificationStats,
   getExpiringCertifications,
   getUserCertifications,
+  downloadAllUserCertifications,
   getCertificationFile,
   uploadCertificate,
   searchCertifications,
@@ -84,6 +85,7 @@ router.post('/', createCertification);
 router.get('/stats', getCertificationStats);
 router.get('/expiring', getExpiringCertifications);
 router.get('/user/:userId', getUserCertifications);
+router.get('/user/:userId/download-all', downloadAllUserCertifications);
 router.get('/search', searchCertifications);
 router.get('/technologies', getTechnologies);
 router.get('/departments', getDepartments);

@@ -1,8 +1,10 @@
 import { Component, OnDestroy, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterOutlet, Router, RouterModule, NavigationEnd } from '@angular/router';
-import { filter, Subscription } from 'rxjs';
+import { filter, Subscription, Subject } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
 import { AuthService } from './core/services/auth.service';
+import { SettingsService } from './core/services/settings.service';
 import { TermsModalComponent } from './shared/components/terms-modal/terms-modal.component';
 
 @Component({
@@ -16,10 +18,15 @@ export class App implements OnInit, OnDestroy {
   sidebarCollapsed = false;
   private routerSub?: Subscription;
   private readonly publicRoutes = ['/login', '/register', '/forgot-password', '/reset-password', '/verify-email'];
+  
+  appName = '';
+  sidebarLogo = '';
+  private readonly destroy$ = new Subject<void>();
 
   constructor(
     private readonly router: Router,
-    public readonly authService: AuthService
+    public readonly authService: AuthService,
+    private readonly settingsService: SettingsService
   ) {}
 
   ngOnInit(): void {
@@ -27,10 +34,27 @@ export class App implements OnInit, OnDestroy {
     this.routerSub = this.router.events
       .pipe(filter(event => event instanceof NavigationEnd))
       .subscribe((event: any) => this.setSidebarByRoute(event.urlAfterRedirects || event.url));
+
+    // Suscribirse a los cambios del branding dinámico
+    this.settingsService.branding$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((branding) => {
+        if (branding) {
+          this.appName = branding.appName || 'CertiVault';
+          this.sidebarLogo = branding.sidebarLogo || '';
+        }
+      });
+
+    // Cargar y aplicar configuración inicial de branding
+    this.settingsService.loadAndApplyBranding().subscribe({
+      error: (err) => console.error('Error al cargar la configuración de branding:', err)
+    });
   }
 
   ngOnDestroy(): void {
     this.routerSub?.unsubscribe();
+    this.destroy$.next();
+    this.destroy$.complete();
   }
 
   toggleSidebar(): void {

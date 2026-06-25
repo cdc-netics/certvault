@@ -2,14 +2,17 @@ import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { Router, RouterModule } from '@angular/router';
+import { Subject } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
 import { AuthService } from '../../../core/services/auth.service';
+import { SettingsService } from '../../../core/services/settings.service';
 
 @Component({
   selector: 'app-login',
   standalone: true,
   imports: [CommonModule, ReactiveFormsModule, RouterModule],
   template: `
-    <div class="min-vh-100 d-flex align-items-center justify-content-center bg-light-custom">
+    <div class="min-vh-100 d-flex align-items-center justify-content-center" [style.background]="getBackgroundStyle()">
       <div class="container">
         <div class="row justify-content-center">
           <div class="col-md-6 col-lg-4">
@@ -17,11 +20,11 @@ import { AuthService } from '../../../core/services/auth.service';
               <div class="card-body p-4">
                 <div class="text-center mb-4">
                   <img
-                    src="/resources/NETICS-Isotipo.png"
-                    alt="Netics isotipo"
+                    [src]="loginLogo"
+                    alt="Logo"
                     class="login-logo mb-3"
                   />
-                  <h2 class="text-primary fw-bold mb-1">CertiVault</h2>
+                  <h2 class="text-primary fw-bold mb-1">{{ appName }}</h2>
                   <p class="text-muted small">Gestión de Certificaciones Profesionales</p>
                 </div>
 
@@ -172,10 +175,18 @@ export class LoginComponent implements OnInit {
   adProvider: 'ldap' | 'azure' = 'azure';
   useAdLdap = false;
 
+  // Propiedades de branding dinámico
+  loginLogo = '/resources/NETICS-Isotipo.png';
+  appName = 'CertiVault';
+  primaryColor = '#00C3B4';
+  secondaryColor = '#008f86';
+  private readonly destroy$ = new Subject<void>();
+
   constructor(
     private readonly fb: FormBuilder,
     private readonly authService: AuthService,
-    private readonly router: Router
+    private readonly router: Router,
+    private readonly settingsService: SettingsService
   ) {
     this.loginForm = this.fb.group({
       email: ['', [Validators.required, Validators.email]],
@@ -184,6 +195,23 @@ export class LoginComponent implements OnInit {
   }
 
   ngOnInit(): void {
+    // Suscribirse a los cambios del branding dinámico
+    this.settingsService.branding$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((branding) => {
+        if (branding) {
+          this.loginLogo = branding.loginLogo || '/resources/NETICS-Isotipo.png';
+          this.appName = branding.appName || 'CertiVault';
+          this.primaryColor = branding.primaryColor || '#00C3B4';
+          this.secondaryColor = branding.secondaryColor || '#008f86';
+        }
+      });
+
+    // Cargar y aplicar configuración de branding
+    this.settingsService.loadAndApplyBranding().subscribe({
+      error: (err) => console.error('Error al cargar la configuración de branding en Login:', err)
+    });
+
     // Carga inicial de la configuración de AD/SSO para renderizar las opciones de login
     this.authService.getAdConfig().subscribe({
       next: (response) => {
@@ -283,5 +311,14 @@ export class LoginComponent implements OnInit {
         this.loginForm.get(key)?.markAsTouched();
       }
     }
+  }
+
+  getBackgroundStyle(): string {
+    return `linear-gradient(135deg, ${this.primaryColor} 0%, ${this.secondaryColor} 100%)`;
+  }
+
+  ngOnDestroy(): void {
+    this.destroy$.next();
+    this.destroy$.complete();
   }
 }

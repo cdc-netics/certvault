@@ -140,6 +140,24 @@ export class UserService {
       .pipe(catchError(this.handleError));
   }
 
+  // Crear cargo
+  createPosition(pos: { name: string }): Observable<ApiResponse<Position>> {
+    return this.http.post<ApiResponse<Position>>('/api/positions', pos)
+      .pipe(catchError(this.handleError));
+  }
+
+  // Actualizar cargo
+  updatePosition(id: string, pos: { name: string, isActive?: boolean }): Observable<ApiResponse<Position>> {
+    return this.http.put<ApiResponse<Position>>(`/api/positions/${id}`, pos)
+      .pipe(catchError(this.handleError));
+  }
+
+  // Eliminar cargo
+  deletePosition(id: string): Observable<ApiResponse<void>> {
+    return this.http.delete<ApiResponse<void>>(`/api/positions/${id}`)
+      .pipe(catchError(this.handleError));
+  }
+
   // Actualizar masivamente el departamento de una lista de usuarios
   bulkUpdateDepartment(userIds: string[], departmentId: string): Observable<ApiResponse<void>> {
     return this.http.patch<ApiResponse<void>>(`${this.API_URL}/bulk-department`, { userIds, departmentId })

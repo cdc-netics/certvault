@@ -379,8 +379,16 @@ export class UsersListComponent implements OnInit, OnDestroy {
     return this.userService.getRoleLabel(role);
   }
 
-  getDepartmentLabel(department: Department): string {
+  getDepartmentLabel(department: any): string {
     return this.userService.getDepartmentLabel(department);
+  }
+
+  getPositionLabel(position: any): string {
+    if (!position) return '';
+    if (typeof position === 'object') {
+      return position.name || '';
+    }
+    return position;
   }
 
   getRoleBadgeClass(role: UserRole): string {

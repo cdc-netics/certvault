@@ -506,14 +506,24 @@ export const getReportsOverview = async (req: Request, res: Response): Promise<v
 
 export const exportReport = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const rows = await Certification.find().sort({ department: 1, employeeName: 1 }).lean();
+    const certificationFilter: Record<string, unknown> = {};
+    if (req.query.department) certificationFilter.department = req.query.department;
+    if (req.query.status) certificationFilter.status = req.query.status;
+    const issueDate = getDateRange(req);
+    if (issueDate) certificationFilter.issueDate = issueDate;
+
+    const rows = await Certification.find(certificationFilter)
+      .populate('department')
+      .sort({ department: 1, employeeName: 1 })
+      .lean();
+
     const header = ['Titulo', 'Empleado', 'Departamento', 'Proveedor', 'Tecnologia', 'Estado', 'Emision', 'Expiracion'];
     const csv = [
       header.map(csvEscape).join(','),
       ...rows.map(row => [
         row.title,
         row.employeeName,
-        row.department,
+        row.department && typeof row.department === 'object' ? (row.department as any).name : (row.department || ''),
         row.provider,
         row.technology,
         row.status,

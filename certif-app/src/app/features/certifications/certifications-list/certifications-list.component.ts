@@ -4,6 +4,8 @@ import { RouterModule, ActivatedRoute } from '@angular/router';
 import { ReactiveFormsModule, FormBuilder, FormGroup } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { CertificationService } from '../../../core/services/certification.service';
+import { UserService } from '../../../core/services/user.service';
+import { User } from '../../../core/models/user.model';
 import { BackButtonComponent } from '../../../shared/components/back-button/back-button.component';
 import { AuthService } from '../../../core/services/auth.service';
 import { Certification, CertificationStatus, CertificationFilter } from '../../../core/models/certification.model';
@@ -58,7 +60,7 @@ import { Subject, Subscription } from 'rxjs';
         <div class="card-body" [class.d-none]="!showFilters">
           <form [formGroup]="filterForm">
             <div class="row">
-              <div class="col-md-4 mb-3">
+              <div class="col-md-3 mb-3" [class.col-md-4]="!authService.canViewUsers()">
                 <label for="search" class="form-label">Busqueda General</label>
                 <div class="input-group">
                   <span class="input-group-text">
@@ -74,7 +76,7 @@ import { Subject, Subscription } from 'rxjs';
                 </div>
               </div>
 
-              <div class="col-md-4 mb-3">
+              <div class="col-md-3 mb-3" [class.col-md-4]="!authService.canViewUsers()">
                 <label for="type" class="form-label">Tipo</label>
                 <select id="type" class="form-control" formControlName="type">
                   <option value="">Todos los tipos</option>
@@ -89,7 +91,7 @@ import { Subject, Subscription } from 'rxjs';
                 </select>
               </div>
 
-              <div class="col-md-4 mb-3">
+              <div class="col-md-3 mb-3" [class.col-md-4]="!authService.canViewUsers()">
                 <label for="level" class="form-label">Nivel</label>
                 <select id="level" class="form-control" formControlName="level">
                   <option value="">Todos los niveles</option>
@@ -98,6 +100,14 @@ import { Subject, Subscription } from 'rxjs';
                   <option value="advanced">Avanzado</option>
                   <option value="expert">Experto</option>
                   <option value="academic">Académico</option>
+                </select>
+              </div>
+
+              <div class="col-md-3 mb-3" *ngIf="authService.canViewUsers()">
+                <label for="employeeId" class="form-label">Colaborador</label>
+                <select id="employeeId" class="form-control" formControlName="employeeId">
+                  <option value="">Todos los colaboradores</option>
+                  <option *ngFor="let u of usersOptions" [value]="u._id">{{ u.firstName }} {{ u.lastName }}</option>
                 </select>
               </div>
             </div>
@@ -399,6 +409,7 @@ export class CertificationsListComponent implements OnInit, OnDestroy {
 
   uniqueProviders: string[] = [];
   uniqueDepartments: string[] = [];
+  usersOptions: User[] = []; // Opciones de colaboradores para el filtro
 
   stats: any = null;
   selectedCertification: Certification | null = null;
@@ -411,6 +422,7 @@ export class CertificationsListComponent implements OnInit, OnDestroy {
     private readonly fb: FormBuilder,
     private readonly certificationService: CertificationService,
     public readonly authService: AuthService,
+    private readonly userService: UserService,
     private readonly http: HttpClient,
     private readonly route: ActivatedRoute
   ) {
@@ -421,6 +433,7 @@ export class CertificationsListComponent implements OnInit, OnDestroy {
       provider: [''],
       department: [''],
       status: [''],
+      employeeId: [''],
       dateFrom: [''],
       dateTo: ['']
     });
@@ -749,6 +762,22 @@ export class CertificationsListComponent implements OnInit, OnDestroy {
         }
       }
     });
+
+    // Obtener la lista completa de colaboradores activos para el filtro (solo para usuarios con permisos)
+    if (this.authService.canViewUsers()) {
+      this.userService.getUsers({ limit: 100, isActive: true }).subscribe({
+        next: (response) => {
+          if (response.success && response.data && response.data.users) {
+            this.usersOptions = response.data.users.sort((a, b) => {
+              const nameA = `${a.firstName} ${a.lastName}`.toLowerCase();
+              const nameB = `${b.firstName} ${b.lastName}`.toLowerCase();
+              return nameA.localeCompare(nameB);
+            });
+          }
+        },
+        error: (err) => console.error('Error al cargar colaboradores para filtros:', err)
+      });
+    }
   }
 }
 

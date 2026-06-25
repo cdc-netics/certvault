@@ -127,6 +127,13 @@ export class CertificationService {
       .pipe(catchError(this.handleError));
   }
 
+  downloadAllUserCertifications(userId: string): Observable<Blob> {
+    // Solicitar el archivo ZIP consolidado al backend
+    return this.http.get(`${this.API_URL}/user/${userId}/download-all`, {
+      responseType: 'blob'
+    }).pipe(catchError(this.handleError));
+  }
+
   uploadCertificateFile(certificationId: string, file: File): Observable<ApiResponse<{ url: string }>> {
     const formData = new FormData();
     formData.append('certificate', file);

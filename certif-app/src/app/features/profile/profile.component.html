@@ -238,7 +238,7 @@
                 </div>
 
                 <!-- Correo Personal -->
-                <div class="col-md-6 mb-3">
+                <div class="col-md-6 mb-3" *ngIf="requirePersonalEmail">
                   <label for="personalEmail" class="form-label">
                     Correo Personal <span class="text-danger">*</span>
                   </label>
@@ -543,10 +543,16 @@
               <i class="fas fa-certificate me-2"></i>
               Mis Certificaciones
             </h6>
-            <button class="btn btn-sm btn-primary" routerLink="/certifications/new">
-              <i class="fas fa-plus me-1"></i>
-              Nueva Certificacion
-            </button>
+            <div class="d-flex gap-2">
+              <button *ngIf="userCertifications.length > 0" class="btn btn-sm btn-outline-secondary" (click)="downloadAllCertifications()" [disabled]="downloadingZip">
+                <i class="fas me-1" [ngClass]="downloadingZip ? 'fa-spinner fa-spin' : 'fa-file-archive'"></i>
+                {{ downloadingZip ? 'Preparando ZIP...' : 'Descargar ZIP' }}
+              </button>
+              <button class="btn btn-sm btn-primary" routerLink="/certifications/new">
+                <i class="fas fa-plus me-1"></i>
+                Nueva Certificacion
+              </button>
+            </div>
           </div>
           <div class="card-body">
             <!-- Cargando -->

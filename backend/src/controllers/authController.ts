@@ -8,6 +8,7 @@ import { sendPasswordResetEmail, sendVerificationEmail } from '../services/email
 import { AuditLog } from '../models/AuditLog';
 import { SecuritySettings } from '../models/SecuritySettings';
 import { resolveDepartment, resolvePosition } from '../utils/resolveEntities';
+import { SmtpProfile } from '../models/SmtpProfile';
 
 interface RegisterData {
   username: string;
@@ -267,12 +268,14 @@ export const login = async (req: AuthRequest, res: Response): Promise<void> => {
     const isPersonalEmailMissingOrEqual = !user.personalEmail || 
       user.personalEmail.toLowerCase().trim() === user.email.toLowerCase().trim();
 
-    // Si la contraseña expiro o falta el correo de respaldo, se exige su cambio obligatorio.
-    // Se establece una excepcion para el administrador de semilla para facilitar las pruebas y administracion inicial.
+    const activeSmtp = await SmtpProfile.findOne({ isActive: true });
+    const requirePersonalEmail = activeSmtp ? activeSmtp.requirePersonalEmail !== false : true;
+
+    // Si la contraseña expiro o falta el correo de respaldo (si es requerido), se exige su cambio obligatorio.
     if (isSeedAdmin) {
       user.mustChangePassword = false;
       user.termsAccepted = true;
-    } else if (isExpired || isPersonalEmailMissingOrEqual) {
+    } else if (isExpired || (requirePersonalEmail && isPersonalEmailMissingOrEqual)) {
       user.mustChangePassword = true;
     }
 
@@ -281,9 +284,6 @@ export const login = async (req: AuthRequest, res: Response): Promise<void> => {
 
     user.lastLogin = new Date();
     user.refreshToken = refreshToken;
-    // Se deshabilita la validacion del esquema al guardar marcas de sesion y tokens.
-    // Esto previene que usuarios con perfiles antiguos e incompletos (p. ej. sin correo personal)
-    // sufran excepciones del esquema de Mongoose al loguearse y queden bloqueados sin poder ingresar.
     await user.save({ validateBeforeSave: false });
 
     res.json({
@@ -309,7 +309,7 @@ export const login = async (req: AuthRequest, res: Response): Promise<void> => {
           mustChangePassword: user.mustChangePassword,
           termsAccepted: user.termsAccepted,
           termsAcceptedAt: user.termsAcceptedAt,
-          requiresPersonalEmailUpdate: isPersonalEmailMissingOrEqual && !isSeedAdmin
+          requiresPersonalEmailUpdate: requirePersonalEmail && isPersonalEmailMissingOrEqual && !isSeedAdmin
         },
         expiresIn: 7 * 24 * 60 * 60
       },
@@ -869,8 +869,10 @@ export const verifyResetToken = async (req: Request, res: Response): Promise<voi
       return;
     }
 
-    const requiresPersonalEmail = !user.personalEmail || 
-      user.personalEmail.toLowerCase().trim() === user.email.toLowerCase().trim();
+    const activeSmtp = await SmtpProfile.findOne({ isActive: true });
+    const requirePersonalEmail = activeSmtp ? activeSmtp.requirePersonalEmail !== false : true;
+    const requiresPersonalEmail = requirePersonalEmail && (!user.personalEmail || 
+      user.personalEmail.toLowerCase().trim() === user.email.toLowerCase().trim());
 
     res.json({
       success: true,
@@ -1125,9 +1127,12 @@ export const adLogin = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
+    const activeSmtp = await SmtpProfile.findOne({ isActive: true });
+    const requirePersonalEmail = activeSmtp ? activeSmtp.requirePersonalEmail !== false : true;
+
     // Identificar si falta actualizar el correo personal (debe ser diferente al corporativo)
-    const requiresPersonalEmailUpdate = isNewUser || !user.personalEmail || 
-      user.personalEmail.toLowerCase().trim() === user.email.toLowerCase().trim();
+    const requiresPersonalEmailUpdate = requirePersonalEmail && (isNewUser || !user.personalEmail || 
+      user.personalEmail.toLowerCase().trim() === user.email.toLowerCase().trim());
 
     const token = generateToken(String(user._id));
     const refreshTokenVal = generateRefreshToken(String(user._id));

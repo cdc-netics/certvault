@@ -20,7 +20,9 @@ const buildUpdatePayload = (body: Partial<SmtpProfileInput>) => {
     'fromName',
     'fromEmail',
     'rejectUnauthorized',
-    'connectionTimeout'
+    'connectionTimeout',
+    'sendBackupOnDelete',
+    'requirePersonalEmail'
   ];
 
   for (const field of allowedFields) {
@@ -255,3 +257,23 @@ export const testSmtpProfile = async (req: Request, res: Response): Promise<void
     });
   }
 };
+
+// Obtener la política SMTP activa actual (si se requiere correo personal de forma obligatoria)
+export const getActiveSmtpPolicy = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const activeProfile = await SmtpProfile.findOne({ isActive: true });
+    res.json({
+      success: true,
+      data: {
+        requirePersonalEmail: activeProfile ? activeProfile.requirePersonalEmail !== false : true
+      }
+    });
+  } catch (error) {
+    console.error('Error al obtener la política SMTP activa:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Error al obtener políticas SMTP'
+    });
+  }
+};
+

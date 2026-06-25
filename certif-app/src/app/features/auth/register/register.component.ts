@@ -5,6 +5,7 @@ import { Router, RouterModule } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 import { UserService } from '../../../core/services/user.service';
 import { BackButtonComponent } from '../../../shared/components/back-button/back-button.component';
+import { SettingsService } from '../../../core/services/settings.service';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 
@@ -93,7 +94,7 @@ import { takeUntil } from 'rxjs/operators';
                     </div>
                   </div>
 
-                  <div class="mb-3">
+                  <div class="mb-3" *ngIf="requirePersonalEmail">
                     <label for="personalEmail" class="form-label">Correo Personal</label>
                     <input
                       type="email"
@@ -258,6 +259,7 @@ export class RegisterComponent implements OnInit, OnDestroy {
   availablePositions: any[] = [];
   showCustomDept = false;
   showCustomPos = false;
+  requirePersonalEmail = true;
 
   private readonly destroy$ = new Subject<void>();
 
@@ -265,7 +267,8 @@ export class RegisterComponent implements OnInit, OnDestroy {
     private readonly fb: FormBuilder,
     private readonly authService: AuthService,
     private readonly userService: UserService,
-    private readonly router: Router
+    private readonly router: Router,
+    private readonly settingsService: SettingsService
   ) {
     this.registerForm = this.fb.group({
       firstName: ['', Validators.required],
@@ -291,6 +294,24 @@ export class RegisterComponent implements OnInit, OnDestroy {
       this.router.navigate(['/dashboard']);
       return;
     }
+
+    // Cargar directivas de políticas SMTP
+    this.settingsService.getActiveSmtpPolicy()
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (response) => {
+          if (response.success && response.data) {
+            this.requirePersonalEmail = response.data.requirePersonalEmail;
+            if (!this.requirePersonalEmail) {
+              const personalEmailCtrl = this.registerForm.get('personalEmail');
+              personalEmailCtrl?.clearValidators();
+              personalEmailCtrl?.setValidators([Validators.email]);
+              personalEmailCtrl?.updateValueAndValidity();
+            }
+          }
+        },
+        error: (err) => console.error('Error al obtener politicas SMTP:', err)
+      });
 
     this.loadDepartments();
     this.loadPositions();

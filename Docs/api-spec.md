@@ -106,11 +106,11 @@ Este documento detalla los principales endpoints de la API de **CertVault**, des
 
 ---
 
-### Eliminar Usuario (Borrado Físico y Envío de Respaldo)
+### Eliminar Usuario (Borrado Físico y Envío Condicional de Respaldo)
 * **Ruta:** `DELETE /api/users/:id`
 * **Encabezados:** `Authorization: Bearer <Token>` (Requiere rol `admin`)
 * **Respuesta Exitosa (200 OK):**
-  Dispara el borrado físico de la base de datos y de disco. Envía de forma automática un correo electrónico de respaldo con las certificaciones adjuntas en formato PDF. Registra un log detallado en el módulo de auditoría:
+  Dispara el borrado físico de la base de datos y de disco. Si la política SMTP `sendBackupOnDelete` está habilitada, genera y envía automáticamente un correo con un ZIP conteniendo las certificaciones del usuario. Si la política está deshabilitada, el usuario se elimina sin envío de respaldo. Registra un log detallado en el módulo de auditoría:
   ```json
   {
     "success": true,
@@ -219,6 +219,34 @@ Todos estos endpoints requieren privilegios de rol `admin`:
       "message": "Respaldo local eliminado exitosamente"
     }
     ```
+
+---
+
+### Políticas SMTP (Directivas Globales del Sistema)
+* **Obtener Políticas Activas:** `GET /api/settings/smtp-policy`
+* **Encabezados:** `Authorization: Bearer <Token>`
+* **Descripción:** Retorna las directivas activas del perfil SMTP global. Utilizado por el frontend para determinar dinámicamente si el correo personal es obligatorio y si se envían respaldos al eliminar usuarios.
+* **Respuesta Exitosa (200 OK):**
+  ```json
+  {
+    "success": true,
+    "data": {
+      "sendBackupOnDelete": true,
+      "requirePersonalEmail": false
+    }
+  }
+  ```
+* **Respuesta sin Configuración (200 OK):**
+  Si no existe un perfil SMTP activo, retorna valores por defecto:
+  ```json
+  {
+    "success": true,
+    "data": {
+      "sendBackupOnDelete": true,
+      "requirePersonalEmail": true
+    }
+  }
+  ```
 
 ---
 

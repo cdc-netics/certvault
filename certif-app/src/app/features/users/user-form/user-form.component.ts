@@ -9,6 +9,7 @@ import { BackButtonComponent } from '../../../shared/components/back-button/back
 import { UserService, DepartmentOption, RoleOption } from '../../../core/services/user.service';
 import { AuthService } from '../../../core/services/auth.service';
 import { User, UserRole, Department, RegisterRequest } from '../../../core/models/user.model';
+import { SettingsService } from '../../../core/services/settings.service';
 
 @Component({
   selector: 'app-user-form',
@@ -36,6 +37,7 @@ export class UserFormComponent implements OnInit, OnDestroy {
   canEditRoles = false;
   canSetLeader = false;
   canAdminChangePassword = false;
+  requirePersonalEmail = true;
 
 
   private readonly destroy$ = new Subject<void>();
@@ -47,7 +49,8 @@ export class UserFormComponent implements OnInit, OnDestroy {
     private readonly userService: UserService,
     private readonly authService: AuthService,
     private readonly route: ActivatedRoute,
-    private readonly router: Router
+    private readonly router: Router,
+    private readonly settingsService: SettingsService
   ) {}
 
   ngOnInit(): void {
@@ -56,6 +59,25 @@ export class UserFormComponent implements OnInit, OnDestroy {
     this.updatePermissions();
 
     this.initializeForm();
+
+    // Obtener políticas SMTP y ajustar validación
+    this.settingsService.getActiveSmtpPolicy()
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (response) => {
+          if (response.success && response.data) {
+            this.requirePersonalEmail = response.data.requirePersonalEmail;
+            if (!this.requirePersonalEmail) {
+              const personalEmailCtrl = this.userForm.get('personalEmail');
+              personalEmailCtrl?.clearValidators();
+              personalEmailCtrl?.setValidators([Validators.email, this.emailsDifferentValidator.bind(this)]);
+              personalEmailCtrl?.updateValueAndValidity();
+            }
+          }
+        },
+        error: (err) => console.error('Error al obtener politicas SMTP:', err)
+      });
+
     this.applyFieldLocks();
     this.setPasswordValidators();
     this.userForm.get('password')?.valueChanges

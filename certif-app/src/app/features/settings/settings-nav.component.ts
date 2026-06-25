@@ -44,6 +44,11 @@ import { RouterModule } from '@angular/router';
         </a>
       </li>
       <li class="nav-item">
+        <a class="nav-link" routerLink="/settings/positions" routerLinkActive="active">
+          <i class="fas fa-user-tag me-1"></i> Cargos
+        </a>
+      </li>
+      <li class="nav-item">
         <a class="nav-link" routerLink="/settings/security" routerLinkActive="active">
           <i class="fas fa-shield-alt me-1"></i> Seguridad
         </a>
