@@ -1103,8 +1103,17 @@ export const adLogin = async (req: Request, res: Response): Promise<void> => {
         isActive: true,
         isVerified: true,
         termsAccepted: false,
-        mustChangePassword: false
       });
+    }
+
+    if (isNewUser && user) {
+      // Re-asociar de forma inmediata cualquier certificación huérfana para el usuario recién auto-aprovisionado
+      try {
+        const { healOrphanedCertifications } = await import('../utils/userHealer');
+        await healOrphanedCertifications();
+      } catch (healError) {
+        console.error('Error al curar certificaciones huérfanas tras aprovisionamiento JIT:', healError);
+      }
     }
 
     if (user.isActive === false) {

@@ -19,6 +19,7 @@ _No hay issues pendientes registrados._
 | **ISS-006** | Normalización del Emisor/Plataforma (Provider)       | Backend / Frontend | 29/05/2026      | Se implementó script de normalización case-insensitive al arrancar el servidor backend (unificando históricos a la moda predominante). Se integró normalización en altas/ediciones, se creó endpoint de proveedores y se actualizaron los filtros del frontend para usar datos completos de la base de datos. |
 | **ISS-007** | Control de Accesos en Eliminación de Certificaciones | Backend / Frontend | 29/05/2026      | Se agregaron restricciones en el backend para la eliminación de certificaciones (permitiendo la acción solo al propietario, administrador o líder del área). Se aplicó la misma validación lógica en el frontend para controlar la visibilidad del botón borrar de cada certificado individualmente.          |
 | **ISS-008** | Campo de correo personal ausente al recuperar clave  | Backend / Frontend | 25/06/2026      | Se validó el token en carga de página mediante `verify-reset-token` y se añadió condicionalmente el campo "Correo personal" al formulario reactivo si el backend lo requiere. Se implementó validador de disparidad de emails. |
+| **ISS-009** | Desaparición de usuarios por expiración de tokens    | Backend            | 25/06/2026      | Se removieron los índices TTL sobre `passwordResetExpires` y `verificationExpires` en `User.ts` que eliminaban al usuario completo. Se integró eliminación automática de estos índices al conectar a la DB y rutina utilitaria de auto-recuperación de certificaciones huérfanas al crear o loguear usuarios. |
 
 
 ---
@@ -42,4 +43,13 @@ _No hay issues pendientes registrados._
 - **Código Afectado**: [reset-password.component.ts](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/certif-app/src/app/features/auth/reset-password/reset-password.component.ts)
 - **Sugerencia de Mejora**:
   Para garantizar que la recuperación sea viable cuando la base de datos requiera configurar o actualizar el correo de respaldo, se valida el estado del token al cargar la vista. De ser necesario, se añade dinámicamente el control `personalEmail` al formulario reactivo y se incorporan las validaciones pertinentes para evitar el uso del correo institucional.
+
+---
+
+### [ISS-009] Desaparición de usuarios por expiración de tokens
+
+- **Código Afectado**: [User.ts](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/backend/src/models/User.ts), [server.ts](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/backend/src/server.ts)
+- **Sugerencia de Mejora**:
+  Eliminar los índices TTL que apuntan a campos del modelo de usuario para evitar el borrado automático de registros. Se programa una limpieza automática de los índices en el arranque de la base de datos y se crea un resolvedor utilitario en `userHealer.ts` que escanea y vuelve a asociar automáticamente cualquier certificación huérfana por similitud de nombres y departamentos cuando los usuarios recrean sus cuentas.
+
 
