@@ -63,6 +63,11 @@ export interface PublicApiClient {
   downloadEndpointPattern: string;
 }
 
+export interface ServerPolicy {
+  sendBackupOnDelete: boolean;
+  requirePersonalEmail: boolean;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -125,10 +130,20 @@ export class SettingsService {
     return this.cachedGet<SmtpProfile[]>('smtp-profiles', `${this.API_URL}/smtp-profiles`);
   }
 
-  // Obtener la política SMTP activa respecto a la obligatoriedad del correo personal
-  getActiveSmtpPolicy(): Observable<ApiResponse<{ requirePersonalEmail: boolean }>> {
-    return this.http.get<ApiResponse<{ requirePersonalEmail: boolean }>>(`${this.API_URL}/smtp-policy`)
+  // Obtener la política global del servidor asociada a flujos de correo/usuarios
+  getServerPolicy(): Observable<ApiResponse<ServerPolicy>> {
+    return this.http.get<ApiResponse<ServerPolicy>>(`${this.API_URL}/smtp-policy`)
       .pipe(catchError(this.handleError));
+  }
+
+  updateServerPolicy(payload: Partial<ServerPolicy>): Observable<ApiResponse<ServerPolicy>> {
+    return this.http.put<ApiResponse<ServerPolicy>>(`${this.API_URL}/smtp-policy`, payload)
+      .pipe(catchError(this.handleError));
+  }
+
+  // Compatibilidad temporal con componentes existentes
+  getActiveSmtpPolicy(): Observable<ApiResponse<{ requirePersonalEmail: boolean }>> {
+    return this.getServerPolicy() as Observable<ApiResponse<{ requirePersonalEmail: boolean }>>;
   }
 
   createSmtpProfile(payload: SmtpProfilePayload): Observable<ApiResponse<SmtpProfile>> {

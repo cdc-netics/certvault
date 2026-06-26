@@ -8,7 +8,7 @@ import { sendPasswordResetEmail, sendVerificationEmail } from '../services/email
 import { AuditLog } from '../models/AuditLog';
 import { SecuritySettings } from '../models/SecuritySettings';
 import { resolveDepartment, resolvePosition } from '../utils/resolveEntities';
-import { SmtpProfile } from '../models/SmtpProfile';
+import { getResolvedServerPolicy } from '../services/serverPolicyService';
 
 interface RegisterData {
   username: string;
@@ -268,8 +268,7 @@ export const login = async (req: AuthRequest, res: Response): Promise<void> => {
     const isPersonalEmailMissingOrEqual = !user.personalEmail || 
       user.personalEmail.toLowerCase().trim() === user.email.toLowerCase().trim();
 
-    const activeSmtp = await SmtpProfile.findOne({ isActive: true });
-    const requirePersonalEmail = activeSmtp ? activeSmtp.requirePersonalEmail !== false : true;
+    const { requirePersonalEmail } = await getResolvedServerPolicy();
 
     // Si la contraseña expiro o falta el correo de respaldo (si es requerido), se exige su cambio obligatorio.
     if (isSeedAdmin) {
@@ -869,8 +868,7 @@ export const verifyResetToken = async (req: Request, res: Response): Promise<voi
       return;
     }
 
-    const activeSmtp = await SmtpProfile.findOne({ isActive: true });
-    const requirePersonalEmail = activeSmtp ? activeSmtp.requirePersonalEmail !== false : true;
+    const { requirePersonalEmail } = await getResolvedServerPolicy();
     const requiresPersonalEmail = requirePersonalEmail && (!user.personalEmail || 
       user.personalEmail.toLowerCase().trim() === user.email.toLowerCase().trim());
 
@@ -1127,8 +1125,7 @@ export const adLogin = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const activeSmtp = await SmtpProfile.findOne({ isActive: true });
-    const requirePersonalEmail = activeSmtp ? activeSmtp.requirePersonalEmail !== false : true;
+    const { requirePersonalEmail } = await getResolvedServerPolicy();
 
     // Identificar si falta actualizar el correo personal (debe ser diferente al corporativo)
     const requiresPersonalEmailUpdate = requirePersonalEmail && (isNewUser || !user.personalEmail || 

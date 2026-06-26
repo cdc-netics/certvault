@@ -8,6 +8,7 @@ import {
   SmtpProfileInput,
   toSafeSmtpProfile
 } from '../services/smtpProfileService';
+import { ServerPolicy } from '../models/ServerPolicy';
 
 const buildUpdatePayload = (body: Partial<SmtpProfileInput>) => {
   const payload: Record<string, unknown> = {};
@@ -20,9 +21,7 @@ const buildUpdatePayload = (body: Partial<SmtpProfileInput>) => {
     'fromName',
     'fromEmail',
     'rejectUnauthorized',
-    'connectionTimeout',
-    'sendBackupOnDelete',
-    'requirePersonalEmail'
+    'connectionTimeout'
   ];
 
   for (const field of allowedFields) {
@@ -258,22 +257,57 @@ export const testSmtpProfile = async (req: Request, res: Response): Promise<void
   }
 };
 
-// Obtener la política SMTP activa actual (si se requiere correo personal de forma obligatoria)
+// Obtener las políticas globales del servidor (independientes de los perfiles SMTP)
 export const getActiveSmtpPolicy = async (req: Request, res: Response): Promise<void> => {
   try {
-    const activeProfile = await SmtpProfile.findOne({ isActive: true });
+    // Leer de la colección global; si no existe, usar defaults
+    const policy = await ServerPolicy.findOne();
     res.json({
       success: true,
       data: {
-        requirePersonalEmail: activeProfile ? activeProfile.requirePersonalEmail !== false : true
+        sendBackupOnDelete: policy ? policy.sendBackupOnDelete : true,
+        requirePersonalEmail: policy ? policy.requirePersonalEmail : true
       }
     });
   } catch (error) {
-    console.error('Error al obtener la política SMTP activa:', error);
+    console.error('Error al obtener las políticas del servidor:', error);
     res.status(500).json({
       success: false,
-      error: 'Error al obtener políticas SMTP'
+      error: 'Error al obtener políticas del servidor'
     });
   }
 };
 
+// Actualizar las políticas globales del servidor (upsert: crea si no existe)
+export const updateServerPolicy = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { sendBackupOnDelete, requirePersonalEmail } = req.body;
+    const updateData: Record<string, unknown> = {};
+
+    if (sendBackupOnDelete !== undefined) updateData.sendBackupOnDelete = Boolean(sendBackupOnDelete);
+    if (requirePersonalEmail !== undefined) updateData.requirePersonalEmail = Boolean(requirePersonalEmail);
+    updateData.updatedBy = req.user?._id;
+
+    // Upsert: actualizar el documento único o crearlo si no existe
+    const policy = await ServerPolicy.findOneAndUpdate(
+      {},
+      { $set: updateData },
+      { new: true, upsert: true, runValidators: true }
+    );
+
+    res.json({
+      success: true,
+      data: {
+        sendBackupOnDelete: policy.sendBackupOnDelete,
+        requirePersonalEmail: policy.requirePersonalEmail
+      },
+      message: 'Políticas del servidor actualizadas correctamente'
+    });
+  } catch (error) {
+    console.error('Error al actualizar las políticas del servidor:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Error al actualizar políticas del servidor'
+    });
+  }
+};

@@ -8,7 +8,8 @@ import {
   getSmtpProfiles,
   testSmtpProfile,
   updateSmtpProfile,
-  getActiveSmtpPolicy
+  getActiveSmtpPolicy,
+  updateServerPolicy
 } from '../controllers/smtpProfilesController';
 import {
   exportBackup,
@@ -53,6 +54,9 @@ router.get('/health', (_req, res) => {
 router.get('/smtp-policy', authenticate, getActiveSmtpPolicy);
 
 router.use(authenticate, adminOnly);
+
+// Ruta para actualizar las políticas globales del servidor (solo admin)
+router.put('/smtp-policy', updateServerPolicy);
 
 const idValidation = [param('id').isMongoId().withMessage('ID invalido')];
 
