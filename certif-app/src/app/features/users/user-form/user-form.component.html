@@ -323,7 +323,7 @@
               <button
                 type="submit"
                 class="btn btn-primary"
-                [disabled]="userForm.invalid || loading">
+                [disabled]="loading">
                 <output *ngIf="loading" class="spinner-border spinner-border-sm me-2"></output>
                 <i *ngIf="!loading" [class]="isEditMode ? 'fas fa-save' : 'fas fa-plus'" class="me-1"></i>
                 {{ isEditMode ? 'Actualizar Usuario' : 'Crear Usuario' }}
