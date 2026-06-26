@@ -311,6 +311,10 @@
               </div>
             </div>
 
+            <div class="alert alert-danger" *ngIf="submitErrorMessage">
+              <small>{{ submitErrorMessage }}</small>
+            </div>
+
             <div class="d-flex justify-content-end gap-2 pt-3 border-top">
               <button
                 type="button"
