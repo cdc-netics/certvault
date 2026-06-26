@@ -20,6 +20,9 @@ El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1
   - Corrección de la resolución de rutas relativas con `path.resolve` en el backend al manipular archivos adjuntos y eliminar certificados físicos, evitando el uso errático de `process.cwd()`.
   - Independencia de las tareas críticas: la eliminación física de archivos de certificado en disco y registros en base de datos ya no se cancela ni se interrumpe si falla el envío del correo de respaldo por problemas de SMTP.
   - Eliminación robusta de certificaciones en BD filtrando tanto por el `employeeId` como por los registros huérfanos específicos identificados en la consulta inicial.
+- **Mensajes de Auditoría Descriptivos en Actividad Reciente (Backend):**
+  - Implementación del middleware de auditoría dinámica en `auditService.ts` utilizando `res.locals.auditMessage` asignado desde los controladores.
+  - Los controladores `createUser`, `updateUser` y `deleteUser` ahora asignan descripciones claras (ej: "Eliminado colaborador: David Espinoza (david@empresa.com)") evitando que el log de actividad muestre endpoints HTTP con IDs crudos (ej: "DELETE /api/users/69f90c7263456e3bfd5184c5").
 
 ## [2.4.0-beta] - 2026-06-25 20:30
 
