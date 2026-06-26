@@ -23,6 +23,7 @@ export class UserFormComponent implements OnInit, OnDestroy {
   loading = false;
   isEditMode = false;
   userId: string | null = null;
+  submitErrorMessage = '';
 
   availableRoles: RoleOption[] = [];
   availableDepartments: DepartmentOption[] = [];
@@ -92,7 +93,7 @@ export class UserFormComponent implements OnInit, OnDestroy {
     this.userForm.get('password')?.valueChanges
       .pipe(takeUntil(this.destroy$))
       .subscribe(() => this.userForm.get('confirmPassword')?.updateValueAndValidity({ onlySelf: true }));
-    
+
     // Suscripción para revalidar el correo personal al cambiar el correo corporativo
     this.userForm.get('email')?.valueChanges
       .pipe(takeUntil(this.destroy$))
@@ -269,7 +270,7 @@ export class UserFormComponent implements OnInit, OnDestroy {
           if (response.success && response.data) {
             const target = response.data;
             this.targetUserIsAdmin = target.role === UserRole.ADMIN;
-            
+
             const deptVal = target.department && typeof target.department === 'object' ? (target.department as any)._id : target.department;
             const posVal = target.position && typeof target.position === 'object' ? (target.position as any)._id : target.position;
 
@@ -369,8 +370,12 @@ export class UserFormComponent implements OnInit, OnDestroy {
   }
 
   onSubmit(): void {
+    this.submitErrorMessage = '';
+
     if (this.userForm.invalid) {
       this.markFormGroupTouched();
+      this.submitErrorMessage = this.buildValidationErrorMessage();
+      this.focusFirstInvalidControl();
       return;
     }
 
@@ -409,7 +414,7 @@ export class UserFormComponent implements OnInit, OnDestroy {
           },
           error: (error) => {
             console.error('Error actualizando usuario:', error);
-            alert('Error al actualizar el usuario: ' + error.message);
+            this.submitErrorMessage = 'Error al actualizar el usuario: ' + error.message;
             this.loading = false;
           }
         });
@@ -427,11 +432,57 @@ export class UserFormComponent implements OnInit, OnDestroy {
           },
           error: (error) => {
             console.error('Error creando usuario:', error);
-            alert('Error al crear el usuario: ' + error.message);
+            this.submitErrorMessage = 'Error al crear el usuario: ' + error.message;
             this.loading = false;
           }
         });
     }
+  }
+
+  private buildValidationErrorMessage(): string {
+    const labels: Record<string, string> = {
+      firstName: 'Nombre',
+      lastName: 'Apellido',
+      username: 'Nombre de usuario',
+      email: 'Email empresa',
+      personalEmail: 'Correo personal',
+      password: 'Contrasena',
+      confirmPassword: 'Confirmar contrasena',
+      role: 'Rol',
+      department: 'Departamento',
+      customDepartment: 'Nuevo departamento',
+      position: 'Cargo/Posicion',
+      customPosition: 'Nuevo cargo',
+      phone: 'Telefono'
+    };
+
+    const invalidFields = Object.keys(this.userForm.controls)
+      .filter((key) => {
+        const control = this.userForm.get(key);
+        return !!control && control.enabled && control.invalid;
+      })
+      .map((key) => labels[key] || key);
+
+    if (invalidFields.length === 0) {
+      return 'Revisa los datos ingresados e intenta nuevamente.';
+    }
+
+    return `Revisa los campos requeridos: ${invalidFields.join(', ')}.`;
+  }
+
+  private focusFirstInvalidControl(): void {
+    const invalidControlName = Object.keys(this.userForm.controls).find((key) => {
+      const control = this.userForm.get(key);
+      return !!control && control.enabled && control.invalid;
+    });
+
+    if (!invalidControlName) {
+      return;
+    }
+
+    const selector = `[formControlName="${invalidControlName}"]`;
+    const element = document.querySelector(selector) as HTMLElement | null;
+    element?.focus();
   }
 
   private markFormGroupTouched(): void {
