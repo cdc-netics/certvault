@@ -3,6 +3,24 @@
 Todos los cambios notables en este proyecto serán documentados en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y este proyecto se encuentra actualmente en fase de **versiones Beta**.
 
+## [2.5.0-beta] - 2026-06-26
+
+### Añadido
+- **Visualización mejorada del Perfil de Usuario (Frontend & Backend):**
+  - Poblado dinámico (`.populate('department position')`) de los subdocumentos en el backend al realizar login convencional (`login`), login por Active Directory (`adLogin`) y actualización de perfil (`updateProfile`).
+  - Implementación del helper reusable `getPositionLabel()` en el frontend (`profile.component.ts`) y ajuste del renderizado en la plantilla para mostrar los nombres de cargo/departamento en texto claro en lugar de IDs crudos (ObjectIds) de MongoDB.
+
+### Modificado
+- **Refactorización Estética del Módulo de Configuración (/settings):**
+  - Reestructuración de las 9 sub-vistas del panel de configuraciones bajo un diseño SaaS profesional y unificado con rejilla plana y moderna, eliminando la anidación excesiva de tarjetas ("cajas dentro de cajas").
+  - Resolución de múltiples advertencias de tipado TypeScript y errores menores de inicialización en componentes de configuración (ej: `smtp-profiles-list.component`, `security-settings.component`, etc.).
+
+### Corregido
+- **Robustez en la Eliminación en Cascada de Colaboradores (Backend):**
+  - Corrección de la resolución de rutas relativas con `path.resolve` en el backend al manipular archivos adjuntos y eliminar certificados físicos, evitando el uso errático de `process.cwd()`.
+  - Independencia de las tareas críticas: la eliminación física de archivos de certificado en disco y registros en base de datos ya no se cancela ni se interrumpe si falla el envío del correo de respaldo por problemas de SMTP.
+  - Eliminación robusta de certificaciones en BD filtrando tanto por el `employeeId` como por los registros huérfanos específicos identificados en la consulta inicial.
+
 ## [2.4.0-beta] - 2026-06-25 20:30
 
 ### Añadido

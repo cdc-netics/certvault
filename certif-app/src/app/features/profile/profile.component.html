@@ -52,7 +52,7 @@
 
           <!-- Info basica -->
           <h5 class="mb-1">{{ currentUser?.firstName }} {{ currentUser?.lastName }}</h5>
-          <p class="text-muted mb-2">{{ currentUser?.position }}</p>
+          <p class="text-muted mb-2">{{ getPositionLabel(currentUser?.position) }}</p>
           
           <!-- Badges -->
           <div class="mb-3">

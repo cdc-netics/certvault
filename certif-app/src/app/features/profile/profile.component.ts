@@ -587,6 +587,14 @@ export class ProfileComponent implements OnInit, OnDestroy {
     return this.userService.getDepartmentLabel(department);
   }
 
+  getPositionLabel(position: any): string {
+    if (!position) return '';
+    if (typeof position === 'object') {
+      return position.name || '';
+    }
+    return position;
+  }
+
   formatDate(date: Date): string {
     if (!date) return 'N/A';
     const now = new Date();
