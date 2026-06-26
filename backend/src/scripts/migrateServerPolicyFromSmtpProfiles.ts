@@ -26,12 +26,6 @@ for (let pass = 0; pass < 3; pass++) {
   if (!changed) break;
 }
 
-if (process.env.MONGODB_URI && process.env.MONGODB_URI.includes('//mongo:')) {
-  process.env.MONGODB_URI = process.env.MONGODB_URI.replace('//mongo:', '//127.0.0.1:');
-} else if (process.env.MONGODB_URI && process.env.MONGODB_URI.includes('//mongo/')) {
-  process.env.MONGODB_URI = process.env.MONGODB_URI.replace('//mongo/', '//127.0.0.1/');
-}
-
 const asBooleanOrUndefined = (value: unknown): boolean | undefined => {
   return typeof value === 'boolean' ? value : undefined;
 };
