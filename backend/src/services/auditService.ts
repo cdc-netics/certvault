@@ -119,7 +119,7 @@ export const auditRequest = (req: Request, res: Response, next: NextFunction): v
     }
 
     // Construir un mensaje descriptivo y amigable para el log
-    let message = `${req.method} ${req.originalUrl}`;
+    let message = res.locals.auditMessage || `${req.method} ${req.originalUrl}`;
     if (isError) {
       message = `Fallo en operación: ${req.method} ${path} (Error ${res.statusCode})`;
     } else if (isDownload) {

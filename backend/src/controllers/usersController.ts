@@ -320,6 +320,8 @@ export const createUser = async (req: AuthRequest, res: Response): Promise<void>
       .populate('managedDepartments')
       .populate('position');
 
+    res.locals.auditMessage = `Creado colaborador: ${newUser.firstName} ${newUser.lastName} (${newUser.email})`;
+
     res.status(201).json({
       success: true,
       data: userResponse,
@@ -518,6 +520,8 @@ export const updateUser = async (req: AuthRequest, res: Response): Promise<void>
       .populate('department')
       .populate('managedDepartments')
       .populate('position');
+
+    res.locals.auditMessage = `Actualizado colaborador: ${updatedUser?.firstName} ${updatedUser?.lastName} (${updatedUser?.email})`;
 
     res.json({
       success: true,
@@ -732,6 +736,8 @@ export const deleteUser = async (req: AuthRequest, res: Response): Promise<void>
       ]
     });
     await User.findByIdAndDelete(id);
+
+    res.locals.auditMessage = `Eliminado colaborador: ${fullName} (${userToDelete.email})`;
 
     res.json({
       success: true,
