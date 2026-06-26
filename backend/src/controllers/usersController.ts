@@ -12,7 +12,7 @@ import { recordAuditLog } from '../services/auditService';
 import { AuditAction } from '../models/AuditLog';
 import { resolveDepartment, resolvePosition } from '../utils/resolveEntities';
 import { Department } from '../models/Department';
-import { SmtpProfile } from '../models/SmtpProfile';
+import { getResolvedServerPolicy } from '../services/serverPolicyService';
 
 interface CreateUserRequest {
   username: string;
@@ -253,8 +253,7 @@ export const createUser = async (req: AuthRequest, res: Response): Promise<void>
       }
     }
 
-    const activeSmtp = await SmtpProfile.findOne({ isActive: true });
-    const requirePersonalEmail = activeSmtp ? activeSmtp.requirePersonalEmail !== false : true;
+    const { requirePersonalEmail } = await getResolvedServerPolicy();
 
     if (requirePersonalEmail && (!userData.personalEmail || !userData.personalEmail.trim())) {
       res.status(400).json({
@@ -374,8 +373,7 @@ export const updateUser = async (req: AuthRequest, res: Response): Promise<void>
       }
     });
 
-    const activeSmtp = await SmtpProfile.findOne({ isActive: true });
-    const requirePersonalEmail = activeSmtp ? activeSmtp.requirePersonalEmail !== false : true;
+    const { requirePersonalEmail } = await getResolvedServerPolicy();
 
     if (requirePersonalEmail) {
       const incomingPersonalEmail = req.body.personalEmail;
@@ -611,8 +609,7 @@ export const deleteUser = async (req: AuthRequest, res: Response): Promise<void>
     }).sort({ issueDate: -1 });
 
     if (certifications.length > 0) {
-      const activeSmtp = await SmtpProfile.findOne({ isActive: true });
-      const sendBackup = activeSmtp ? activeSmtp.sendBackupOnDelete !== false : true;
+      const { sendBackupOnDelete: sendBackup } = await getResolvedServerPolicy();
 
       try {
         if (sendBackup) {

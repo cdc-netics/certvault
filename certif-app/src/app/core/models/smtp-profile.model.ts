@@ -11,8 +11,6 @@ export interface SmtpProfile {
   isActive: boolean;
   rejectUnauthorized: boolean;
   connectionTimeout: number;
-  sendBackupOnDelete: boolean;
-  requirePersonalEmail: boolean;
   lastTestAt?: string;
   lastTestSuccess?: boolean;
   lastTestMessage?: string;
@@ -32,6 +30,4 @@ export interface SmtpProfilePayload {
   isActive?: boolean;
   rejectUnauthorized: boolean;
   connectionTimeout: number;
-  sendBackupOnDelete?: boolean;
-  requirePersonalEmail?: boolean;
 }

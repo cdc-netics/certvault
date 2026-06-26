@@ -101,28 +101,6 @@ import { SettingsNavComponent } from '../settings-nav.component';
                   </div>
                 </div>
 
-                <div class="card bg-light border-0 mb-3">
-                  <div class="card-body py-2 px-3">
-                    <h6 class="fw-bold text-secondary mb-2 small"><i class="fas fa-sliders-h me-1 text-primary"></i> Politicas del Servidor</h6>
-                    
-                    <div class="form-check form-switch mb-2">
-                      <input id="sendBackupOnDelete" class="form-check-input" type="checkbox" formControlName="sendBackupOnDelete">
-                      <label class="form-check-label small cursor-pointer" for="sendBackupOnDelete">
-                        <strong>Enviar ZIP al eliminar colaborador</strong>
-                        <span class="d-block text-muted" style="font-size: 0.75rem;">Envia un ZIP con sus certificados al borrar su cuenta.</span>
-                      </label>
-                    </div>
-
-                    <div class="form-check form-switch mb-0">
-                      <input id="requirePersonalEmail" class="form-check-input" type="checkbox" formControlName="requirePersonalEmail">
-                      <label class="form-check-label small cursor-pointer" for="requirePersonalEmail">
-                        <strong>Requerir correo personal</strong>
-                        <span class="d-block text-muted" style="font-size: 0.75rem;">Exige registrar el correo de respaldo al colaborador.</span>
-                      </label>
-                    </div>
-                  </div>
-                </div>
-
                 <div class="form-check form-switch mb-3">
                   <input id="isActive" class="form-check-input" type="checkbox" formControlName="isActive">
                   <label class="form-check-label" for="isActive">Activar este perfil al guardar</label>
@@ -138,6 +116,38 @@ import { SettingsNavComponent } from '../settings-nav.component';
         </div>
 
         <div class="col-lg-7">
+          <div class="card mb-3">
+            <div class="card-header d-flex justify-content-between align-items-center">
+              <h5 class="mb-0">Politicas globales del servidor</h5>
+              <button type="button" class="btn btn-sm btn-outline-secondary" (click)="loadServerPolicy()" [disabled]="loadingPolicy || savingPolicy">
+                <i class="fas fa-sync-alt me-1"></i>
+                Actualizar
+              </button>
+            </div>
+            <div class="card-body" [formGroup]="policyForm">
+              <div class="form-check form-switch mb-3">
+                <input id="sendBackupOnDelete" class="form-check-input" type="checkbox" formControlName="sendBackupOnDelete">
+                <label class="form-check-label" for="sendBackupOnDelete">
+                  <strong>Enviar ZIP al eliminar colaborador</strong>
+                  <span class="d-block text-muted small">Envia un ZIP con sus certificados al borrar su cuenta.</span>
+                </label>
+              </div>
+
+              <div class="form-check form-switch mb-3">
+                <input id="requirePersonalEmail" class="form-check-input" type="checkbox" formControlName="requirePersonalEmail">
+                <label class="form-check-label" for="requirePersonalEmail">
+                  <strong>Requerir correo personal</strong>
+                  <span class="d-block text-muted small">Exige registrar correo de respaldo al colaborador.</span>
+                </label>
+              </div>
+
+              <button type="button" class="btn btn-primary" (click)="saveServerPolicy()" [disabled]="loadingPolicy || savingPolicy">
+                <i class="fas fa-save me-1"></i>
+                {{ savingPolicy ? 'Guardando politicas...' : 'Guardar politicas globales' }}
+              </button>
+            </div>
+          </div>
+
           <div class="card mb-3">
             <div class="card-header">
               <h5 class="mb-0">Prueba de conexion y envio</h5>
@@ -199,11 +209,6 @@ import { SettingsNavComponent } from '../settings-nav.component';
                         <span class="badge" [class.bg-success]="profile.isActive" [class.bg-secondary]="!profile.isActive">
                           {{ profile.isActive ? 'Activo' : 'Inactivo' }}
                         </span>
-                        <div class="mt-1" style="font-size: 0.7rem; line-height: 1.2;">
-                          <span class="text-success me-1" *ngIf="profile.sendBackupOnDelete" title="Respaldo al eliminar activo"><i class="fas fa-file-archive"></i> ZIP</span>
-                          <span class="text-secondary me-1" *ngIf="!profile.sendBackupOnDelete" title="Respaldo al eliminar inactivo"><i class="fas fa-file-archive text-muted"></i> ZIP Off</span>
-                          <span class="text-primary" *ngIf="profile.requirePersonalEmail" title="Email personal obligatorio"><i class="fas fa-id-card"></i> Oblig.</span>
-                        </div>
                       </td>
                       <td>
                         <span class="badge" *ngIf="profile.lastTestAt" [class.bg-success]="profile.lastTestSuccess" [class.bg-danger]="profile.lastTestSuccess === false">
@@ -245,12 +250,15 @@ import { SettingsNavComponent } from '../settings-nav.component';
 export class SmtpSettingsComponent implements OnInit {
   profiles: SmtpProfile[] = [];
   profileForm: FormGroup;
+  policyForm: FormGroup;
   testEmail: FormControl<string | null>;
   editingProfile: SmtpProfile | null = null;
   selectedProfileId = '';
   loading = false;
   saving = false;
   testing = false;
+  loadingPolicy = false;
+  savingPolicy = false;
   successMessage = '';
   errorMessage = '';
 
@@ -270,14 +278,55 @@ export class SmtpSettingsComponent implements OnInit {
       fromEmail: ['', [Validators.required, Validators.email]],
       isActive: [false],
       rejectUnauthorized: [false],
-      connectionTimeout: [15000, [Validators.min(3000), Validators.max(60000)]],
+      connectionTimeout: [15000, [Validators.min(3000), Validators.max(60000)]]
+    });
+    this.policyForm = this.fb.group({
       sendBackupOnDelete: [true],
       requirePersonalEmail: [true]
     });
   }
 
   ngOnInit(): void {
+    this.loadServerPolicy();
     this.loadProfiles();
+  }
+
+  loadServerPolicy(): void {
+    this.loadingPolicy = true;
+    this.settingsService.getServerPolicy().subscribe({
+      next: (response) => {
+        if (response.success && response.data) {
+          this.policyForm.patchValue({
+            sendBackupOnDelete: response.data.sendBackupOnDelete !== false,
+            requirePersonalEmail: response.data.requirePersonalEmail !== false
+          }, { emitEvent: false });
+        }
+        this.loadingPolicy = false;
+      },
+      error: () => {
+        this.loadingPolicy = false;
+      }
+    });
+  }
+
+  saveServerPolicy(): void {
+    this.savingPolicy = true;
+    this.clearMessages();
+    const value = this.policyForm.value;
+
+    this.settingsService.updateServerPolicy({
+      sendBackupOnDelete: Boolean(value.sendBackupOnDelete),
+      requirePersonalEmail: Boolean(value.requirePersonalEmail)
+    }).subscribe({
+      next: (response) => {
+        this.successMessage = response.message || 'Politicas del servidor actualizadas';
+        this.savingPolicy = false;
+      },
+      error: (error) => {
+        this.errorMessage = error.message;
+        this.savingPolicy = false;
+      }
+    });
   }
 
   loadProfiles(): void {
@@ -336,9 +385,7 @@ export class SmtpSettingsComponent implements OnInit {
       fromEmail: profile.fromEmail,
       isActive: profile.isActive,
       rejectUnauthorized: profile.rejectUnauthorized,
-      connectionTimeout: profile.connectionTimeout,
-      sendBackupOnDelete: profile.sendBackupOnDelete !== false,
-      requirePersonalEmail: profile.requirePersonalEmail !== false
+      connectionTimeout: profile.connectionTimeout
     });
   }
 
@@ -355,9 +402,7 @@ export class SmtpSettingsComponent implements OnInit {
       fromEmail: '',
       isActive: false,
       rejectUnauthorized: false,
-      connectionTimeout: 15000,
-      sendBackupOnDelete: true,
-      requirePersonalEmail: true
+      connectionTimeout: 15000
     });
   }
 
@@ -436,9 +481,7 @@ export class SmtpSettingsComponent implements OnInit {
       fromEmail: value.fromEmail,
       isActive: Boolean(value.isActive),
       rejectUnauthorized: Boolean(value.rejectUnauthorized),
-      connectionTimeout: Number(value.connectionTimeout),
-      sendBackupOnDelete: Boolean(value.sendBackupOnDelete),
-      requirePersonalEmail: Boolean(value.requirePersonalEmail)
+      connectionTimeout: Number(value.connectionTimeout)
     };
 
     if (value.password) {

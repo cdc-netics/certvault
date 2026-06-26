@@ -48,6 +48,46 @@ const normalizeProviderName = async (providerName?: string): Promise<string> => 
   return existing && existing.provider ? existing.provider : trimmed;
 };
 
+const buildDepartmentCondition = async (rawDepartment?: string): Promise<Record<string, unknown> | null> => {
+  if (!rawDepartment) return null;
+
+  const normalized = rawDepartment.trim();
+  if (!normalized) return null;
+
+  // Compatibilidad: aceptar id de departamento y también nombre/código (por ejemplo "TI").
+  if (mongoose.Types.ObjectId.isValid(normalized)) {
+    return {
+      $or: [
+        { department: new mongoose.Types.ObjectId(normalized) },
+        { $expr: { $eq: ['$department', normalized] } }
+      ]
+    };
+  }
+
+  const escaped = normalized.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+  const exactInsensitive = new RegExp(`^${escaped}$`, 'i');
+
+  const matchingDepts = await Department.find({
+    $or: [{ name: exactInsensitive }, { code: exactInsensitive }]
+  })
+    .select('_id')
+    .lean();
+
+  const departmentIds = matchingDepts.map((dept) => dept._id);
+
+  // Fallback para datos legados donde department pudo quedar almacenado como string.
+  if (departmentIds.length === 0) {
+    return { $expr: { $eq: ['$department', normalized] } };
+  }
+
+  return {
+    $or: [
+      { department: { $in: departmentIds } },
+      { $expr: { $eq: ['$department', normalized] } }
+    ]
+  };
+};
+
 export const createCertification = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const payload = req.body;
@@ -127,9 +167,23 @@ export const getCertifications = async (req: Request, res: Response): Promise<vo
       const escaped = (req.query.provider as string).trim().replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
       filter.provider = { $regex: new RegExp(`^${escaped}$`, 'i') };
     }
-    if (req.query.department) filter.department = req.query.department;
+    const departmentCondition = await buildDepartmentCondition(req.query.department as string | undefined);
+    if (departmentCondition) {
+      filter.$and = filter.$and || [];
+      filter.$and.push(departmentCondition);
+    }
     if (req.query.status) filter.status = req.query.status;
-    if (req.query.employeeId) filter.employeeId = req.query.employeeId;
+    if (req.query.employeeId) {
+      const employeeId = (req.query.employeeId as string).trim();
+      if (!mongoose.Types.ObjectId.isValid(employeeId)) {
+        res.status(400).json({
+          success: false,
+          error: 'employeeId invalido'
+        });
+        return;
+      }
+      filter.employeeId = new mongoose.Types.ObjectId(employeeId);
+    }
 
     if (req.query.dateFrom || req.query.dateTo) {
       filter.issueDate = {};
@@ -274,7 +328,11 @@ export const getPublicCertifications = async (req: Request, res: Response): Prom
       const escaped = (req.query.provider as string).trim().replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
       certificationFilter.provider = { $regex: new RegExp(`^${escaped}$`, 'i') };
     }
-    if (req.query.department) certificationFilter.department = req.query.department;
+    const departmentCondition = await buildDepartmentCondition(req.query.department as string | undefined);
+    if (departmentCondition) {
+      certificationFilter.$and = certificationFilter.$and || [];
+      (certificationFilter.$and as any[]).push(departmentCondition);
+    }
     if (req.query.status) certificationFilter.status = req.query.status;
     if (req.query.certificateNumber) certificationFilter.certificateNumber = req.query.certificateNumber;
 
@@ -926,8 +984,13 @@ export const getTechnologies = async (_req: Request, res: Response): Promise<voi
 
 export const getDepartments = async (_req: Request, res: Response): Promise<void> => {
   try {
-    const departments = await Certification.distinct('department');
-    res.json({ success: true, data: departments });
+    const departments = await Department.find({ isActive: true }).select('name').lean();
+    const names = departments
+      .map((dept) => (dept.name || '').trim())
+      .filter(Boolean)
+      .sort((a, b) => a.localeCompare(b));
+
+    res.json({ success: true, data: names });
   } catch (error) {
     res.status(500).json({
       success: false,
