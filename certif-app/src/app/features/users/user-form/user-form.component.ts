@@ -69,22 +69,13 @@ export class UserFormComponent implements OnInit, OnDestroy {
           if (response.success && response.data) {
             this.requirePersonalEmail = response.data.requirePersonalEmail;
           }
-          // Aplicar validators según la política resuelta
-          const personalEmailCtrl = this.userForm.get('personalEmail');
-          if (this.requirePersonalEmail) {
-            personalEmailCtrl?.setValidators([Validators.required, Validators.email, this.emailsDifferentValidator.bind(this)]);
-          } else {
-            personalEmailCtrl?.clearValidators();
-            personalEmailCtrl?.setValidators([Validators.email, this.emailsDifferentValidator.bind(this)]);
-          }
-          personalEmailCtrl?.updateValueAndValidity();
+          this.applyPersonalEmailPolicy();
         },
         error: (err) => {
           console.error('Error al obtener politicas SMTP:', err);
           // En caso de error, asumir que es requerido por defecto y aplicar validators
-          const personalEmailCtrl = this.userForm.get('personalEmail');
-          personalEmailCtrl?.setValidators([Validators.required, Validators.email, this.emailsDifferentValidator.bind(this)]);
-          personalEmailCtrl?.updateValueAndValidity();
+          this.requirePersonalEmail = true;
+          this.applyPersonalEmailPolicy();
         }
       });
 
@@ -235,6 +226,26 @@ export class UserFormComponent implements OnInit, OnDestroy {
     passwordControl.setValidators(validators);
     passwordControl.updateValueAndValidity({ emitEvent: false });
     this.userForm.get('confirmPassword')?.updateValueAndValidity({ emitEvent: false });
+  }
+
+  private applyPersonalEmailPolicy(): void {
+    const personalEmailCtrl = this.userForm.get('personalEmail');
+    if (!personalEmailCtrl) return;
+
+    if (this.requirePersonalEmail) {
+      personalEmailCtrl.enable({ emitEvent: false });
+      personalEmailCtrl.setValidators([
+        Validators.required,
+        Validators.email,
+        this.emailsDifferentValidator.bind(this)
+      ]);
+    } else {
+      personalEmailCtrl.clearValidators();
+      personalEmailCtrl.setErrors(null);
+      personalEmailCtrl.disable({ emitEvent: false });
+    }
+
+    personalEmailCtrl.updateValueAndValidity({ emitEvent: false });
   }
 
   private confirmPasswordValidator(control: any) {
