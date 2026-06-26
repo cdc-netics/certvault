@@ -1,83 +1,92 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnInit } from '@angular/core';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
-import { BackButtonComponent } from '../../../shared/components/back-button/back-button.component';
 import { BrandingSettings, SettingsService } from '../../../core/services/settings.service';
-import { SettingsNavComponent } from '../settings-nav.component';
 
 @Component({
   selector: 'app-branding-settings',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, BackButtonComponent, SettingsNavComponent],
+  imports: [CommonModule, ReactiveFormsModule],
   template: `
-    <div class="container-fluid">
-      <div class="d-flex justify-content-between align-items-center pt-3 pb-2 mb-3 border-bottom">
-        <div>
-          <h1 class="h2 mb-1"><i class="fas fa-palette me-2"></i>Branding</h1>
-          <p class="text-muted mb-0">Logos de la app, login y reportes.</p>
+    <div class="alert alert-success" *ngIf="successMessage">{{ successMessage }}</div>
+    <div class="alert alert-danger" *ngIf="errorMessage">{{ errorMessage }}</div>
+
+    <form [formGroup]="form" (ngSubmit)="save()">
+      <div class="row g-5">
+        <!-- Sección de Identidad -->
+        <div class="col-lg-6">
+          <div class="mb-4">
+            <h5 class="fw-bold text-dark mb-1">Identidad de la Plataforma</h5>
+            <p class="text-muted small mb-0">Personaliza la información de la aplicación, empresa y colores temáticos corporativos.</p>
+          </div>
+
+          <div class="mt-4">
+            <div class="mb-3">
+              <label class="form-label fw-semibold text-secondary" for="appName">Nombre de la aplicación</label>
+              <input id="appName" class="form-control" formControlName="appName" placeholder="CertiVault">
+            </div>
+            
+            <div class="mb-3">
+              <label class="form-label fw-semibold text-secondary" for="companyName">Empresa</label>
+              <input id="companyName" class="form-control" formControlName="companyName" placeholder="Netics">
+            </div>
+
+            <div class="row mb-3">
+              <div class="col-md-6 mb-3 mb-md-0">
+                <label class="form-label fw-semibold text-secondary d-block" for="primaryColor">Color principal</label>
+                <div class="d-flex align-items-center gap-2">
+                  <input id="primaryColor" class="form-control form-control-color border-2" type="color" formControlName="primaryColor" style="width: 50px; height: 38px; padding: 3px;">
+                  <span class="font-monospace text-secondary small">{{ form.get('primaryColor')?.value }}</span>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label fw-semibold text-secondary d-block" for="secondaryColor">Color secundario</label>
+                <div class="d-flex align-items-center gap-2">
+                  <input id="secondaryColor" class="form-control form-control-color border-2" type="color" formControlName="secondaryColor" style="width: 50px; height: 38px; padding: 3px;">
+                  <span class="font-monospace text-secondary small">{{ form.get('secondaryColor')?.value }}</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label fw-semibold text-secondary" for="reportFooter">Pie de página en reportes</label>
+              <textarea id="reportFooter" class="form-control" rows="3" formControlName="reportFooter" placeholder="Escribe el texto legal o institucional para el pie de reportes..."></textarea>
+            </div>
+          </div>
         </div>
-        <app-back-button [customRoute]="'/dashboard'" [label]="'Volver al Dashboard'"></app-back-button>
+
+        <!-- Sección de Logos -->
+        <div class="col-lg-6">
+          <div class="mb-4">
+            <h5 class="fw-bold text-dark mb-1">Logotipos e Imágenes</h5>
+            <p class="text-muted small mb-0">Carga los logos institucionales para los diferentes módulos de la aplicación.</p>
+          </div>
+
+          <div class="mt-4">
+            <div class="mb-4 pb-3 border-bottom border-light" *ngFor="let logo of logoFields">
+              <label class="form-label fw-semibold text-secondary mb-1">{{ logo.label }}</label>
+              <input class="form-control form-control-sm mb-2" type="file" accept="image/*" (change)="loadLogo($event, logo.control)">
+              
+              <div class="d-flex align-items-center gap-3 mt-2" *ngIf="form.get(logo.control)?.value">
+                <div class="p-2 bg-light border rounded-2 d-flex align-items-center justify-content-center">
+                  <img [src]="form.get(logo.control)?.value" class="img-fluid" style="max-height: 50px; object-fit: contain;">
+                </div>
+                <button type="button" class="btn btn-sm btn-outline-danger px-2 py-1" (click)="clearLogo(logo.control)">
+                  <i class="fas fa-trash-alt me-1"></i> Quitar logo
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
-      <app-settings-nav></app-settings-nav>
 
-      <div class="alert alert-success" *ngIf="successMessage">{{ successMessage }}</div>
-      <div class="alert alert-danger" *ngIf="errorMessage">{{ errorMessage }}</div>
-
-      <form [formGroup]="form" (ngSubmit)="save()">
-        <div class="row g-4">
-          <div class="col-lg-6">
-            <div class="card">
-              <div class="card-header"><h5 class="mb-0">Identidad</h5></div>
-              <div class="card-body">
-                <div class="mb-3">
-                  <label class="form-label">Nombre aplicacion</label>
-                  <input class="form-control" formControlName="appName">
-                </div>
-                <div class="mb-3">
-                  <label class="form-label">Empresa</label>
-                  <input class="form-control" formControlName="companyName">
-                </div>
-                <div class="row">
-                  <div class="col-md-6 mb-3">
-                    <label class="form-label">Color principal</label>
-                    <input class="form-control form-control-color" type="color" formControlName="primaryColor">
-                  </div>
-                  <div class="col-md-6 mb-3">
-                    <label class="form-label">Color secundario</label>
-                    <input class="form-control form-control-color" type="color" formControlName="secondaryColor">
-                  </div>
-                </div>
-                <div class="mb-3">
-                  <label class="form-label">Pie de reportes</label>
-                  <textarea class="form-control" rows="3" formControlName="reportFooter"></textarea>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="col-lg-6">
-            <div class="card">
-              <div class="card-header"><h5 class="mb-0">Logos</h5></div>
-              <div class="card-body">
-                <div class="mb-3" *ngFor="let logo of logoFields">
-                  <label class="form-label">{{ logo.label }}</label>
-                  <input class="form-control" type="file" accept="image/*" (change)="loadLogo($event, logo.control)">
-                  <img *ngIf="form.get(logo.control)?.value" [src]="form.get(logo.control)?.value" class="img-thumbnail mt-2" style="max-height: 90px;">
-                  <button type="button" class="btn btn-sm btn-outline-danger mt-2" (click)="clearLogo(logo.control)" *ngIf="form.get(logo.control)?.value">
-                    Quitar logo
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <button class="btn btn-primary mt-4" type="submit" [disabled]="form.invalid || saving">
+      <div class="mt-5 pt-3 border-top d-flex justify-content-end">
+        <button class="btn btn-primary px-4 py-2 fw-semibold" type="submit" [disabled]="form.invalid || saving">
           <i class="fas fa-save me-1"></i>
           {{ saving ? 'Guardando...' : 'Guardar Branding' }}
         </button>
-      </form>
-    </div>
+      </div>
+    </form>
   `
 })
 export class BrandingSettingsComponent implements OnInit {

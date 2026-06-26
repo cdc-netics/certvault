@@ -1,173 +1,175 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnInit } from '@angular/core';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
-import { BackButtonComponent } from '../../../shared/components/back-button/back-button.component';
 import { PublicApiClient, SettingsService } from '../../../core/services/settings.service';
-import { SettingsNavComponent } from '../settings-nav.component';
 
 @Component({
   selector: 'app-external-api-settings',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, BackButtonComponent, SettingsNavComponent],
+  imports: [CommonModule, ReactiveFormsModule],
   template: `
-    <div class="container-fluid">
-      <div class="d-flex justify-content-between align-items-center pt-3 pb-2 mb-3 border-bottom">
-        <div>
-          <h1 class="h2 mb-1"><i class="fas fa-plug me-2"></i>API Externa</h1>
-          <p class="text-muted mb-0">Configura y prueba el acceso externo de certificaciones desde esta pantalla.</p>
+    <div class="alert alert-success" *ngIf="successMessage">{{ successMessage }}</div>
+    <div class="alert alert-danger" *ngIf="errorMessage">{{ errorMessage }}</div>
+    <div class="alert alert-warning border-0 shadow-sm" *ngIf="generatedApiKey">
+      <i class="fas fa-key me-2"></i>
+      <strong>API key generada:</strong> <code class="bg-white p-1 rounded">{{ generatedApiKey }}</code>
+      <div class="mt-1 small text-muted">Cópiala ahora. Por motivos de seguridad, no se volverá a mostrar completa.</div>
+    </div>
+
+    <div class="row g-5" [formGroup]="form">
+      <!-- Columna izquierda: Formulario de Cliente API -->
+      <div class="col-lg-5">
+        <div class="mb-4">
+          <h5 class="fw-bold text-dark mb-1">
+            {{ editingClient ? 'Editar Cliente API' : 'Nuevo Cliente API' }}
+          </h5>
+          <p class="text-muted small mb-0">Registra un cliente externo para consumir de forma segura los endpoints de verificación.</p>
         </div>
-        <app-back-button [customRoute]="'/dashboard'" [label]="'Volver al Dashboard'"></app-back-button>
-      </div>
 
-      <app-settings-nav></app-settings-nav>
+        <div class="mt-4">
+          <div class="mb-3">
+            <label class="form-label fw-semibold text-secondary" for="name">Nombre o Sistema</label>
+            <input id="name" type="text" class="form-control" formControlName="name" placeholder="Ej: Portal RRHH, ERP Corporativo...">
+          </div>
 
-      <div class="alert alert-success" *ngIf="successMessage">{{ successMessage }}</div>
-      <div class="alert alert-danger" *ngIf="errorMessage">{{ errorMessage }}</div>
-      <div class="alert alert-warning" *ngIf="generatedApiKey">
-        <strong>API key generada:</strong> {{ generatedApiKey }}
-        <div><small>Copiala ahora. Luego solo quedara el hint en pantalla.</small></div>
-      </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold text-secondary" for="description">Descripción</label>
+            <input id="description" type="text" class="form-control" formControlName="description" placeholder="Ej: Integración para descarga masiva de certificados...">
+          </div>
 
-      <div class="row g-4" [formGroup]="form">
-        <div class="col-lg-6">
-          <div class="card">
-            <div class="card-header">
-              <h5 class="mb-0">{{ editingClient ? 'Editar cliente API' : 'Nuevo cliente API' }}</h5>
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label class="form-label fw-semibold text-secondary" for="rateLimitPerMinute">Límite por minuto</label>
+              <input id="rateLimitPerMinute" type="number" class="form-control" formControlName="rateLimitPerMinute">
             </div>
-            <div class="card-body">
-                <div class="mb-3">
-                  <label class="form-label" for="name">Nombre</label>
-                  <input id="name" type="text" class="form-control" formControlName="name" placeholder="ERP, Partner X, Integracion BI...">
-                </div>
-
-                <div class="mb-3">
-                  <label class="form-label" for="description">Descripcion</label>
-                  <input id="description" type="text" class="form-control" formControlName="description" placeholder="Descripcion opcional del cliente">
-                </div>
-
-                <div class="row">
-                  <div class="col-md-6 mb-3">
-                    <label class="form-label" for="rateLimitPerMinute">Limite por minuto</label>
-                    <input id="rateLimitPerMinute" type="number" class="form-control" formControlName="rateLimitPerMinute">
-                  </div>
-                  <div class="col-md-6 mb-3">
-                    <label class="form-label" for="maxPageSize">Maximo por pagina</label>
-                    <input id="maxPageSize" type="number" class="form-control" formControlName="maxPageSize">
-                  </div>
-                </div>
-
-                <div class="form-check form-switch mb-2">
-                  <input id="isActive" type="checkbox" class="form-check-input" formControlName="isActive">
-                  <label class="form-check-label" for="isActive">Cliente activo</label>
-                </div>
-
-                <div class="form-check form-switch mb-3">
-                  <input id="canDownloadFiles" type="checkbox" class="form-check-input" formControlName="canDownloadFiles">
-                  <label class="form-check-label" for="canDownloadFiles">Permitir descarga de certificados</label>
-                </div>
-
-                <div class="mb-3">
-                  <label class="form-label" for="apiKey">API key (opcional)</label>
-                  <input id="apiKey" type="text" class="form-control" formControlName="apiKey" placeholder="Si va vacia, se genera automaticamente al crear">
-                  <small class="text-muted">En edicion, vacio = mantener clave actual.</small>
-                </div>
-
-                <div class="d-flex gap-2">
-                  <button class="btn btn-primary" type="button" (click)="save()" [disabled]="saving">
-                    <i class="fas fa-save me-1"></i>
-                    {{ saving ? 'Guardando...' : 'Guardar cliente' }}
-                  </button>
-                  <button class="btn btn-outline-secondary" type="button" (click)="resetForm()" [disabled]="saving">
-                    Limpiar
-                  </button>
-                </div>
+            <div class="col-md-6 mb-3">
+              <label class="form-label fw-semibold text-secondary" for="maxPageSize">Máximo por página</label>
+              <input id="maxPageSize" type="number" class="form-control" formControlName="maxPageSize">
             </div>
           </div>
+
+          <div class="form-check form-switch mb-2">
+            <input id="isActive" type="checkbox" class="form-check-input" formControlName="isActive">
+            <label class="form-check-label fw-semibold text-secondary" for="isActive">Cliente activo</label>
+          </div>
+
+          <div class="form-check form-switch mb-4">
+            <input id="canDownloadFiles" type="checkbox" class="form-check-input" formControlName="canDownloadFiles">
+            <label class="form-check-label fw-semibold text-secondary" for="canDownloadFiles">Permitir descarga de archivos de certificados</label>
+          </div>
+
+          <div class="mb-4">
+            <label class="form-label fw-semibold text-secondary" for="apiKey">API key personalizada (opcional)</label>
+            <input id="apiKey" type="text" class="form-control" formControlName="apiKey" placeholder="Dejar vacío para autogenerar">
+            <small class="text-muted d-block mt-1 small">En modo edición, dejar vacío mantiene la clave actual sin modificaciones.</small>
+          </div>
+
+          <div class="d-flex gap-2">
+            <button class="btn btn-primary px-4 py-2 fw-semibold" type="button" (click)="save()" [disabled]="saving">
+              <i class="fas fa-save me-1"></i>
+              {{ saving ? 'Guardando...' : 'Guardar Cliente' }}
+            </button>
+            <button class="btn btn-outline-secondary px-3 py-2" type="button" (click)="resetForm()" [disabled]="saving">
+              Limpiar
+            </button>
+          </div>
         </div>
+      </div>
 
-        <div class="col-lg-6">
-          <div class="card">
-            <div class="card-header">
-              <h5 class="mb-0">Prueba manual por API key</h5>
-            </div>
-            <div class="card-body">
-              <p class="text-muted">Usa una API key para probar lectura directa del endpoint externo.</p>
+      <!-- Columna derecha: Prueba Manual e Historial -->
+      <div class="col-lg-7">
+        <!-- Prueba manual -->
+        <div class="mb-5">
+          <h5 class="fw-bold text-dark mb-1">Prueba manual de API</h5>
+          <p class="text-muted small mb-4">Prueba de forma inmediata la validez de un token y visualiza la respuesta simulada del servidor.</p>
 
-              <div class="mb-3">
-                <label class="form-label" for="testApiKey">API key para prueba</label>
-                <input id="testApiKey" type="text" class="form-control" formControlName="testApiKey" placeholder="Ingresa la API key para probar">
-              </div>
-
-              <button class="btn btn-outline-primary" type="button" (click)="testApi()" [disabled]="testing">
+          <div class="mb-3">
+            <label class="form-label fw-semibold text-secondary" for="testApiKey">API key para prueba</label>
+            <div class="input-group">
+              <input id="testApiKey" type="text" class="form-control form-control-sm" formControlName="testApiKey" placeholder="Ingresa el token a verificar...">
+              <button class="btn btn-outline-primary btn-sm fw-semibold" type="button" (click)="testApi()" [disabled]="testing">
                 <i class="fas fa-vial me-1"></i>
-                {{ testing ? 'Probando...' : 'Probar API externa' }}
+                {{ testing ? 'Probando...' : 'Validar' }}
               </button>
-
-              <div class="alert alert-info mt-3 mb-0" *ngIf="testMessage">{{ testMessage }}</div>
             </div>
           </div>
 
-          <div class="card mt-3">
-            <div class="card-header d-flex justify-content-between align-items-center">
-              <h5 class="mb-0">Clientes API</h5>
-              <button class="btn btn-sm btn-outline-secondary" type="button" (click)="load()" [disabled]="loading">
-                <i class="fas fa-sync-alt me-1"></i>Actualizar
-              </button>
+          <div class="alert alert-info border-0 shadow-sm mt-3 mb-0" *ngIf="testMessage">
+            <i class="fas fa-info-circle me-1"></i>
+            {{ testMessage }}
+          </div>
+        </div>
+
+        <hr class="my-4 text-muted opacity-10">
+
+        <!-- Clientes API -->
+        <div>
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+              <h5 class="fw-bold text-dark mb-1">Clientes API Registrados</h5>
+              <p class="text-muted small mb-0">Gestión de accesos y tokens externos.</p>
             </div>
-            <div class="card-body p-0">
-              <div class="p-4 text-center" *ngIf="loading">
-                <div class="spinner-border" role="status"></div>
-              </div>
+            <button class="btn btn-sm btn-outline-secondary" type="button" (click)="load()" [disabled]="loading">
+              <i class="fas fa-sync-alt me-1"></i>Actualizar
+            </button>
+          </div>
 
-              <div class="table-responsive" *ngIf="!loading && clients.length > 0">
-                <table class="table table-sm align-middle mb-0">
-                  <thead class="table-light">
-                    <tr>
-                      <th>Cliente</th>
-                      <th>Limites</th>
-                      <th>Estado</th>
-                      <th>Ultimo uso</th>
-                      <th class="text-end">Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr *ngFor="let client of clients">
-                      <td>
-                        <div class="fw-semibold">{{ client.name }}</div>
-                        <small class="text-muted">{{ client.keyHint || 'sin hint' }}</small>
-                        <div *ngIf="client.description" class="small text-muted">{{ client.description }}</div>
-                      </td>
-                      <td>
-                        <div class="small">{{ client.rateLimitPerMinute }}/min</div>
-                        <div class="small">{{ client.maxPageSize }}/pagina</div>
-                        <div class="small" [class.text-success]="client.canDownloadFiles" [class.text-muted]="!client.canDownloadFiles">
-                          {{ client.canDownloadFiles ? 'Descarga ON' : 'Descarga OFF' }}
-                        </div>
-                      </td>
-                      <td>
-                        <span class="badge" [class.bg-success]="client.isActive" [class.bg-secondary]="!client.isActive">
-                          {{ client.isActive ? 'Activo' : 'Inactivo' }}
-                        </span>
-                      </td>
-                      <td>
-                        <small>{{ client.lastUsedAt ? (client.lastUsedAt | date:'yyyy-MM-dd HH:mm') : 'Sin uso' }}</small>
-                      </td>
-                      <td class="text-end">
-                        <div class="btn-group btn-group-sm">
-                          <button class="btn btn-outline-primary" type="button" (click)="edit(client)"><i class="fas fa-edit"></i></button>
-                          <button class="btn btn-outline-warning" type="button" (click)="rotateKey(client)" [disabled]="saving"><i class="fas fa-key"></i></button>
-                          <button class="btn btn-outline-info" type="button" (click)="runServerTest(client)" [disabled]="testing"><i class="fas fa-vial"></i></button>
-                          <button class="btn btn-outline-danger" type="button" (click)="remove(client)"><i class="fas fa-trash"></i></button>
-                        </div>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
+          <div class="mt-4">
+            <div class="p-4 text-center" *ngIf="loading">
+              <div class="spinner-border text-primary" role="status"></div>
+            </div>
 
-              <div class="p-4 text-center text-muted" *ngIf="!loading && clients.length === 0">
-                No hay clientes API configurados.
-              </div>
+            <div class="table-responsive border rounded-3 bg-white" *ngIf="!loading && clients.length > 0">
+              <table class="table table-hover align-middle mb-0" style="font-size: 0.9rem;">
+                <thead class="table-light text-secondary">
+                  <tr>
+                    <th class="ps-3">Cliente</th>
+                    <th>Límites / Permisos</th>
+                    <th>Estado</th>
+                    <th>Último uso</th>
+                    <th class="text-end pe-3">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let client of clients">
+                    <td class="ps-3">
+                      <div class="fw-semibold text-dark">{{ client.name }}</div>
+                      <small class="text-muted d-block font-monospace" style="font-size: 0.75rem;">Hint: {{ client.keyHint || 'sin hint' }}</small>
+                      <div *ngIf="client.description" class="small text-muted text-truncate" style="max-width: 200px;" [title]="client.description">
+                        {{ client.description }}
+                      </div>
+                    </td>
+                    <td>
+                      <div class="small text-dark">{{ client.rateLimitPerMinute }} peticiones/min</div>
+                      <div class="small text-muted">{{ client.maxPageSize }} reg/pág</div>
+                      <div class="small" [class.text-success]="client.canDownloadFiles" [class.text-muted]="!client.canDownloadFiles">
+                        <i class="fas" [class.fa-file-download]="client.canDownloadFiles" [class.fa-ban]="!client.canDownloadFiles"></i>
+                        {{ client.canDownloadFiles ? ' Descargas ON' : ' Descargas OFF' }}
+                      </div>
+                    </td>
+                    <td>
+                      <span class="badge" [class.bg-success-subtle]="client.isActive" [class.text-success]="client.isActive" [class.bg-secondary-subtle]="!client.isActive" [class.text-secondary]="!client.isActive">
+                        {{ client.isActive ? 'Activo' : 'Inactivo' }}
+                      </span>
+                    </td>
+                    <td class="text-secondary small">
+                      {{ client.lastUsedAt ? (client.lastUsedAt | date:'yyyy-MM-dd HH:mm') : 'Sin uso registrado' }}
+                    </td>
+                    <td class="text-end pe-3">
+                      <div class="btn-group btn-group-sm shadow-sm">
+                        <button class="btn btn-outline-secondary" type="button" title="Editar" (click)="edit(client)"><i class="fas fa-edit"></i></button>
+                        <button class="btn btn-outline-warning" type="button" title="Regenerar clave" (click)="rotateKey(client)" [disabled]="saving"><i class="fas fa-key"></i></button>
+                        <button class="btn btn-outline-info" type="button" title="Ejecutar test" (click)="runServerTest(client)" [disabled]="testing"><i class="fas fa-vial"></i></button>
+                        <button class="btn btn-outline-danger" type="button" title="Eliminar" (click)="remove(client)"><i class="fas fa-trash"></i></button>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="p-4 text-center text-muted border border-dashed rounded-3 bg-light" *ngIf="!loading && clients.length === 0">
+              No hay clientes API configurados.
             </div>
           </div>
         </div>

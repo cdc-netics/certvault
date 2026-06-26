@@ -59,7 +59,8 @@ const buildDepartmentCondition = async (rawDepartment?: string): Promise<Record<
     return {
       $or: [
         { department: new mongoose.Types.ObjectId(normalized) },
-        { $expr: { $eq: ['$department', normalized] } }
+        // Se utiliza $toString sobre el campo department en la expresión para evadir la validación automática de esquema de Mongoose en Mongoose 8.x
+        { $expr: { $eq: [{ $toString: '$department' }, normalized] } }
       ]
     };
   }
@@ -76,14 +77,15 @@ const buildDepartmentCondition = async (rawDepartment?: string): Promise<Record<
   const departmentIds = matchingDepts.map((dept) => dept._id);
 
   // Fallback para datos legados donde department pudo quedar almacenado como string.
+  // Se utiliza $toString sobre el campo department en la expresión para evadir la validación automática de esquema de Mongoose en Mongoose 8.x
   if (departmentIds.length === 0) {
-    return { $expr: { $eq: ['$department', normalized] } };
+    return { $expr: { $eq: [{ $toString: '$department' }, normalized] } };
   }
 
   return {
     $or: [
       { department: { $in: departmentIds } },
-      { $expr: { $eq: ['$department', normalized] } }
+      { $expr: { $eq: [{ $toString: '$department' }, normalized] } }
     ]
   };
 };
@@ -229,6 +231,34 @@ export const getCertifications = async (req: Request, res: Response): Promise<vo
     // Solo limitamos a usuarios activos si el usuario es READER o TECNICO.
     if (!currentUser || (currentUser.role !== UserRole.ADMIN && currentUser.role !== UserRole.LIDER)) {
       userFilter.isActive = true;
+
+      // Si el usuario no tiene privilegios de lectura global (no es líder ni admin), se fuerza la restricción a su propio departamento
+      if (currentUser && currentUser.department) {
+        const userDeptId = currentUser.department._id || currentUser.department;
+        
+        // Se limita la búsqueda de colaboradores del backend al mismo departamento
+        userFilter.department = userDeptId;
+
+        // Se limpia cualquier condición de departamento que provenga de query params previos
+        filter.$and = filter.$and || [];
+        filter.$and = filter.$and.filter((cond: any) => {
+          return !cond.$or || !cond.$or.some((o: any) => o.department !== undefined || (o.$expr && JSON.stringify(o.$expr).includes('department')));
+        });
+
+        // Se inyecta la restricción del departamento correspondiente al usuario actual
+        filter.$and.push({
+          $or: [
+            { department: userDeptId },
+            {
+              isOrganizational: true,
+              $or: [
+                { appliesToAllCompany: true },
+                { applicableDepartments: userDeptId }
+              ]
+            }
+          ]
+        });
+      }
     }
 
     if (Object.keys(userFilter).length > 0) {

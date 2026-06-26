@@ -113,7 +113,7 @@ import { Subject, Subscription } from 'rxjs';
             </div>
 
             <div class="row">
-              <div class="col-md-4 mb-3">
+              <div class="col-md-4 mb-3" [class.col-md-6]="!authService.isAdmin() && !authService.isLeader()">
                 <label for="provider" class="form-label">Plataforma/Emisor</label>
                 <select id="provider" class="form-control" formControlName="provider">
                   <option value="">Todas las plataformas</option>
@@ -121,7 +121,7 @@ import { Subject, Subscription } from 'rxjs';
                 </select>
               </div>
 
-              <div class="col-md-4 mb-3">
+              <div class="col-md-4 mb-3" *ngIf="authService.isAdmin() || authService.isLeader()">
                 <label for="department" class="form-label">Departamento</label>
                 <select id="department" class="form-control" formControlName="department">
                   <option value="">Todos los departamentos</option>
@@ -129,7 +129,7 @@ import { Subject, Subscription } from 'rxjs';
                 </select>
               </div>
 
-              <div class="col-md-4 mb-3">
+              <div class="col-md-4 mb-3" [class.col-md-6]="!authService.isAdmin() && !authService.isLeader()">
                 <label for="status" class="form-label">Estado</label>
                 <select id="status" class="form-control" formControlName="status">
                   <option value="">Todos los estados</option>
