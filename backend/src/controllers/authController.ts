@@ -284,6 +284,8 @@ export const login = async (req: AuthRequest, res: Response): Promise<void> => {
     user.lastLogin = new Date();
     user.refreshToken = refreshToken;
     await user.save({ validateBeforeSave: false });
+    // Poblar departamento y cargo para que el cliente reciba los nombres y no IDs crudos
+    await user.populate('department position');
 
     res.json({
       success: true,
@@ -489,6 +491,8 @@ export const updateProfile = async (req: AuthRequest, res: Response): Promise<vo
     }
 
     await req.user.save();
+    // Re-poblar relaciones tras guardar para que el cliente reciba la informacion legible
+    await req.user.populate('department position');
 
     res.json({
       success: true,
@@ -1137,6 +1141,8 @@ export const adLogin = async (req: Request, res: Response): Promise<void> => {
     user.lastLogin = new Date();
     user.refreshToken = refreshTokenVal;
     await user.save({ validateBeforeSave: false });
+    // Poblar departamento y cargo para el inicio de sesion unico AD
+    await user.populate('department position');
 
     res.json({
       success: true,
