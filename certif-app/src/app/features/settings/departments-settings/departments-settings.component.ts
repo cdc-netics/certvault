@@ -4,13 +4,12 @@ import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } 
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { UserService } from '../../../core/services/user.service';
-import { SettingsNavComponent } from '../settings-nav.component';
 import { User } from '../../../core/models/user.model';
 
 @Component({
   selector: 'app-departments-settings',
   standalone: true,
-  imports: [CommonModule, FormsModule, ReactiveFormsModule, SettingsNavComponent],
+  imports: [CommonModule, FormsModule, ReactiveFormsModule],
   templateUrl: './departments-settings.component.html',
   styleUrls: ['./departments-settings.component.css']
 })

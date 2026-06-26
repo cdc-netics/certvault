@@ -198,12 +198,12 @@ export const sendUserCertificationsArchiveEmail = async (
       .join('\n');
 
   // Recolectar y adjuntar los archivos físicos de certificados del disco.
-  // Se utiliza process.cwd() para garantizar la resolución correcta tanto en desarrollo como en producción (dist/).
+  // Se utiliza __dirname de forma absoluta para garantizar la resolución correcta tanto en desarrollo como en producción (dist/).
   const attachments: any[] = [];
   payload.certifications.forEach(cert => {
     if (cert.certificateUrl && cert.certificateUrl.startsWith('/uploads/certificates/')) {
       const fileName = path.basename(cert.certificateUrl);
-      const filePath = path.resolve(process.cwd(), 'uploads/certificates', fileName);
+      const filePath = path.resolve(__dirname, '../../uploads/certificates', fileName);
       if (fs.existsSync(filePath)) {
         attachments.push({
           filename: `${cert.title.replace(/[^a-zA-Z0-9]/g, '_')}${path.extname(fileName)}`,

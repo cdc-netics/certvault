@@ -611,8 +611,9 @@ export const deleteUser = async (req: AuthRequest, res: Response): Promise<void>
     if (certifications.length > 0) {
       const { sendBackupOnDelete: sendBackup } = await getResolvedServerPolicy();
 
-      try {
-        if (sendBackup) {
+      // 1. Envío del Correo de Respaldo (si está activo en las políticas del servidor)
+      if (sendBackup) {
+        try {
           await sendUserCertificationsArchiveEmail({
             to: userToDelete.personalEmail,
             name: `${userToDelete.firstName} ${userToDelete.lastName}`,
@@ -650,44 +651,48 @@ export const deleteUser = async (req: AuthRequest, res: Response): Promise<void>
               titles: certifications.map(c => c.title)
             }
           });
+        } catch (mailError) {
+          console.error('Error al enviar el correo de respaldo al eliminar usuario:', mailError);
+          // Registrar en auditoría el fallo del envío del correo (la eliminación física prosigue)
+          await recordAuditLog({
+            action: AuditAction.DELETE,
+            resource: 'users',
+            resourceId: id as string,
+            userId: currentUser._id,
+            userEmail: currentUser.email,
+            userRole: currentUser.role,
+            method: req.method,
+            path: req.originalUrl,
+            ip: req.ip,
+            userAgent: req.get('user-agent'),
+            statusCode: 500,
+            message: `Fallo al enviar correo de respaldo al eliminar usuario ${userToDelete.email}. Error: ${(mailError as Error).message}`,
+            metadata: {
+              error: (mailError as Error).message,
+              stack: (mailError as Error).stack,
+              recipient: userToDelete.personalEmail || userToDelete.email
+            }
+          });
         }
+      }
 
-        // Eliminar archivos físicos de certificados del disco usando process.cwd() para entornos dist/
+      // 2. Eliminación de los archivos físicos de certificados del disco
+      try {
         for (const cert of certifications) {
           if (cert.certificateUrl && cert.certificateUrl.startsWith('/uploads/certificates/')) {
             const fileName = path.basename(cert.certificateUrl);
-            const filePath = path.resolve(process.cwd(), 'uploads/certificates', fileName);
+            // Se utiliza __dirname de forma absoluta para evitar fallos de resolución con process.cwd() en desarrollo o Docker
+            const filePath = path.resolve(__dirname, '../../uploads/certificates', fileName);
             if (fs.existsSync(filePath)) {
               fs.unlinkSync(filePath);
             }
           }
         }
-      } catch (error) {
-        console.error('Error procesando el respaldo de certificados del usuario:', error);
-        // Registrar en auditoría el fallo detallado para que sea visible en la interfaz web de logs
-        await recordAuditLog({
-          action: AuditAction.DELETE,
-          resource: 'users',
-          resourceId: id as string,
-          userId: currentUser._id,
-          userEmail: currentUser.email,
-          userRole: currentUser.role,
-          method: req.method,
-          path: req.originalUrl,
-          ip: req.ip,
-          userAgent: req.get('user-agent'),
-          statusCode: 500,
-          message: `Fallo al enviar correo de respaldo al eliminar usuario ${userToDelete.email}. Error: ${(error as Error).message}`,
-          metadata: {
-            error: (error as Error).message,
-            stack: (error as Error).stack,
-            recipient: userToDelete.personalEmail || userToDelete.email
-          }
-        });
+      } catch (fileError) {
+        console.error('Error al eliminar físicamente los archivos de certificados:', fileError);
       }
     } else {
-      // Si no se encontraron certificaciones, verificamos si existen registros asociados
-      // con employeeId como string en lugar de ObjectId (causado por el importador antiguo)
+      // Si no se encontraron certificaciones, verificamos si existen registros huérfanos asociados
       const rawCertsCount = await Certification.collection.countDocuments({
         employeeId: id // Consulta directa a MongoDB sin casteo de Mongoose
       });
@@ -708,7 +713,7 @@ export const deleteUser = async (req: AuthRequest, res: Response): Promise<void>
         userAgent: req.get('user-agent'),
         statusCode: 200,
         message: rawCertsCount > 0
-          ? `Omitido correo de respaldo al eliminar usuario ${userToDelete.email}: se detectaron ${rawCertsCount} certificados guardados incorrectamente como texto (strings) en la BD. Re-importe el backup con el sistema corregido.`
+          ? `Omitido correo de respaldo al eliminar usuario ${userToDelete.email}: se detectaron ${rawCertsCount} certificados guardados incorrectamente en la BD. Re-importe el backup con el sistema corregido.`
           : `Omitido correo de respaldo al eliminar usuario ${userToDelete.email}: no tiene ninguna certificación asociada en la base de datos (total certificaciones en la plataforma: ${totalCertsInDb}).`,
         metadata: {
           rawCertificationsFound: rawCertsCount,
@@ -718,7 +723,14 @@ export const deleteUser = async (req: AuthRequest, res: Response): Promise<void>
       });
     }
 
-    await Certification.deleteMany({ employeeId: id });
+    // 3. Eliminación en cascada de los registros en base de datos
+    const certIds = certifications.map(c => c._id);
+    await Certification.deleteMany({
+      $or: [
+        { _id: { $in: certIds } },
+        { employeeId: id }
+      ]
+    });
     await User.findByIdAndDelete(id);
 
     res.json({
