@@ -233,7 +233,7 @@ export const getCertifications = async (req: Request, res: Response): Promise<vo
       userFilter.isActive = true;
 
       // Si el usuario no tiene privilegios de lectura global (no es líder ni admin), se fuerza la restricción a su propio departamento
-      if (currentUser && currentUser.department) {
+      if (currentUser && currentUser.department && currentUser.role !== UserRole.READER) {
         const userDeptId = currentUser.department._id || currentUser.department;
         
         // Se limita la búsqueda de colaboradores del backend al mismo departamento
