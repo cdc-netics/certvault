@@ -53,3 +53,64 @@ activos del sistema y el READER puede ver el catálogo completo de certificacion
 | LIDER   | Sin cambios — acceso global                           |
 | READER  | **Corregido** — ve certs de todos los usuarios activos |
 | TECNICO | Sin cambios — restringido a su departamento           |
+
+---
+
+## ISS-TECNICO-VISIBLEUSERS-002 — TECNICO sin visibilidad de certificaciones de su departamento
+
+| Campo        | Valor                                        |
+|--------------|----------------------------------------------|
+| **Estado**   | ✅ Corregido                                  |
+| **Severidad**| Alta                                         |
+| **Rol afect**| `TECNICO`                                    |
+| **Fecha**    | 2026-07-02                                   |
+| **Archivo**  | `backend/src/controllers/certificationsController.ts` |
+| **Línea**    | 240                                          |
+
+### Descripción
+
+Un usuario con rol `TECNICO` no veía ninguna certificación al iniciar sesión. Al cambiar
+el mismo usuario a rol `READER` o `ADMIN` sí las veía, descartando un problema de datos.
+
+### Causa raíz
+
+El doble filtro `$and` en `getCertifications` genera dos condiciones independientes:
+
+- **Condición A** (sobre certs): `cert.department === tecnicoDeptId` — correcta
+- **Condición B** (sobre certs): `cert.employeeId IN visibleUserIds` — problemática
+
+`visibleUsers` se construía con `userFilter = { isActive: true, department: tecnicoDeptId }`.
+En cualquiera de estos escenarios, la Condición B devuelve vacío y bloquea todos los resultados:
+
+| Escenario | Por qué falla |
+|-----------|---------------|
+| Dept nuevo (sin más usuarios) | `visibleUserIds = [soloEl]`, sin certs propias → B vacío |
+| Empleado movido a otro dept | Ya no aparece en `visibleUsers` del dept original → cert invisible |
+| Empleado marcado `isActive: false` | Excluido de `visibleUsers` → cert invisible |
+
+La Condición A ya garantiza la restricción de departamento sobre las certs. La asignación
+`userFilter.department` era redundante y causaba estos falsos negativos.
+
+### Fix aplicado
+
+```diff
+  const userDeptId = currentUser.department._id || currentUser.department;
+
+- // Se limita la búsqueda de colaboradores del backend al mismo departamento
+- userFilter.department = userDeptId;
+
+  // Se limpia cualquier condición de departamento...
+```
+
+`userFilter` queda como `{ isActive: true }` (sin filtro de dept). `visibleUsers` resuelve
+a todos los usuarios activos del sistema. La Condición B ya no descarta certs válidas.
+La restricción de departamento la sigue aplicando exclusivamente la Condición A.
+
+### Impacto post-fix
+
+| Rol     | Comportamiento                                              |
+|---------|-------------------------------------------------------------|
+| ADMIN   | Sin cambios — acceso global                                 |
+| LIDER   | Sin cambios — acceso global                                 |
+| READER  | Sin cambios — ve certs de todos los usuarios activos        |
+| **TECNICO** | **Corregido** — ve todas las certs de su dept (sin importar estado del empleado) |
