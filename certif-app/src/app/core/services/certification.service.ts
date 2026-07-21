@@ -8,6 +8,7 @@ import {
   CertificationStats 
 } from '../models/certification.model';
 import { ApiResponse, PaginatedResponse, PaginationParams } from '../models/common.model';
+import { extractHttpErrorMessage } from '../utils/http-error.util';
 
 @Injectable({
   providedIn: 'root'
@@ -188,15 +189,7 @@ export class CertificationService {
   }
 
   private handleError(error: HttpErrorResponse): Observable<never> {
-    let errorMessage = 'Ha ocurrido un error desconocido';
-    
-    if (error.error instanceof ErrorEvent) {
-      errorMessage = `Error: ${error.error.message}`;
-    } else {
-      errorMessage = error.error?.message || `Error ${error.status}: ${error.statusText}`;
-    }
-    
-    return throwError(() => new Error(errorMessage));
+    return throwError(() => new Error(extractHttpErrorMessage(error)));
   }
 
   downloadFile(url: string): Observable<Blob> {

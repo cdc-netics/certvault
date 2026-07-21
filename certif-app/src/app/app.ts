@@ -6,10 +6,11 @@ import { takeUntil } from 'rxjs/operators';
 import { AuthService } from './core/services/auth.service';
 import { SettingsService } from './core/services/settings.service';
 import { TermsModalComponent } from './shared/components/terms-modal/terms-modal.component';
+import { ToastContainerComponent } from './shared/components/toast-container/toast-container.component';
 
 @Component({
   selector: 'app-root',
-  imports: [CommonModule, RouterModule, RouterOutlet, TermsModalComponent],
+  imports: [CommonModule, RouterModule, RouterOutlet, TermsModalComponent, ToastContainerComponent],
   templateUrl: './app.component.html',
   styleUrl: './app.scss'
 })

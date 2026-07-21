@@ -4,6 +4,7 @@ import { Certification } from '../models/Certification';
 import { Department } from '../models/Department';
 import { Position } from '../models/Position';
 import { resolveDepartment, resolvePosition } from './resolveEntities';
+import { logger } from '../config/logger';
 
 // Lista de departamentos por defecto basados en el antiguo enum del sistema
 const DEFAULT_DEPARTMENTS = [
@@ -80,7 +81,7 @@ export const runDatabaseMigration = async (): Promise<void> => {
           user.department = resolvedDeptId;
           isModified = true;
         } catch (deptErr) {
-          console.error(`❌ Error migrando departamento "${currentDept}" para usuario ${user.username}:`, deptErr);
+          logger.error(`❌ Error migrando departamento "${currentDept}" para usuario ${user.username}:`, deptErr);
         }
       }
 
@@ -97,7 +98,7 @@ export const runDatabaseMigration = async (): Promise<void> => {
               migratedManagedDepts.push(resolvedDeptId);
               managedDeptsChanged = true;
             } catch (deptErr) {
-              console.error(`❌ Error migrando managedDepartment "${dept}" para usuario ${user.username}:`, deptErr);
+              logger.error(`❌ Error migrando managedDepartment "${dept}" para usuario ${user.username}:`, deptErr);
             }
           } else if (dept) {
             migratedManagedDepts.push(new mongoose.Types.ObjectId(String(dept)));
@@ -118,7 +119,7 @@ export const runDatabaseMigration = async (): Promise<void> => {
           user.position = resolvedPosId;
           isModified = true;
         } catch (posErr) {
-          console.error(`❌ Error migrando cargo "${currentPosition}" para usuario ${user.username}:`, posErr);
+          logger.error(`❌ Error migrando cargo "${currentPosition}" para usuario ${user.username}:`, posErr);
         }
       }
 
@@ -149,7 +150,7 @@ export const runDatabaseMigration = async (): Promise<void> => {
           await Certification.updateOne({ _id: cert._id }, { $set: { department: resolvedDeptId } });
           certsMigratedCount++;
         } catch (certErr) {
-          console.error(`❌ Error migrando departamento "${currentDept}" para certificación ${cert.title}:`, certErr);
+          logger.error(`❌ Error migrando departamento "${currentDept}" para certificación ${cert.title}:`, certErr);
         }
       }
     }
@@ -193,7 +194,7 @@ export const runDatabaseMigration = async (): Promise<void> => {
 
     console.log('🏁 Proceso de migración finalizado exitosamente.');
   } catch (error) {
-    console.error('❌ Error catastrófico en la rutina de migración de base de datos:', error);
+    logger.error('❌ Error catastrófico en la rutina de migración de base de datos:', error);
     throw error;
   }
 };

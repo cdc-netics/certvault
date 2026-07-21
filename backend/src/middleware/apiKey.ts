@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
 import { PublicApiClient } from '../models/PublicApiClient';
+import { logger } from '../config/logger';
 
 export interface PublicApiClientContext {
   id: string;
@@ -96,7 +97,7 @@ export const requireApiKey = async (req: PublicApiRequest, res: Response, next: 
   try {
     apiConfigByHash = await getCachedApiConfig();
   } catch (error) {
-    console.error('No se pudo leer configuracion de API externa:', error);
+    logger.error('No se pudo leer configuracion de API externa:', error);
     res.status(500).json({
       success: false,
       error: 'Error validando API key'
@@ -135,7 +136,7 @@ export const requireApiKey = async (req: PublicApiRequest, res: Response, next: 
   req.publicApiClient = client;
 
   void PublicApiClient.updateOne({ _id: client.id }, { $set: { lastUsedAt: new Date() } }).catch((error) => {
-    console.warn('No se pudo actualizar lastUsedAt del cliente API:', error);
+    logger.warn('No se pudo actualizar lastUsedAt del cliente API:', error);
   });
 
   next();

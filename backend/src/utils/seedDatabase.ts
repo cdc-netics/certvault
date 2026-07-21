@@ -3,6 +3,7 @@ import { User, UserRole, Permission } from '../models/User';
 import { Certification, CertificationStatus, CertificationType, CertificationLevel } from '../models/Certification';
 import bcrypt from 'bcryptjs';
 import { resolveDepartment, resolvePosition } from './resolveEntities';
+import { logger } from '../config/logger';
 
 export const seedDatabase = async (): Promise<void> => {
   try {
@@ -36,7 +37,7 @@ export const seedDatabase = async (): Promise<void> => {
 
     console.log('✅ Seed de base de datos completado exitosamente');
   } catch (error) {
-    console.error('❌ Error en seed de base de datos:', error);
+    logger.error('❌ Error en seed de base de datos:', error);
     throw error;
   }
 };
