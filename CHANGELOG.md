@@ -3,6 +3,26 @@
 Todos los cambios notables en este proyecto serán documentados en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y este proyecto se encuentra actualmente en fase de **versiones Beta**.
 
+## [2.6.0-beta] - 2026-07-21
+
+### Añadido
+- **Manejo Centralizado de Errores (Frontend):**
+  - Nuevo `NotificationService` (basado en signals) y componente global `ToastContainerComponent` para mostrar notificaciones de éxito, error, advertencia e información de forma consistente en toda la aplicación.
+  - Nuevo `GlobalErrorHandler` (implementación de `ErrorHandler` de Angular) que captura excepciones de runtime no controladas y las notifica al usuario en lugar de fallar en silencio.
+  - Utilidad compartida `extractHttpErrorMessage()` que unifica la extracción de mensajes de error HTTP, reemplazando 4 implementaciones divergentes de `handleError` duplicadas en `auth.service.ts`, `certification.service.ts`, `user.service.ts` y `settings.service.ts`.
+  - El interceptor HTTP (`auth.interceptor.ts`) ahora notifica automáticamente errores de infraestructura (red caída, `403`, `>=500`) y muestra un aviso de sesión expirada antes de redirigir en un `401`.
+- **Logging Persistente de Errores (Backend):**
+  - Nuevo logger centralizado con Winston (`backend/src/config/logger.ts`) que escribe a archivos rotativos `error.log` y `combined.log`, y captura automáticamente excepciones y rechazos de promesas verdaderamente no controlados en `exceptions.log`/`rejections.log`.
+  - Volumen de logs persistente montado en Docker (`./logs/backend:/app/logs` en `docker-compose.yml`).
+
+### Modificado
+- **Backend:** Reemplazadas las ~90 llamadas a `console.error`/`console.log`/`console.warn` en los 7 controladores, servicios de cron/auditoría, middleware de errores y API key, `database.ts`, `server.ts` y rutinas de arranque (`migration.ts`, `seedDatabase.ts`, `userHealer.ts`, `crypto.ts`) por el logger centralizado, asegurando que todo error quede persistido en disco.
+- **Frontend:** Cerrados puntos de falla silenciosa en `dashboard.component.ts` (reseteo de estadísticas sin aviso) y en las cargas auxiliares de `users-list.component.ts` (política del servidor, estadísticas, roles y departamentos), que ahora notifican al usuario mediante el nuevo `NotificationService`.
+
+### Corregido
+- **Dependencia Faltante de LDAP (Bug Latente):** Restaurada la declaración de `ldapjs`/`@types/ldapjs` en `backend/package.json`, ausente pese a ser utilizada en el login LDAP (`authController.ts`) — la falta de esta declaración ocultaba además un error de tipado real en las opciones de búsqueda LDAP (`scope`), ahora corregido.
+- **Catch Silencioso en Certificaciones:** Corregido un bloque `catch` en `certificationsController.ts` (`getCertificationById`) que no registraba ningún log ante errores de casteo de `ObjectId`, dejándolos completamente invisibles.
+
 ## [2.5.0-beta] - 2026-06-26
 
 ### Añadido
