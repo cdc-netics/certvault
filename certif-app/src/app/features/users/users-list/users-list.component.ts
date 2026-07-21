@@ -10,6 +10,7 @@ import { UserService, UsersQuery, UserStats } from '../../../core/services/user.
 import { AuthService } from '../../../core/services/auth.service';
 import { User, UserRole, Department } from '../../../core/models/user.model';
 import { SettingsService } from '../../../core/services/settings.service';
+import { NotificationService } from '../../../core/services/notification.service';
 
 @Component({
   selector: 'app-users-list',
@@ -63,7 +64,8 @@ export class UsersListComponent implements OnInit, OnDestroy {
   constructor(
     private readonly userService: UserService,
     private readonly authService: AuthService,
-    private readonly settingsService: SettingsService
+    private readonly settingsService: SettingsService,
+    private readonly notificationService: NotificationService
   ) {}
 
   ngOnInit(): void {
@@ -107,6 +109,7 @@ export class UsersListComponent implements OnInit, OnDestroy {
         },
         error: (error) => {
           console.error('Error al cargar la política del servidor:', error);
+          this.notificationService.warning('No se pudo cargar la politica de respaldo del servidor.');
         }
       });
   }
@@ -151,6 +154,7 @@ export class UsersListComponent implements OnInit, OnDestroy {
         },
         error: (error) => {
           console.error('Error cargando estadísticas:', error);
+          this.notificationService.warning('No se pudieron cargar las estadisticas de usuarios.');
         }
       });
   }
@@ -166,6 +170,7 @@ export class UsersListComponent implements OnInit, OnDestroy {
         },
         error: (error) => {
           console.error('Error cargando roles:', error);
+          this.notificationService.warning('No se pudieron cargar los roles disponibles.');
         }
       });
   }
@@ -181,6 +186,7 @@ export class UsersListComponent implements OnInit, OnDestroy {
         },
         error: (error) => {
           console.error('Error cargando departamentos:', error);
+          this.notificationService.warning('No se pudieron cargar los departamentos disponibles.');
         }
       });
   }

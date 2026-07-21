@@ -13,6 +13,7 @@ import { AuditAction } from '../models/AuditLog';
 import { resolveDepartment, resolvePosition } from '../utils/resolveEntities';
 import { Department } from '../models/Department';
 import { getResolvedServerPolicy } from '../services/serverPolicyService';
+import { logger } from '../config/logger';
 
 interface CreateUserRequest {
   username: string;
@@ -143,7 +144,7 @@ export const getUsers = async (req: AuthRequest, res: Response): Promise<void> =
       }
     });
   } catch (error) {
-    console.error('Error obteniendo usuarios:', error);
+    logger.error('Error obteniendo usuarios:', error);
     res.status(500).json({
       success: false,
       error: 'Error interno del servidor'
@@ -202,7 +203,7 @@ export const getUserById = async (req: AuthRequest, res: Response): Promise<void
       data: user
     });
   } catch (error) {
-    console.error('Error obteniendo usuario:', error);
+    logger.error('Error obteniendo usuario:', error);
     res.status(500).json({
       success: false,
       error: 'Error interno del servidor'
@@ -297,7 +298,7 @@ export const createUser = async (req: AuthRequest, res: Response): Promise<void>
       const { healOrphanedCertifications } = await import('../utils/userHealer');
       await healOrphanedCertifications();
     } catch (healError) {
-      console.error('Error al curar certificaciones huérfanas tras creación de usuario:', healError);
+      logger.error('Error al curar certificaciones huérfanas tras creación de usuario:', healError);
     }
 
     let emailWarning = '';
@@ -309,7 +310,7 @@ export const createUser = async (req: AuthRequest, res: Response): Promise<void>
         expiresInMinutes: VERIFY_TOKEN_EXP_MINUTES
       });
     } catch (emailError) {
-      console.error('Usuario creado, pero fallo el envio de verificacion:', emailError);
+      logger.error('Usuario creado, pero fallo el envio de verificacion:', emailError);
       emailWarning = ' No se pudo enviar el correo de verificacion.';
     }
 
@@ -328,7 +329,7 @@ export const createUser = async (req: AuthRequest, res: Response): Promise<void>
       message: `Usuario creado exitosamente.${emailWarning}`
     });
   } catch (error: any) {
-    console.error('Error creando usuario:', error);
+    logger.error('Error creando usuario:', error);
     // Retornar error de validación específico de Mongoose con código 400
     if (error && error.name === 'ValidationError') {
       const messages = Object.values(error.errors).map((e: any) => e.message);
@@ -529,7 +530,7 @@ export const updateUser = async (req: AuthRequest, res: Response): Promise<void>
       message: 'Usuario actualizado exitosamente'
     });
   } catch (error: any) {
-    console.error('Error actualizando usuario:', error);
+    logger.error('Error actualizando usuario:', error);
     // Retornar error de validación específico de Mongoose con código 400
     if (error && error.name === 'ValidationError') {
       const messages = Object.values(error.errors).map((e: any) => e.message);
@@ -656,7 +657,7 @@ export const deleteUser = async (req: AuthRequest, res: Response): Promise<void>
             }
           });
         } catch (mailError) {
-          console.error('Error al enviar el correo de respaldo al eliminar usuario:', mailError);
+          logger.error('Error al enviar el correo de respaldo al eliminar usuario:', mailError);
           // Registrar en auditoría el fallo del envío del correo (la eliminación física prosigue)
           await recordAuditLog({
             action: AuditAction.DELETE,
@@ -693,7 +694,7 @@ export const deleteUser = async (req: AuthRequest, res: Response): Promise<void>
           }
         }
       } catch (fileError) {
-        console.error('Error al eliminar físicamente los archivos de certificados:', fileError);
+        logger.error('Error al eliminar físicamente los archivos de certificados:', fileError);
       }
     } else {
       // Si no se encontraron certificaciones, verificamos si existen registros huérfanos asociados
@@ -746,7 +747,7 @@ export const deleteUser = async (req: AuthRequest, res: Response): Promise<void>
         : 'Usuario eliminado exitosamente'
     });
   } catch (error) {
-    console.error('Error eliminando usuario:', error);
+    logger.error('Error eliminando usuario:', error);
     res.status(500).json({
       success: false,
       error: 'Error interno del servidor'
@@ -803,7 +804,7 @@ export const getUserStats = async (req: AuthRequest, res: Response): Promise<voi
       }
     });
   } catch (error) {
-    console.error('Error obteniendo estadisticas de usuarios:', error);
+    logger.error('Error obteniendo estadisticas de usuarios:', error);
     res.status(500).json({
       success: false,
       error: 'Error interno del servidor'
@@ -830,7 +831,7 @@ export const getDepartments = async (_req: AuthRequest, res: Response): Promise<
       data: formatted
     });
   } catch (error) {
-    console.error('Error obteniendo departamentos:', error);
+    logger.error('Error obteniendo departamentos:', error);
     res.status(500).json({
       success: false,
       error: 'Error interno del servidor'
@@ -867,7 +868,7 @@ export const getRoles = async (req: AuthRequest, res: Response): Promise<void> =
       data: availableRoles
     });
   } catch (error) {
-    console.error('Error obteniendo roles:', error);
+    logger.error('Error obteniendo roles:', error);
     res.status(500).json({
       success: false,
       error: 'Error interno del servidor'
@@ -917,7 +918,7 @@ export const forcePasswordChange = async (req: AuthRequest, res: Response): Prom
       });
     }
   } catch (error) {
-    console.error('Error forzando cambio masivo de contraseñas:', error);
+    logger.error('Error forzando cambio masivo de contraseñas:', error);
     res.status(500).json({
       success: false,
       error: 'Error interno del servidor'
@@ -958,7 +959,7 @@ export const bulkUpdateDepartment = async (req: AuthRequest, res: Response): Pro
       message: `Se actualizó el departamento para ${result.modifiedCount} usuarios.`
     });
   } catch (error) {
-    console.error('Error en actualización masiva de departamentos:', error);
+    logger.error('Error en actualización masiva de departamentos:', error);
     res.status(500).json({
       success: false,
       error: 'Error interno del servidor'

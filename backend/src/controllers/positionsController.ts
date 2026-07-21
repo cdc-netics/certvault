@@ -4,6 +4,7 @@ import { User } from '../models/User';
 import { AuthRequest } from '../middleware/auth';
 import { recordAuditLog } from '../services/auditService';
 import { AuditAction } from '../models/AuditLog';
+import { logger } from '../config/logger';
 
 // Obtener todos los cargos
 export const getPositions = async (req: AuthRequest, res: Response): Promise<void> => {
@@ -22,7 +23,7 @@ export const getPositions = async (req: AuthRequest, res: Response): Promise<voi
       data: positions
     });
   } catch (error) {
-    console.error('Error al obtener cargos:', error);
+    logger.error('Error al obtener cargos:', error);
     res.status(500).json({ success: false, error: 'Error al obtener cargos' });
   }
 };
@@ -67,7 +68,7 @@ export const createPosition = async (req: AuthRequest, res: Response): Promise<v
       message: 'Cargo creado exitosamente'
     });
   } catch (error) {
-    console.error('Error al crear cargo:', error);
+    logger.error('Error al crear cargo:', error);
     res.status(500).json({ success: false, error: 'Error al crear cargo' });
   }
 };
@@ -122,7 +123,7 @@ export const updatePosition = async (req: AuthRequest, res: Response): Promise<v
       message: 'Cargo actualizado exitosamente'
     });
   } catch (error) {
-    console.error('Error al actualizar cargo:', error);
+    logger.error('Error al actualizar cargo:', error);
     res.status(500).json({ success: false, error: 'Error al actualizar cargo' });
   }
 };
@@ -161,7 +162,7 @@ export const deletePosition = async (req: AuthRequest, res: Response): Promise<v
       message: 'Cargo eliminado permanentemente'
     });
   } catch (error) {
-    console.error('Error al eliminar cargo:', error);
+    logger.error('Error al eliminar cargo:', error);
     res.status(500).json({ success: false, error: 'Error al eliminar cargo' });
   }
 };

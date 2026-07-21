@@ -3,6 +3,7 @@ import { SecuritySettings } from '../models/SecuritySettings';
 import { Certification } from '../models/Certification';
 import { sendPasswordExpirationWarningEmail, sendCertificateExpirationWarningEmail } from './emailService';
 import { runLocalBackup } from './backupService';
+import { logger } from '../config/logger';
 
 // Función para revisar de forma asíncrona la expiración de contraseñas de todos los usuarios
 export const checkPasswordExpirationAlerts = async (): Promise<void> => {
@@ -41,13 +42,13 @@ export const checkPasswordExpirationAlerts = async (): Promise<void> => {
             daysRemaining
           });
         } catch (emailError) {
-          console.error(`[Cron] Error enviando alerta de expiración a ${user.email}:`, emailError);
+          logger.error(`[Cron] Error enviando alerta de expiración a ${user.email}:`, emailError);
         }
       }
     }
     console.log('[Cron] Evaluación de expiración de contraseñas finalizada.');
   } catch (error) {
-    console.error('[Cron] Error evaluando expiración de contraseñas:', error);
+    logger.error('[Cron] Error evaluando expiración de contraseñas:', error);
   }
 };
 
@@ -97,13 +98,13 @@ export const checkCertificateExpirationAlerts = async (): Promise<void> => {
             });
           }
         } catch (emailError) {
-          console.error(`[Cron] Error enviando alerta de vencimiento a ${cert.employeeId} para "${cert.title}":`, emailError);
+          logger.error(`[Cron] Error enviando alerta de vencimiento a ${cert.employeeId} para "${cert.title}":`, emailError);
         }
       }
     }
     console.log('[Cron] Evaluación de vencimiento de certificados finalizada.');
   } catch (error) {
-    console.error('[Cron] Error evaluando vencimiento de certificados:', error);
+    logger.error('[Cron] Error evaluando vencimiento de certificados:', error);
   }
 };
 
@@ -130,7 +131,7 @@ export const checkAutoBackup = async (): Promise<void> => {
       await settings.save();
     }
   } catch (error) {
-    console.error('[Cron] Error en la rutina de respaldo automático:', error);
+    logger.error('[Cron] Error en la rutina de respaldo automático:', error);
   }
 };
 

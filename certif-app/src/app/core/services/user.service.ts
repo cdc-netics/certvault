@@ -13,6 +13,7 @@ import {
   UserRoleLabels
 } from '../models/user.model';
 import { ApiResponse } from '../models/common.model';
+import { extractHttpErrorMessage } from '../utils/http-error.util';
 
 export interface UsersResponse {
   users: User[];
@@ -333,17 +334,7 @@ export class UserService {
   }
 
   private handleError(error: HttpErrorResponse): Observable<never> {
-    let errorMessage = 'Ha ocurrido un error inesperado';
-    
-    if (error.error instanceof ErrorEvent) {
-      // Error del lado del cliente
-      errorMessage = `Error: ${error.error.message}`;
-    } else {
-      // Error del lado del servidor
-      errorMessage = error.error?.error || `Error ${error.status}: ${error.message}`;
-    }
-    
-    return throwError(() => new Error(errorMessage));
+    return throwError(() => new Error(extractHttpErrorMessage(error)));
   }
 }
 
