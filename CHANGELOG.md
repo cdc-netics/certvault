@@ -3,6 +3,11 @@
 Todos los cambios notables en este proyecto serán documentados en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/) y este proyecto se encuentra actualmente en fase de **versiones Beta**.
 
+## [2.6.1-beta] - 2026-07-29
+
+### Corregido
+- **RBAC en Certificaciones Organizacionales (Backend):** Corregido `getCertificationFile` en `certificationsController.ts`, que solo eximía al rol `ADMIN` de la restricción por departamento aplicable en certificaciones organizacionales. Los roles `LIDER` y `READER` —que ya cuentan con lectura global en el listado (`getCertifications`, ver ISS-014)— podían ver estas certificaciones pero recibían `403` al intentar abrirlas o descargarlas. Se unificó el criterio de acceso global (`ADMIN`/`LIDER`/`READER`) entre ambos endpoints; `TECNICO` se mantiene restringido a su departamento aplicable.
+
 ## [2.6.0-beta] - 2026-07-21
 
 ### Añadido
