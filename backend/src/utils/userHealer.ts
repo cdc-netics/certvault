@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import { User } from '../models/User';
 import { Certification } from '../models/Certification';
+import { logger } from '../config/logger';
 
 /**
  * Escanea y asocia de nuevo las certificaciones huérfanas con usuarios activos.
@@ -57,6 +58,6 @@ export const healOrphanedCertifications = async (): Promise<void> => {
       console.log(`[UserHealer] Se recuperaron e integraron ${healedCount} certificaciones huérfanas.`);
     }
   } catch (error) {
-    console.error('[UserHealer] Fallo durante la ejecución de la rutina de auto-curación:', error);
+    logger.error('[UserHealer] Fallo durante la ejecución de la rutina de auto-curación:', error);
   }
 };

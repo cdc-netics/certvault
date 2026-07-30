@@ -9,6 +9,7 @@ import {
   toSafeSmtpProfile
 } from '../services/smtpProfileService';
 import { ServerPolicy } from '../models/ServerPolicy';
+import { logger } from '../config/logger';
 
 const buildUpdatePayload = (body: Partial<SmtpProfileInput>) => {
   const payload: Record<string, unknown> = {};
@@ -45,7 +46,7 @@ export const getSmtpProfiles = async (_req: Request, res: Response): Promise<voi
       data: profiles.map(toSafeSmtpProfile)
     });
   } catch (error) {
-    console.error('Error listando perfiles SMTP:', error);
+    logger.error('Error listando perfiles SMTP:', error);
     res.status(500).json({
       success: false,
       error: 'Error al listar perfiles SMTP'
@@ -74,7 +75,7 @@ export const createSmtpProfile = async (req: AuthRequest, res: Response): Promis
       message: 'Perfil SMTP creado exitosamente'
     });
   } catch (error: any) {
-    console.error('Error creando perfil SMTP:', error);
+    logger.error('Error creando perfil SMTP:', error);
     res.status(400).json({
       success: false,
       error: error.code === 11000 ? 'Ya existe un perfil SMTP con ese nombre' : 'Error al crear perfil SMTP'
@@ -110,7 +111,7 @@ export const updateSmtpProfile = async (req: AuthRequest, res: Response): Promis
       message: 'Perfil SMTP actualizado exitosamente'
     });
   } catch (error: any) {
-    console.error('Error actualizando perfil SMTP:', error);
+    logger.error('Error actualizando perfil SMTP:', error);
     res.status(400).json({
       success: false,
       error: error.code === 11000 ? 'Ya existe un perfil SMTP con ese nombre' : 'Error al actualizar perfil SMTP'
@@ -134,7 +135,7 @@ export const deleteSmtpProfile = async (req: Request, res: Response): Promise<vo
       message: 'Perfil SMTP eliminado exitosamente'
     });
   } catch (error) {
-    console.error('Error eliminando perfil SMTP:', error);
+    logger.error('Error eliminando perfil SMTP:', error);
     res.status(500).json({
       success: false,
       error: 'Error al eliminar perfil SMTP'
@@ -169,7 +170,7 @@ export const activateSmtpProfile = async (req: Request, res: Response): Promise<
       message: 'Perfil SMTP activado exitosamente'
     });
   } catch (error) {
-    console.error('Error activando perfil SMTP:', error);
+    logger.error('Error activando perfil SMTP:', error);
     res.status(500).json({
       success: false,
       error: 'Error al activar perfil SMTP'
@@ -197,7 +198,7 @@ export const deactivateSmtpProfile = async (req: Request, res: Response): Promis
       message: 'Perfil SMTP desactivado exitosamente'
     });
   } catch (error) {
-    console.error('Error desactivando perfil SMTP:', error);
+    logger.error('Error desactivando perfil SMTP:', error);
     res.status(500).json({
       success: false,
       error: 'Error al desactivar perfil SMTP'
@@ -270,7 +271,7 @@ export const getActiveSmtpPolicy = async (req: Request, res: Response): Promise<
       }
     });
   } catch (error) {
-    console.error('Error al obtener las políticas del servidor:', error);
+    logger.error('Error al obtener las políticas del servidor:', error);
     res.status(500).json({
       success: false,
       error: 'Error al obtener políticas del servidor'
@@ -304,7 +305,7 @@ export const updateServerPolicy = async (req: AuthRequest, res: Response): Promi
       message: 'Políticas del servidor actualizadas correctamente'
     });
   } catch (error) {
-    console.error('Error al actualizar las políticas del servidor:', error);
+    logger.error('Error al actualizar las políticas del servidor:', error);
     res.status(500).json({
       success: false,
       error: 'Error al actualizar políticas del servidor'

@@ -30,6 +30,7 @@ services:
         condition: service_healthy
     volumes:
       - backend_uploads:/app/uploads
+      - ./logs/backend:/app/logs
     expose:
       - "${BACKEND_PORT}"
 

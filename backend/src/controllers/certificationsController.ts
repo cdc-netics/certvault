@@ -11,6 +11,7 @@ import {
 import { AuthRequest } from '../middleware/auth';
 import { User, UserRole } from '../models/User';
 import { Department } from '../models/Department';
+import { logger } from '../config/logger';
 
 const canAccessCertification = (certification: ICertification, user: any): boolean => {
   // Se permite el acceso de lectura y descarga de archivos a cualquier usuario autenticado en la plataforma.
@@ -141,7 +142,7 @@ export const createCertification = async (req: AuthRequest, res: Response): Prom
 
     res.status(201).json({ success: true, data: certification });
   } catch (error) {
-    console.error('Error creating certification:', error);
+    logger.error('Error creating certification:', error);
     if (error instanceof Error && (error as any).name === 'ValidationError') {
       res.status(400).json({
         success: false,
@@ -233,11 +234,8 @@ export const getCertifications = async (req: Request, res: Response): Promise<vo
       userFilter.isActive = true;
 
       // Si el usuario no tiene privilegios de lectura global (no es líder ni admin), se fuerza la restricción a su propio departamento
-      if (currentUser && currentUser.department) {
+      if (currentUser && currentUser.department && currentUser.role !== UserRole.READER) {
         const userDeptId = currentUser.department._id || currentUser.department;
-        
-        // Se limita la búsqueda de colaboradores del backend al mismo departamento
-        userFilter.department = userDeptId;
 
         // Se limpia cualquier condición de departamento que provenga de query params previos
         filter.$and = filter.$and || [];
@@ -334,7 +332,7 @@ export const getCertifications = async (req: Request, res: Response): Promise<vo
       }
     });
   } catch (error) {
-    console.error('Error getting certifications:', error);
+    logger.error('Error getting certifications:', error);
     res.status(500).json({
       success: false,
       error: 'Error al obtener certificaciones'
@@ -441,7 +439,7 @@ export const getPublicCertifications = async (req: Request, res: Response): Prom
       }
     });
   } catch (error) {
-    console.error('Error getting public certifications:', error);
+    logger.error('Error getting public certifications:', error);
     res.status(500).json({
       success: false,
       error: 'Error al obtener certificaciones publicas'
@@ -464,6 +462,7 @@ export const getCertificationById = async (req: AuthRequest, res: Response): Pro
 
     res.json({ success: true, data: certification });
   } catch (error) {
+    logger.error('Error al obtener la certificación:', error);
     res.status(500).json({
       success: false,
       error: 'Error al obtener la certificación'
@@ -535,7 +534,7 @@ export const getCertificationFile = async (req: AuthRequest, res: Response): Pro
     res.setHeader('Content-Disposition', `${disposition}; filename="${downloadName.replace(/"/g, '')}"`);
     res.sendFile(filePath);
   } catch (error) {
-    console.error('Error getting certification file:', error);
+    logger.error('Error getting certification file:', error);
     res.status(500).json({
       success: false,
       error: 'Error al obtener el archivo de certificación'
@@ -584,7 +583,7 @@ export const getPublicCertificationFile = async (req: Request, res: Response): P
     res.setHeader('Content-Disposition', `${disposition}; filename="${downloadName.replace(/"/g, '')}"`);
     res.sendFile(filePath);
   } catch (error) {
-    console.error('Error getting public certification file:', error);
+    logger.error('Error getting public certification file:', error);
     res.status(500).json({ success: false, error: 'Error al obtener el archivo de certificacion' });
   }
 };
@@ -687,7 +686,7 @@ export const updateCertification = async (req: AuthRequest, res: Response): Prom
 
     res.json({ success: true, data: updated });
   } catch (error) {
-    console.error('Error updating certification:', error);
+    logger.error('Error updating certification:', error);
     res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Error al actualizar la certificación'
@@ -931,7 +930,7 @@ export const downloadAllUserCertifications = async (req: AuthRequest, res: Respo
     res.setHeader('Content-Type', 'application/zip');
     res.send(zipBuffer);
   } catch (error) {
-    console.error('Error al empaquetar certificaciones en ZIP:', error);
+    logger.error('Error al empaquetar certificaciones en ZIP:', error);
     res.status(500).json({
       success: false,
       error: 'Error al generar la descarga consolidada en ZIP'

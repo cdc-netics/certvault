@@ -6,6 +6,7 @@ import { CertificationService } from '../../core/services/certification.service'
 import { User } from '../../core/models/user.model';
 import { CertificationStatus } from '../../core/models/certification.model';
 import { Subscription } from 'rxjs';
+import { NotificationService } from '../../core/services/notification.service';
 
 @Component({
   selector: 'app-dashboard',
@@ -166,7 +167,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
   constructor(
     private readonly authService: AuthService,
     private readonly router: Router,
-    private readonly certificationService: CertificationService
+    private readonly certificationService: CertificationService,
+    private readonly notificationService: NotificationService
   ) {}
 
   ngOnInit(): void {
@@ -210,7 +212,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
           this.expiringSoon = data.expiringSoon || [];
         }
       },
-      error: () => {
+      error: (error) => {
+        console.error('Error al cargar los datos del dashboard:', error);
+        this.notificationService.error('No se pudieron cargar las estadisticas del dashboard.');
         this.stats = { total: 0, active: 0, expiringSoon: 0, expired: 0 };
         this.recentCertifications = [];
         this.expiringSoon = [];

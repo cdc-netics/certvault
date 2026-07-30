@@ -9,6 +9,7 @@ import { AuditLog } from '../models/AuditLog';
 import { SecuritySettings } from '../models/SecuritySettings';
 import { resolveDepartment, resolvePosition } from '../utils/resolveEntities';
 import { getResolvedServerPolicy } from '../services/serverPolicyService';
+import { logger } from '../config/logger';
 
 interface RegisterData {
   username: string;
@@ -168,7 +169,7 @@ export const register = async (req: AuthRequest, res: Response): Promise<void> =
     } catch (emailError) {
       // Se registra el fallo del SMTP pero se permite que el registro en BD prosiga para evitar bloquear la creacion de cuentas.
       // Adicionalmente se imprime en los logs de la consola del servidor el enlace de activacion para permitir la activacion manual por parte de administradores.
-      console.error('❌ Registro exitoso, pero fallo el envio del correo de activacion:', emailError);
+      logger.error('❌ Registro exitoso, pero fallo el envio del correo de activacion:', emailError);
       console.log(`🔗 [ACTIVACION MANUAL] Enlace de activacion para ${user.email}: ${verifyLink}`);
       emailSent = false;
     }
@@ -180,7 +181,7 @@ export const register = async (req: AuthRequest, res: Response): Promise<void> =
         : 'Registro exitoso. Sin embargo, no pudimos enviar el correo de verificación. Por favor contacta al administrador para activar tu cuenta.'
     });
   } catch (error: any) {
-    console.error('Error en registro:', error);
+    logger.error('Error en registro:', error);
     
     // Manejo de errores de validacion del esquema de Mongoose para evitar codigos 500 genericos
     if (error.name === 'ValidationError') {
@@ -317,7 +318,7 @@ export const login = async (req: AuthRequest, res: Response): Promise<void> => {
       message: 'Inicio de sesion exitoso'
     });
   } catch (error) {
-    console.error('Error en login:', error);
+    logger.error('Error en login:', error);
     res.status(500).json({
       success: false,
       error: 'No pudimos iniciar sesion. Intenta nuevamente.',
@@ -402,7 +403,7 @@ export const logout = async (req: AuthRequest, res: Response): Promise<void> => 
       message: 'Sesion cerrada exitosamente'
     });
   } catch (error) {
-    console.error('Error en logout:', error);
+    logger.error('Error en logout:', error);
     res.status(500).json({
       success: false,
       error: 'No pudimos cerrar la sesion. Intenta nuevamente.',
@@ -446,7 +447,7 @@ export const getCurrentUser = async (req: AuthRequest, res: Response): Promise<v
       }
     });
   } catch (error) {
-    console.error('Error obteniendo usuario actual:', error);
+    logger.error('Error obteniendo usuario actual:', error);
     res.status(500).json({
       success: false,
       error: 'No pudimos cargar tu perfil. Intenta nuevamente.',
@@ -514,7 +515,7 @@ export const updateProfile = async (req: AuthRequest, res: Response): Promise<vo
       message: 'Perfil actualizado exitosamente'
     });
   } catch (error) {
-    console.error('Error actualizando perfil:', error);
+    logger.error('Error actualizando perfil:', error);
     res.status(500).json({
       success: false,
       error: 'No pudimos actualizar el perfil. Intenta nuevamente.',
@@ -613,7 +614,7 @@ export const changePassword = async (req: AuthRequest, res: Response): Promise<v
       message: 'Contraseña actualizada exitosamente'
     });
   } catch (error) {
-    console.error('Error cambiando contraseña:', error);
+    logger.error('Error cambiando contraseña:', error);
     res.status(500).json({
       success: false,
       error: 'No pudimos cambiar la contraseña. Intenta nuevamente.',
@@ -660,7 +661,7 @@ export const forgotPassword = async (req: AuthRequest, res: Response): Promise<v
       message: 'Si el correo esta registrado, enviamos un enlace para restablecer la contraseña.'
     });
   } catch (error) {
-    console.error('Error solicitando reset de contraseña:', error);
+    logger.error('Error solicitando reset de contraseña:', error);
     res.status(500).json({
       success: false,
       error: 'No pudimos enviar el enlace. Intenta nuevamente.',
@@ -745,7 +746,7 @@ export const resetPassword = async (req: AuthRequest, res: Response): Promise<vo
       message: 'Contraseña actualizada. Ya puedes iniciar sesion.'
     });
   } catch (error) {
-    console.error('Error restableciendo contraseña:', error);
+    logger.error('Error restableciendo contraseña:', error);
     res.status(500).json({
       success: false,
       error: 'No pudimos restablecer la contraseña. Intenta nuevamente.',
@@ -794,7 +795,7 @@ export const verifyEmail = async (req: AuthRequest, res: Response): Promise<void
       message: 'Cuenta verificada. Ya puedes iniciar sesion.'
     });
   } catch (error) {
-    console.error('Error verificando correo:', error);
+    logger.error('Error verificando correo:', error);
     res.status(500).json({
       success: false,
       error: 'No pudimos verificar el correo. Intenta nuevamente.',
@@ -836,7 +837,7 @@ export const getMyActivity = async (req: AuthRequest, res: Response): Promise<vo
       data: formattedActivity
     });
   } catch (error) {
-    console.error('Error obteniendo la actividad del usuario:', error);
+    logger.error('Error obteniendo la actividad del usuario:', error);
     res.status(500).json({
       success: false,
       error: 'Error al obtener la actividad reciente',
@@ -885,7 +886,7 @@ export const verifyResetToken = async (req: Request, res: Response): Promise<voi
       }
     });
   } catch (error) {
-    console.error('Error verificando token de reset:', error);
+    logger.error('Error verificando token de reset:', error);
     res.status(500).json({
       success: false,
       error: 'Error interno del servidor'
@@ -935,7 +936,7 @@ export const acceptTerms = async (req: AuthRequest, res: Response): Promise<void
       }
     });
   } catch (error) {
-    console.error('Error al aceptar términos:', error);
+    logger.error('Error al aceptar términos:', error);
     res.status(500).json({
       success: false,
       error: 'Error al procesar la aceptación de los términos y condiciones',
@@ -1013,7 +1014,7 @@ export const adLogin = async (req: Request, res: Response): Promise<void> => {
 
             const searchOpts = {
               filter: `(|(mail=${normalizedEmail})(userPrincipalName=${normalizedEmail}))`,
-              scope: 'sub'
+              scope: 'sub' as const
             };
 
             ldapClient.search(settings.ldapBaseDN || '', searchOpts, (searchErr: any, searchRes: any) => {
@@ -1061,7 +1062,7 @@ export const adLogin = async (req: Request, res: Response): Promise<void> => {
         userPosition = userLdapProfile.title || 'Colaborador';
 
       } catch (ldapError: any) {
-        console.error('❌ LDAP Auth Error:', ldapError.message);
+        logger.error('❌ LDAP Auth Error:', ldapError.message);
         
         // Simulación en entorno de desarrollo local si no hay servidor LDAP o falta la dependencia
         if (process.env.NODE_ENV !== 'production' || ldapError.message.includes('Cannot find module')) {
@@ -1120,7 +1121,7 @@ export const adLogin = async (req: Request, res: Response): Promise<void> => {
         const { healOrphanedCertifications } = await import('../utils/userHealer');
         await healOrphanedCertifications();
       } catch (healError) {
-        console.error('Error al curar certificaciones huérfanas tras aprovisionamiento JIT:', healError);
+        logger.error('Error al curar certificaciones huérfanas tras aprovisionamiento JIT:', healError);
       }
     }
 
@@ -1174,7 +1175,7 @@ export const adLogin = async (req: Request, res: Response): Promise<void> => {
     });
 
   } catch (error: any) {
-    console.error('Error en adLogin:', error);
+    logger.error('Error en adLogin:', error);
     res.status(500).json({ success: false, error: 'Error del sistema al procesar el inicio de sesión único.' });
   }
 };
@@ -1190,7 +1191,7 @@ export const getAdConfig = async (_req: Request, res: Response): Promise<void> =
       }
     });
   } catch (error) {
-    console.error('Error al obtener la configuración de AD:', error);
+    logger.error('Error al obtener la configuración de AD:', error);
     res.status(500).json({
       success: false,
       error: 'Error al obtener la configuración de AD'

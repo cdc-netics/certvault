@@ -6,6 +6,7 @@ import { AuthRequest } from '../middleware/auth';
 import { recordAuditLog } from '../services/auditService';
 import { AuditAction } from '../models/AuditLog';
 import { Certification } from '../models/Certification';
+import { logger } from '../config/logger';
 
 // Helper para generar el código del departamento
 const generateCode = async (name: string): Promise<string> => {
@@ -45,7 +46,7 @@ export const getDepartments = async (req: AuthRequest, res: Response): Promise<v
       data: departments
     });
   } catch (error) {
-    console.error('Error al obtener departamentos:', error);
+    logger.error('Error al obtener departamentos:', error);
     res.status(500).json({ success: false, error: 'Error al obtener departamentos' });
   }
 };
@@ -66,7 +67,7 @@ export const getDepartmentById = async (req: AuthRequest, res: Response): Promis
       data: department
     });
   } catch (error) {
-    console.error('Error al obtener departamento:', error);
+    logger.error('Error al obtener departamento:', error);
     res.status(500).json({ success: false, error: 'Error al obtener el departamento' });
   }
 };
@@ -138,7 +139,7 @@ export const createDepartment = async (req: AuthRequest, res: Response): Promise
       message: 'Departamento creado exitosamente'
     });
   } catch (error) {
-    console.error('Error al crear departamento:', error);
+    logger.error('Error al crear departamento:', error);
     res.status(500).json({ success: false, error: 'Error al crear departamento' });
   }
 };
@@ -240,7 +241,7 @@ export const updateDepartment = async (req: AuthRequest, res: Response): Promise
       message: 'Departamento actualizado exitosamente'
     });
   } catch (error) {
-    console.error('Error al actualizar departamento:', error);
+    logger.error('Error al actualizar departamento:', error);
     res.status(500).json({ success: false, error: 'Error al actualizar departamento' });
   }
 };
@@ -314,7 +315,7 @@ export const deleteDepartment = async (req: AuthRequest, res: Response): Promise
       message: 'Departamento eliminado permanentemente'
     });
   } catch (error) {
-    console.error('Error al eliminar departamento:', error);
+    logger.error('Error al eliminar departamento:', error);
     res.status(500).json({ success: false, error: 'Error al eliminar departamento' });
   }
 };
@@ -357,7 +358,7 @@ export const bulkDeleteDepartments = async (req: AuthRequest, res: Response): Pr
       message: `Se eliminaron permanentemente ${deletedCount} departamentos`
     });
   } catch (error) {
-    console.error('Error al eliminar departamentos en lote:', error);
+    logger.error('Error al eliminar departamentos en lote:', error);
     res.status(500).json({ success: false, error: 'Error al eliminar departamentos en lote' });
   }
 };
@@ -421,7 +422,7 @@ export const bulkInactivateDepartments = async (req: AuthRequest, res: Response)
       message: `Se inactivaron ${inactivatedCount} departamentos`
     });
   } catch (error) {
-    console.error('Error al inactivar departamentos en lote:', error);
+    logger.error('Error al inactivar departamentos en lote:', error);
     res.status(500).json({ success: false, error: 'Error al inactivar departamentos en lote' });
   }
 };

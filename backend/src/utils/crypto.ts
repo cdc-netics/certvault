@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { logger } from '../config/logger';
 
 // Algoritmo de cifrado estándar y robusto para datos confidenciales
 const ALGORITHM = 'aes-256-cbc';
@@ -53,7 +54,7 @@ export const decrypt = (encryptedText: string): string => {
     
     return decryptedParts.join('');
   } catch (error) {
-    console.error('Error al descifrar la información:', error);
+    logger.error('Error al descifrar la información:', error);
     // Devolvemos el texto original en caso de error o si no estaba cifrado para evitar caídas de ejecución
     return encryptedText;
   }

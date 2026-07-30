@@ -4,6 +4,7 @@ import { Observable, of, throwError, BehaviorSubject } from 'rxjs';
 import { catchError, tap } from 'rxjs/operators';
 import { ApiResponse } from '../models/common.model';
 import { SmtpProfile, SmtpProfilePayload } from '../models/smtp-profile.model';
+import { extractHttpErrorMessage } from '../utils/http-error.util';
 
 export interface AuditLogsQuery {
   page?: number;
@@ -335,8 +336,7 @@ export class SettingsService {
   }
 
   private handleError(error: HttpErrorResponse): Observable<never> {
-    const message = error.error?.message || error.error?.error || 'Error procesando configuracion';
-    return throwError(() => new Error(message));
+    return throwError(() => new Error(extractHttpErrorMessage(error)));
   }
 
   private cachedGet<T>(key: string, url: string, params?: HttpParams): Observable<ApiResponse<T>> {
