@@ -34,6 +34,7 @@ Este documento registra los problemas, vulnerabilidades, mejoras y tareas técni
 | **ISS-015** | Subida y gestión de certificaciones de Compliance por Líderes      | Backend / Frontend | 25/06/2026      | Formularios frontend dinámicos con alcance organizacional/checks de áreas aplicables. Edición de compliance habilitada a cualquier líder y borrado corporativo restringido a creador/admin. |
 | **ISS-016** | Flexibilidad en Departamentos: Creación inicial sin Líder de Área  | Backend / Frontend | 25/06/2026      | Permitida desvinculación a nulo de líderes, eliminando la asociación en managedDepartments y degradándolo automáticamente si no gestiona otras áreas. |
 | **ISS-017** | Panel y ejecución de respaldos completos automáticos y rotativos   | Backend / Frontend | 25/06/2026      | Programado cron de respaldo diario comprimido en backend/backups/ con rotación física de hasta 10 archivos. Creada interfaz visual de configuración y control de backups locales. |
+| **ISS-023** | Roles no-Admin reciben 403 al abrir certificaciones organizacionales | Backend            | 29/07/2026      | Corregido `getCertificationFile` en `certificationsController.ts`: la validación de acceso a certificaciones organizacionales solo eximía al rol `ADMIN`, dejando fuera a `LIDER` y `READER` pese a que ambos ya tienen lectura global habilitada en el listado (`getCertifications`, ISS-014). Se unificó el criterio de acceso global en ambos endpoints. |
 
 
 ---
@@ -183,6 +184,14 @@ Este documento registra los problemas, vulnerabilidades, mejoras y tareas técni
 - **Código Afectado (Backend)**: [settingsController.ts](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/backend/src/controllers/settingsController.ts) (función `exportReport`).
 - **Propuesta de Implementación**:
   - **Backend**: Corregir la consulta en `exportReport` dentro de [settingsController.ts](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/backend/src/controllers/settingsController.ts). Actualmente ejecuta una búsqueda incondicional (`Certification.find()`), omitiendo los parámetros de filtrado enviados en el request. Se modificará para capturar los Query Params de `department`, `status`, `from` y `to` (usando `getDateRange(req)`), y aplicar dicho objeto de filtro en la consulta final a Mongoose antes de construir el archivo CSV de descarga.
+
+---
+
+### [ISS-023] Roles no-Admin reciben 403 al abrir certificaciones organizacionales
+
+- **Código Afectado (Backend)**: [certificationsController.ts](file:///c:/Workspace/certvault/backend/src/controllers/certificationsController.ts) (función `getCertificationFile`).
+- **Causa Raíz**: El listado (`getCertifications`) otorga lectura global sobre certificaciones organizacionales a los roles `ADMIN`, `LIDER` y `READER` (ver ISS-014), pero la validación de descarga/apertura de archivo en `getCertificationFile` solo eximía al rol `ADMIN` de la restricción por departamento aplicable. Como resultado, un usuario `LIDER` o `READER` podía ver una certificación organizacional de otra área en la lista, pero al intentar abrirla o descargarla recibía `403 - acceso restringido a áreas aplicables` por no pertenecer al departamento asociado.
+- **Resolución**: Se reemplazó el chequeo `isAdmin` por `hasGlobalReadAccess` (`ADMIN`, `LIDER` o `READER`), alineando el criterio de autorización del endpoint de archivo con el ya utilizado en el listado. `TECNICO` continúa restringido a su departamento aplicable.
 
 ---
 
