@@ -53,10 +53,13 @@
   },
   "devDependencies": {
     "@types/adm-zip": "^0.5.8",
+    "@types/jest": "^30.0.0",
     "@types/ldapjs": "^3.0.6",
     "@types/node": "^24.9.1",
     "@types/nodemailer": "^7.0.5",
+    "jest": "^30.4.2",
     "nodemon": "^3.1.10",
+    "ts-jest": "^29.4.12",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3"
   }

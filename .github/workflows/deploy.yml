@@ -5,6 +5,10 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Privilegio minimo del GITHUB_TOKEN: este workflow solo hace checkout, no interactua con la API de GitHub
+permissions:
+  contents: read
+
 concurrency:
   group: production-deploy
   cancel-in-progress: false

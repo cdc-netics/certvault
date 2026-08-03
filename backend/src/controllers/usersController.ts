@@ -8,6 +8,7 @@ import { Certification } from '../models/Certification';
 import { AuthRequest } from '../middleware/auth';
 import { saveBase64Avatar } from '../utils/avatar';
 import { sendVerificationEmail, sendUserCertificationsArchiveEmail } from '../services/emailService';
+import { buildVerifyLink } from '../utils/frontendUrl';
 import { recordAuditLog } from '../services/auditService';
 import { AuditAction } from '../models/AuditLog';
 import { resolveDepartment, resolvePosition } from '../utils/resolveEntities';
@@ -63,19 +64,6 @@ interface UsersQuery {
 }
 
 const VERIFY_TOKEN_EXP_MINUTES = Number(process.env.VERIFY_EMAIL_EXPIRE_MINUTES || 60);
-
-const getFrontendBaseUrl = (): string => {
-  const base = process.env.FRONTEND_URL?.trim();
-  if (!base) {
-    throw new Error('FRONTEND_URL no esta definido en variables de entorno');
-  }
-  return base.replace(/\/$/, '');
-};
-
-const buildVerifyLink = (token: string, email: string): string => {
-  const base = getFrontendBaseUrl();
-  return `${base}/verify-email?token=${token}&email=${encodeURIComponent(email)}`;
-};
 
 export const getUsers = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -306,7 +294,7 @@ export const createUser = async (req: AuthRequest, res: Response): Promise<void>
       await sendVerificationEmail({
         to: newUser.email,
         name: newUser.firstName || newUser.username,
-        verifyLink: buildVerifyLink(verificationToken, newUser.email),
+        verifyLink: buildVerifyLink(verificationToken, newUser.email, req),
         expiresInMinutes: VERIFY_TOKEN_EXP_MINUTES
       });
     } catch (emailError) {

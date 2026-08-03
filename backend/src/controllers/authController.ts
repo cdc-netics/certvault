@@ -5,6 +5,7 @@ import { User, UserRole } from '../models/User';
 import { AuthRequest } from '../middleware/auth';
 import { saveBase64Avatar } from '../utils/avatar';
 import { sendPasswordResetEmail, sendVerificationEmail } from '../services/emailService';
+import { buildResetLink, buildVerifyLink } from '../utils/frontendUrl';
 import { AuditLog } from '../models/AuditLog';
 import { SecuritySettings } from '../models/SecuritySettings';
 import { resolveDepartment, resolvePosition } from '../utils/resolveEntities';
@@ -44,71 +45,6 @@ const generateRefreshToken = (id: string): string => {
   return jwt.sign({ id }, process.env.JWT_SECRET as string, {
     expiresIn: process.env.JWT_REFRESH_EXPIRE || '30d'
   });
-};
-
-const getFrontendBaseUrl = (req?: Request): string => {
-  // Se obtiene el valor estatico configurado como respaldo
-  const envBase = process.env.FRONTEND_URL?.trim() || '';
-  // Se separan multiples URLs en caso de estar configuradas por comas en las variables de entorno
-  const urls = envBase.split(',').map(u => u.trim()).filter(Boolean);
-
-  if (req) {
-    // 1. Validacion mediante la cabecera Origin (enviada tipicamente en llamadas CORS del cliente)
-    const origin = req.headers.origin as string;
-    if (origin) {
-      const matched = urls.find(u => u.toLowerCase().startsWith(origin.toLowerCase()));
-      if (matched) {
-        return matched.replace(/\/$/, '');
-      }
-      return origin.replace(/\/$/, '');
-    }
-
-    // 2. Validacion secundaria mediante la cabecera Referer
-    const referer = req.headers.referer as string;
-    if (referer) {
-      try {
-        const refUrl = new URL(referer);
-        const originFromRef = refUrl.origin;
-        const matched = urls.find(u => u.toLowerCase().startsWith(originFromRef.toLowerCase()));
-        if (matched) {
-          return matched.replace(/\/$/, '');
-        }
-        return originFromRef.replace(/\/$/, '');
-      } catch {
-        // Se ignora el fallo del formateador de URL en caso de referers maliciosos o invalidos
-      }
-    }
-
-    // 3. Validacion terciaria usando cabeceras Host y Protocolo (incluyendo soporte para Proxies)
-    const protocol = (req.headers['x-forwarded-proto'] as string) || req.protocol || 'http';
-    const host = (req.headers['x-forwarded-host'] as string) || req.get('host');
-    if (host) {
-      const generatedUrl = `${protocol}://${host}`;
-      const matched = urls.find(u => u.toLowerCase().startsWith(generatedUrl.toLowerCase()));
-      if (matched) {
-        return matched.replace(/\/$/, '');
-      }
-      return generatedUrl.replace(/\/$/, '');
-    }
-  }
-
-  // Si no se pudo determinar dinamicamente, se opta por el primer valor definido en el entorno
-  const defaultUrl = urls[0];
-  if (defaultUrl) {
-    return defaultUrl.replace(/\/$/, '');
-  }
-
-  throw new Error('FRONTEND_URL no esta definido en las variables de entorno y no se pudo determinar desde la peticion.');
-};
-
-const buildResetLink = (token: string, email: string, req?: Request): string => {
-  const base = getFrontendBaseUrl(req);
-  return `${base}/reset-password?token=${token}&email=${encodeURIComponent(email)}`;
-};
-
-const buildVerifyLink = (token: string, email: string, req?: Request): string => {
-  const base = getFrontendBaseUrl(req);
-  return `${base}/verify-email?token=${token}&email=${encodeURIComponent(email)}`;
 };
 
 export const register = async (req: AuthRequest, res: Response): Promise<void> => {

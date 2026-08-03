@@ -500,10 +500,16 @@ export const getCertificationFile = async (req: AuthRequest, res: Response): Pro
           });
         });
 
-      const isAdmin = req.user?.role === UserRole.ADMIN;
+      // Mismo criterio de acceso global de lectura usado en el listado (getCertifications):
+      // ADMIN, LIDER y READER pueden ver cualquier certificación organizacional sin
+      // restricción de departamento; solo TECNICO queda acotado a su área aplicable.
+      const hasGlobalReadAccess =
+        req.user?.role === UserRole.ADMIN ||
+        req.user?.role === UserRole.LIDER ||
+        req.user?.role === UserRole.READER;
       const isCreator = certification.createdBy?.toString() === req.user?._id?.toString();
 
-      if (!isAdmin && !isCreator && !isUserInApplicableDept) {
+      if (!hasGlobalReadAccess && !isCreator && !isUserInApplicableDept) {
         res.status(403).json({
           success: false,
           error: 'No tienes permisos para descargar el archivo de esta certificación organizacional (acceso restringido a áreas aplicables)'
