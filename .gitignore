@@ -18,6 +18,7 @@ certif-app/.angular/
 # Environment and secrets
 /.env
 backend/uploads/
+backend/backups/
 
 # IDE/system
 .idea/
@@ -28,3 +29,6 @@ Thumbs.db
 node_modules
 pra.md
 BAK/*
+
+.vscode/
+.claude/

@@ -13,6 +13,10 @@ export interface ISecuritySettings extends Document {
   ldapBaseDN?: string; // Base DN para búsquedas (ej. dc=empresa,dc=com)
   ldapBindDN?: string; // Bind DN para conexión (ej. cn=admin,dc=empresa,dc=com)
   ldapBindPassword?: string; // Contraseña del Bind DN (encriptada en BD)
+  // Configuración de respaldos automáticos
+  autoBackupEnabled: boolean; // Indica si los respaldos locales automáticos están habilitados
+  autoBackupIntervalDays: number; // Frecuencia de los respaldos automáticos en días
+  lastAutoBackupAt?: Date; // Fecha de ejecución del último respaldo automático
   updatedBy?: Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
@@ -81,6 +85,22 @@ const securitySettingsSchema = new Schema<ISecuritySettings>(
     ldapBindPassword: {
       type: String,
       trim: true,
+      required: false
+    },
+    autoBackupEnabled: {
+      type: Boolean,
+      required: true,
+      default: false
+    },
+    autoBackupIntervalDays: {
+      type: Number,
+      required: true,
+      default: 7,
+      min: [1, 'El intervalo mínimo es de 1 día'],
+      max: [30, 'El intervalo máximo es de 30 días']
+    },
+    lastAutoBackupAt: {
+      type: Date,
       required: false
     },
     updatedBy: {

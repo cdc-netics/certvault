@@ -9,6 +9,8 @@ import { BackButtonComponent } from '../../../shared/components/back-button/back
 import { UserService, UsersQuery, UserStats } from '../../../core/services/user.service';
 import { AuthService } from '../../../core/services/auth.service';
 import { User, UserRole, Department } from '../../../core/models/user.model';
+import { SettingsService } from '../../../core/services/settings.service';
+import { NotificationService } from '../../../core/services/notification.service';
 
 @Component({
   selector: 'app-users-list',
@@ -20,6 +22,8 @@ import { User, UserRole, Department } from '../../../core/models/user.model';
 export class UsersListComponent implements OnInit, OnDestroy {
   selectedUser: User | null = null;
   showUserModal = false;
+  showBulkDeptModal = false;
+  bulkDepartmentId = '';
   users: User[] = [];
   loading = false;
   errorMessage = '';
@@ -54,10 +58,14 @@ export class UsersListComponent implements OnInit, OnDestroy {
   canCreateUsers = false;
   canEditUsers = false;
   canDeleteUsers = false;
+  // Determina si el sistema debe notificar el envío de respaldo ZIP según la configuración del servidor
+  sendBackupOnDelete = true;
 
   constructor(
     private readonly userService: UserService,
-    private readonly authService: AuthService
+    private readonly authService: AuthService,
+    private readonly settingsService: SettingsService,
+    private readonly notificationService: NotificationService
   ) {}
 
   ngOnInit(): void {
@@ -86,6 +94,24 @@ export class UsersListComponent implements OnInit, OnDestroy {
     this.loadDepartments();
     this.loadStats();
     this.loadUsers();
+    this.loadServerPolicy();
+  }
+
+  // Consulta al backend la política global SMTP para saber si está activado el envío de ZIP
+  private loadServerPolicy(): void {
+    this.settingsService.getServerPolicy()
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (response) => {
+          if (response.success && response.data) {
+            this.sendBackupOnDelete = response.data.sendBackupOnDelete !== false;
+          }
+        },
+        error: (error) => {
+          console.error('Error al cargar la política del servidor:', error);
+          this.notificationService.warning('No se pudo cargar la politica de respaldo del servidor.');
+        }
+      });
   }
 
   private updatePermissions(): void {
@@ -128,6 +154,7 @@ export class UsersListComponent implements OnInit, OnDestroy {
         },
         error: (error) => {
           console.error('Error cargando estadísticas:', error);
+          this.notificationService.warning('No se pudieron cargar las estadisticas de usuarios.');
         }
       });
   }
@@ -143,6 +170,7 @@ export class UsersListComponent implements OnInit, OnDestroy {
         },
         error: (error) => {
           console.error('Error cargando roles:', error);
+          this.notificationService.warning('No se pudieron cargar los roles disponibles.');
         }
       });
   }
@@ -158,6 +186,7 @@ export class UsersListComponent implements OnInit, OnDestroy {
         },
         error: (error) => {
           console.error('Error cargando departamentos:', error);
+          this.notificationService.warning('No se pudieron cargar los departamentos disponibles.');
         }
       });
   }
@@ -240,7 +269,13 @@ export class UsersListComponent implements OnInit, OnDestroy {
 
   deleteUser(user: User): void {
     if (!this.canDeleteUser(user)) return;
-    if (!confirm(`¿Estás seguro de que deseas eliminar al usuario ${user.firstName} ${user.lastName}? Esta acción enviará un respaldo con sus certificados a su correo personal y los borrará de forma permanente.`)) {
+    
+    // El texto del confirm se genera dinámicamente según el estado de la política sendBackupOnDelete del servidor
+    const confirmMessage = this.sendBackupOnDelete
+      ? `¿Estás seguro de que deseas eliminar al usuario ${user.firstName} ${user.lastName}? Esta acción enviará un respaldo con sus certificados a su correo personal y los borrará de forma permanente.`
+      : `¿Estás seguro de que deseas eliminar al usuario ${user.firstName} ${user.lastName}? Esta acción borrará al usuario y sus certificados de forma permanente.`;
+
+    if (!confirm(confirmMessage)) {
       return;
     }
     this.loading = true;
@@ -336,13 +371,57 @@ export class UsersListComponent implements OnInit, OnDestroy {
       });
   }
 
+  openBulkDepartmentModal(): void {
+    this.showBulkDeptModal = true;
+  }
+
+  closeBulkDeptModal(): void {
+    this.showBulkDeptModal = false;
+    this.bulkDepartmentId = '';
+  }
+
+  applyBulkDepartmentChange(): void {
+    if (!this.bulkDepartmentId || this.selectedUserIds.length === 0) return;
+
+    this.loading = true;
+    this.errorMessage = '';
+
+    this.userService.bulkUpdateDepartment(this.selectedUserIds, this.bulkDepartmentId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (response) => {
+          if (response.success) {
+            alert('Se ha actualizado el departamento para los usuarios seleccionados correctamente.');
+            this.selectedUserIds = [];
+            this.closeBulkDeptModal();
+            this.loadUsers();
+            this.loadStats();
+          }
+          this.loading = false;
+        },
+        error: (error) => {
+          console.error('Error al cambiar departamentos masivamente:', error);
+          this.errorMessage = error.message || 'Error al cambiar de departamento';
+          this.loading = false;
+        }
+      });
+  }
+
   // Helpers de presentación
   getRoleLabel(role: UserRole): string {
     return this.userService.getRoleLabel(role);
   }
 
-  getDepartmentLabel(department: Department): string {
+  getDepartmentLabel(department: any): string {
     return this.userService.getDepartmentLabel(department);
+  }
+
+  getPositionLabel(position: any): string {
+    if (!position) return '';
+    if (typeof position === 'object') {
+      return position.name || '';
+    }
+    return position;
   }
 
   getRoleBadgeClass(role: UserRole): string {

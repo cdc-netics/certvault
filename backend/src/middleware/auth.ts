@@ -23,7 +23,11 @@ export const authenticate = async (
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET as string) as { id: string };
-    const user = await User.findById(decoded.id).select('+refreshToken');
+    const user = await User.findById(decoded.id)
+      .select('+refreshToken')
+      .populate('department')
+      .populate('managedDepartments')
+      .populate('position');
 
     if (!user || user.isActive === false) {
       res.status(401).json({

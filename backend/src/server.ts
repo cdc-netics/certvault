@@ -12,7 +12,9 @@ import fs from 'fs';
 
 // Importar configuracion de base de datos y seed
 import { database } from './config/database';
+import { logger } from './config/logger';
 import { seedDatabase } from './utils/seedDatabase';
+import { runDatabaseMigration } from './utils/migration';
 
 // Importar rutas
 import authRoutes from './routes/auth';
@@ -20,11 +22,14 @@ import userRoutes from './routes/users';
 import certificationRoutes from './routes/certifications';
 import dashboardRoutes from './routes/dashboard';
 import settingsRoutes from './routes/settings';
+import departmentRoutes from './routes/departments';
+import positionRoutes from './routes/positions';
 
 // Importar middleware
 import { errorHandler } from './middleware/errorHandler';
 import { notFound } from './middleware/notFound';
-import { auditRequest } from './services/auditService';
+import { auditRequest, recordAuditLog } from './services/auditService';
+import { AuditAction } from './models/AuditLog';
 
 // Importar servicio de cron para expiraciones y auditoría
 import { startCronServices } from './services/cronService';
@@ -82,7 +87,7 @@ const corsOptions: cors.CorsOptions = {
     if (allowedOrigins.includes(normalized)) {
       return callback(null, true);
     }
-    console.warn(`[CORS] Origen rechazado: ${origin}. Orígenes permitidos:`, allowedOrigins);
+    logger.warn(`[CORS] Origen rechazado: ${origin}. Orígenes permitidos:`, allowedOrigins);
     return callback(new Error(`Not allowed by CORS: ${origin}`));
   },
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
@@ -121,6 +126,17 @@ app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev', {
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Toda respuesta de la API depende de la identidad del solicitante: dos usuarios con
+// distinto rol reciben cuerpos distintos para la misma URL. Sin estas cabeceras, cualquier
+// caché intermedia (proxy inverso, CDN) podría reutilizar la respuesta de un usuario para
+// otro, y el navegador podría servir datos obsoletos tras un cambio de permisos.
+app.use('/api', (_req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('Vary', 'Authorization');
+  next();
+});
+
 app.use(auditRequest);
 
 // Servir solo avatares publicos. Los certificados se entregan por endpoint autenticado.
@@ -132,6 +148,8 @@ app.use('/api/users', userRoutes);
 app.use('/api/certifications', certificationRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/settings', settingsRoutes);
+app.use('/api/departments', departmentRoutes);
+app.use('/api/positions', positionRoutes);
 
 // Ruta de salud con informacion de base de datos
 app.get('/api/health', (req, res) => {
@@ -152,12 +170,40 @@ app.use(errorHandler);
 // Conectar a MongoDB y configurar base de datos
 const connectDB = async (): Promise<void> => {
   try {
-    console.log('Inicializando conexion a MongoDB...');
+    logger.info('Inicializando conexion a MongoDB...');
     await database.connect();
-    console.log('Conexion a MongoDB establecida exitosamente');
+    logger.info('Conexion a MongoDB establecida exitosamente');
+
+    // Ejecutar migración de datos para departamentos y cargos dinámicos
+    await runDatabaseMigration();
+
+    // Eliminar los índices TTL problemáticos que borraban a los usuarios al expirar sus tokens
+    try {
+      const db = mongoose.connection.db;
+      if (db) {
+        const collections = await db.listCollections({ name: 'users' }).toArray();
+        if (collections.length > 0) {
+          const indexes = await db.collection('users').listIndexes().toArray();
+          const indexesToDrop = ['passwordResetExpires_1', 'verificationExpires_1'];
+          for (const indexName of indexesToDrop) {
+            if (indexes.some(idx => idx.name === indexName)) {
+              await db.collection('users').dropIndex(indexName);
+              logger.info(`[Base de Datos] Se eliminó el índice TTL obsoleto de la colección de usuarios: ${indexName}`);
+            }
+          }
+        }
+      }
+    } catch (indexError) {
+      logger.error('Error limpiando índices TTL obsoletos en MongoDB:', indexError);
+    }
+
+    // Iniciar la rutina de curación para volver a asociar certificaciones huérfanas
+    const { healOrphanedCertifications } = await import('./utils/userHealer');
+    await healOrphanedCertifications();
+
     await createDefaultAdminAndSeed();
   } catch (error) {
-    console.error('Error conectando a MongoDB:', error);
+    logger.error('Error conectando a MongoDB:', error);
     process.exit(1);
   }
 };
@@ -165,7 +211,8 @@ const connectDB = async (): Promise<void> => {
 // Crear usuario administrador por defecto y datos de ejemplo
 const createDefaultAdminAndSeed = async (): Promise<void> => {
   try {
-    const { User, UserRole, Department, Permission } = await import('./models/User');
+    const { User, UserRole, Permission } = await import('./models/User');
+    const { resolveDepartment, resolvePosition } = await import('./utils/resolveEntities');
 
     const backfillPersonalEmailResult = await User.updateMany(
       {
@@ -196,15 +243,19 @@ const createDefaultAdminAndSeed = async (): Promise<void> => {
     );
 
     if (backfillPersonalEmailResult.modifiedCount > 0 || backfillIsActiveResult.modifiedCount > 0 || backfillTermsResult.modifiedCount > 0) {
-      console.log(
+      logger.info(
         `Backfill usuarios aplicado: personalEmail=${backfillPersonalEmailResult.modifiedCount}, isActive=${backfillIsActiveResult.modifiedCount}, termsAccepted=${backfillTermsResult.modifiedCount}`
       );
     }
 
-    const adminExists = await User.findOne({ role: UserRole.ADMIN }).select('+password');
+    const envAdminEmail = (process.env.ADMIN_EMAIL || 'admin@empresa.com').toLowerCase().trim();
+    const adminExists = await User.findOne({ email: envAdminEmail }).select('+password');
 
     if (!adminExists) {
-      console.log('Creando usuario administrador por defecto...');
+      logger.info('Creando usuario administrador por defecto...');
+      const adminDeptId = await resolveDepartment('TI');
+      const adminPositionId = await resolvePosition('Administrador del Sistema');
+
       const adminUser = new User({
         username: process.env.ADMIN_USERNAME || 'admin',
         email: process.env.ADMIN_EMAIL || 'admin@empresa.com',
@@ -213,35 +264,35 @@ const createDefaultAdminAndSeed = async (): Promise<void> => {
         firstName: 'Administrador',
         lastName: 'del Sistema',
         role: UserRole.ADMIN,
-        department: Department.TI,
-        position: 'Administrador del Sistema',
+        department: adminDeptId,
+        position: adminPositionId,
         isActive: true,
         termsAccepted: false, // Requerir aceptación de términos al ingresar por primera vez
         permissions: Object.values(Permission)
       });
       await adminUser.save();
-      console.log('Usuario administrador creado exitosamente');
-      console.log(`Email: ${adminUser.email}`);
-      console.log(`Contrasena: ${process.env.ADMIN_PASSWORD || 'Admin123!'}`);
+      logger.info('Usuario administrador creado exitosamente');
+      logger.info(`Email: ${adminUser.email}`);
+      logger.info(`Contrasena: ${process.env.ADMIN_PASSWORD || 'Admin123!'}`);
       if (process.env.SEED_DATABASE === 'true') {
-        console.log('Primera instalacion detectada. Creando datos de ejemplo...');
+        logger.info('Primera instalacion detectada. Creando datos de ejemplo...');
         await seedDatabase();
       } else {
-        console.log('Primera instalacion detectada. Saltando datos de ejemplo (SEED_DATABASE != true).');
+        logger.info('Primera instalacion detectada. Saltando datos de ejemplo (SEED_DATABASE != true).');
       }
     } else {
-      console.log('Usuario administrador ya existe. Sincronizando contraseña con el .env actual...');
+      logger.info('Usuario administrador ya existe. Sincronizando contraseña con el .env actual...');
       const envPassword = process.env.ADMIN_PASSWORD || 'Admin123!';
       adminExists.password = envPassword;
       await adminExists.save();
-      console.log('Contraseña del administrador sincronizada con éxito');
+      logger.info('Contraseña del administrador sincronizada con éxito');
  
       const userCount = await User.countDocuments();
       if (userCount === 1 && process.env.SEED_DATABASE === 'true') {
-        console.log('Ejecutando seed de datos de ejemplo...');
+        logger.info('Ejecutando seed de datos de ejemplo...');
         await seedDatabase();
       } else {
-        console.log('Base de datos limpia o con datos de usuario existentes.');
+        logger.info('Base de datos limpia o con datos de usuario existentes.');
       }
     }
 
@@ -281,24 +332,44 @@ const createDefaultAdminAndSeed = async (): Promise<void> => {
         );
         
         if (result.modifiedCount > 0) {
-          console.log(`[Unificación Providers] Normalizados ${result.modifiedCount} registros para el proveedor "${bestVariant}" (variantes unificadas: ${variants.join(', ')})`);
+          logger.info(`[Unificación Providers] Normalizados ${result.modifiedCount} registros para el proveedor "${bestVariant}" (variantes unificadas: ${variants.join(', ')})`);
         }
       }
     }
   } catch (error) {
-    console.error('Error en configuracion inicial:', error);
+    logger.error('Error en configuracion inicial:', error);
   }
 };
 
 // Manejo de cierre graceful
 process.on('SIGTERM', async () => {
-  console.log('Recibida senal SIGTERM, cerrando servidor...');
+  logger.info('Recibida senal SIGTERM, cerrando servidor...');
+  try {
+    // Registrar la detención controlada del sistema en la base de datos de auditoría
+    await recordAuditLog({
+      action: AuditAction.SYSTEM_STOP,
+      resource: 'system',
+      message: 'El servidor backend de CertVault se está deteniendo de forma controlada (SIGTERM / Detención de Docker).'
+    });
+  } catch (err) {
+    logger.error('Error al registrar log de apagado:', err);
+  }
   await database.disconnect();
   process.exit(0);
 });
 
 process.on('SIGINT', async () => {
-  console.log('Recibida senal SIGINT, cerrando servidor...');
+  logger.info('Recibida senal SIGINT, cerrando servidor...');
+  try {
+    // Registrar la detención controlada del sistema en la base de datos de auditoría
+    await recordAuditLog({
+      action: AuditAction.SYSTEM_STOP,
+      resource: 'system',
+      message: 'El servidor backend de CertVault se está deteniendo de forma controlada (SIGINT / Interrupción manual).'
+    });
+  } catch (err) {
+    logger.error('Error al registrar log de apagado:', err);
+  }
   await database.disconnect();
   process.exit(0);
 });
@@ -307,16 +378,27 @@ process.on('SIGINT', async () => {
 const startServer = async (): Promise<void> => {
   await connectDB();
   
+  try {
+    // Registrar el arranque exitoso del sistema en la base de datos de auditoría
+    await recordAuditLog({
+      action: AuditAction.SYSTEM_START,
+      resource: 'system',
+      message: 'El servidor backend de CertVault se ha iniciado correctamente y está listo para recibir conexiones.'
+    });
+  } catch (err) {
+    logger.error('Error al registrar log de inicio:', err);
+  }
+  
   // Inicialización de los servicios cron para control periódico de expiración de claves y certificados
   startCronServices();
 
   app.listen(PORT, () => {
-    console.log(`Servidor corriendo en puerto ${PORT}`);
-    console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+    logger.info(`Servidor corriendo en puerto ${PORT}`);
+    logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
     if (PUBLIC_API_BASE_URL) {
-      console.log(`Health: ${PUBLIC_API_BASE_URL.replace(/\/$/, '')}/api/health`);
+      logger.info(`Health: ${PUBLIC_API_BASE_URL.replace(/\/$/, '')}/api/health`);
     } else {
-      console.log(`Health endpoint: /api/health`);
+      logger.info(`Health endpoint: /api/health`);
     }
   });
 };
@@ -325,12 +407,12 @@ const requiredEnvVars = ['MONGODB_URI', 'JWT_SECRET'];
 const missingEnvVars = requiredEnvVars.filter(envVar => !process.env[envVar]);
 
 if (missingEnvVars.length > 0) {
-  console.error('Variables de entorno faltantes:', missingEnvVars.join(', '));
+  logger.error('Variables de entorno faltantes:', missingEnvVars.join(', '));
   process.exit(1);
 }
 
 startServer().catch(error => {
-  console.error('Error iniciando servidor:', error);
+  logger.error('Error iniciando servidor:', error);
   process.exit(1);
 });
 

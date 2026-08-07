@@ -7,7 +7,9 @@ import {
   deleteSmtpProfile,
   getSmtpProfiles,
   testSmtpProfile,
-  updateSmtpProfile
+  updateSmtpProfile,
+  getActiveSmtpPolicy,
+  updateServerPolicy
 } from '../controllers/smtpProfilesController';
 import {
   exportBackup,
@@ -27,7 +29,11 @@ import {
   systemWipe,
   getSecuritySettings,
   updateSecuritySettings,
-  testAdSettings
+  testAdSettings,
+  listLocalBackups,
+  createManualLocalBackup,
+  downloadLocalBackup,
+  deleteLocalBackup
 } from '../controllers/settingsController';
 import { adminOnly, authenticate } from '../middleware/auth';
 import { validateRequest } from '../middleware/validation';
@@ -45,7 +51,12 @@ router.get('/health', (_req, res) => {
   });
 });
 
+router.get('/smtp-policy', authenticate, getActiveSmtpPolicy);
+
 router.use(authenticate, adminOnly);
+
+// Ruta para actualizar las políticas globales del servidor (solo admin)
+router.put('/smtp-policy', updateServerPolicy);
 
 const idValidation = [param('id').isMongoId().withMessage('ID invalido')];
 
@@ -117,6 +128,10 @@ router.get('/backup/summary', getBackupSummary);
 router.get('/backup/export', exportBackup);
 router.post('/backup/import', upload.single('file'), importBackup);
 router.post('/backup/system-wipe', systemWipe);
+router.get('/backup/local', listLocalBackups);
+router.post('/backup/local', createManualLocalBackup);
+router.get('/backup/local/download/:filename', downloadLocalBackup);
+router.delete('/backup/local/:filename', deleteLocalBackup);
 router.get('/branding', getBranding);
 router.put('/branding', updateBranding);
 router.get('/security', getSecuritySettings);

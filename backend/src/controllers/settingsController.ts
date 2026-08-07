@@ -12,7 +12,16 @@ import { toSafeSmtpProfile } from '../services/smtpProfileService';
 import { clearApiKeyCache } from '../middleware/apiKey';
 import crypto from 'crypto';
 import fs from 'fs';
-import { generateConfigBackup, generateFullBackup, restoreBackup, systemWipe as performSystemWipe } from '../services/backupService';
+import path from 'path';
+import { logger } from '../config/logger';
+import { 
+  generateConfigBackup, 
+  generateFullBackup, 
+  restoreBackup, 
+  systemWipe as performSystemWipe,
+  getLocalBackupsList,
+  runLocalBackup
+} from '../services/backupService';
 
 const getDateRange = (req: Request) => {
   const from = req.query.from ? new Date(req.query.from as string) : undefined;
@@ -92,7 +101,7 @@ export const getAuditLogs = async (req: Request, res: Response): Promise<void> =
       }
     });
   } catch (error) {
-    console.error('Error obteniendo auditoria:', error);
+    logger.error('Error obteniendo auditoria:', error);
     res.status(500).json({ success: false, error: 'Error al obtener auditoria' });
   }
 };
@@ -124,7 +133,7 @@ export const exportBackup = async (req: AuthRequest, res: Response): Promise<voi
     res.setHeader('Content-Disposition', `attachment; filename="certivault-backup-${backupType}-${Date.now()}.zip"`);
     res.status(200).send(zipBuffer);
   } catch (error) {
-    console.error('Error exportando backup:', error);
+    logger.error('Error exportando backup:', error);
     res.status(500).json({ success: false, error: 'Error al exportar backup' });
   }
 };
@@ -164,7 +173,7 @@ export const importBackup = async (req: AuthRequest, res: Response): Promise<voi
 
     res.json({ success: true, message: 'Respaldo importado exitosamente' });
   } catch (error: any) {
-    console.error('Error importando backup:', error);
+    logger.error('Error importando backup:', error);
     res.status(500).json({ success: false, error: error.message || 'Error al importar backup' });
   }
 };
@@ -207,7 +216,7 @@ export const systemWipe = async (req: AuthRequest, res: Response): Promise<void>
 
     res.json({ success: true, message: 'Sistema borrado exitosamente. Solo se conservó el administrador por defecto.' });
   } catch (error) {
-    console.error('Error en system wipe:', error);
+    logger.error('Error en system wipe:', error);
     res.status(500).json({ success: false, error: 'Error al realizar el borrado del sistema' });
   }
 };
@@ -234,7 +243,7 @@ export const updateBranding = async (req: AuthRequest, res: Response): Promise<v
     await branding.save();
     res.json({ success: true, data: branding, message: 'Branding actualizado exitosamente' });
   } catch (error) {
-    console.error('Error actualizando branding:', error);
+    logger.error('Error actualizando branding:', error);
     res.status(400).json({ success: false, error: 'Error al actualizar branding' });
   }
 };
@@ -247,7 +256,7 @@ export const getPublicApiClients = async (_req: Request, res: Response): Promise
       data: clients.map(toSafePublicApiClient)
     });
   } catch (error) {
-    console.error('Error obteniendo clientes de API externa:', error);
+    logger.error('Error obteniendo clientes de API externa:', error);
     res.status(500).json({ success: false, error: 'Error al obtener clientes de API externa' });
   }
 };
@@ -287,7 +296,7 @@ export const createPublicApiClient = async (req: AuthRequest, res: Response): Pr
       message: 'Cliente API creado exitosamente'
     });
   } catch (error) {
-    console.error('Error creando cliente API externo:', error);
+    logger.error('Error creando cliente API externo:', error);
     res.status(500).json({ success: false, error: 'Error al crear cliente de API externa' });
   }
 };
@@ -332,7 +341,7 @@ export const updatePublicApiClient = async (req: AuthRequest, res: Response): Pr
       message: 'Cliente API actualizado exitosamente'
     });
   } catch (error) {
-    console.error('Error actualizando cliente API externo:', error);
+    logger.error('Error actualizando cliente API externo:', error);
     res.status(500).json({ success: false, error: 'Error al actualizar cliente de API externa' });
   }
 };
@@ -362,7 +371,7 @@ export const rotatePublicApiClientKey = async (req: AuthRequest, res: Response):
       message: 'API key regenerada exitosamente'
     });
   } catch (error) {
-    console.error('Error regenerando API key de cliente externo:', error);
+    logger.error('Error regenerando API key de cliente externo:', error);
     res.status(500).json({ success: false, error: 'Error al regenerar API key del cliente' });
   }
 };
@@ -378,7 +387,7 @@ export const deletePublicApiClient = async (_req: AuthRequest, res: Response): P
     clearApiKeyCache();
     res.json({ success: true, message: 'Cliente API eliminado exitosamente' });
   } catch (error) {
-    console.error('Error eliminando cliente API externo:', error);
+    logger.error('Error eliminando cliente API externo:', error);
     res.status(500).json({ success: false, error: 'Error al eliminar cliente de API externa' });
   }
 };
@@ -449,7 +458,7 @@ export const testPublicApiClient = async (req: AuthRequest, res: Response): Prom
       message: 'Prueba de cliente API completada'
     });
   } catch (error) {
-    console.error('Error probando cliente API externo:', error);
+    logger.error('Error probando cliente API externo:', error);
     res.status(500).json({ success: false, error: 'Error al probar cliente de API externa' });
   }
 };
@@ -491,21 +500,31 @@ export const getReportsOverview = async (req: Request, res: Response): Promise<v
       }
     });
   } catch (error) {
-    console.error('Error generando reportes:', error);
+    logger.error('Error generando reportes:', error);
     res.status(500).json({ success: false, error: 'Error al generar reportes' });
   }
 };
 
 export const exportReport = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const rows = await Certification.find().sort({ department: 1, employeeName: 1 }).lean();
+    const certificationFilter: Record<string, unknown> = {};
+    if (req.query.department) certificationFilter.department = req.query.department;
+    if (req.query.status) certificationFilter.status = req.query.status;
+    const issueDate = getDateRange(req);
+    if (issueDate) certificationFilter.issueDate = issueDate;
+
+    const rows = await Certification.find(certificationFilter)
+      .populate('department')
+      .sort({ department: 1, employeeName: 1 })
+      .lean();
+
     const header = ['Titulo', 'Empleado', 'Departamento', 'Proveedor', 'Tecnologia', 'Estado', 'Emision', 'Expiracion'];
     const csv = [
       header.map(csvEscape).join(','),
       ...rows.map(row => [
         row.title,
         row.employeeName,
-        row.department,
+        row.department && typeof row.department === 'object' ? (row.department as any).name : (row.department || ''),
         row.provider,
         row.technology,
         row.status,
@@ -560,7 +579,7 @@ export const getSecuritySettings = async (_req: Request, res: Response): Promise
 
     res.json({ success: true, data: settingsObj });
   } catch (error) {
-    console.error('Error obteniendo configuracion de seguridad:', error);
+    logger.error('Error obteniendo configuracion de seguridad:', error);
     res.status(500).json({ success: false, error: 'Error al obtener configuracion de seguridad' });
   }
 };
@@ -584,7 +603,9 @@ export const updateSecuritySettings = async (req: AuthRequest, res: Response): P
       ldapUrl,
       ldapBaseDN,
       ldapBindDN,
-      ldapBindPassword
+      ldapBindPassword,
+      autoBackupEnabled,
+      autoBackupIntervalDays
     } = req.body;
 
     if (passwordExpirationEnabled !== undefined) {
@@ -595,6 +616,12 @@ export const updateSecuritySettings = async (req: AuthRequest, res: Response): P
     }
     if (certificateExpirationAlertsEnabled !== undefined) {
       settings.certificateExpirationAlertsEnabled = Boolean(certificateExpirationAlertsEnabled);
+    }
+    if (autoBackupEnabled !== undefined) {
+      settings.autoBackupEnabled = Boolean(autoBackupEnabled);
+    }
+    if (autoBackupIntervalDays !== undefined) {
+      settings.autoBackupIntervalDays = Number(autoBackupIntervalDays);
     }
 
     // Configuraciones de Directorio Activo (SSO)
@@ -647,7 +674,7 @@ export const updateSecuritySettings = async (req: AuthRequest, res: Response): P
       message: 'Configuracion de seguridad actualizada exitosamente'
     });
   } catch (error) {
-    console.error('Error actualizando configuracion de seguridad:', error);
+    logger.error('Error actualizando configuracion de seguridad:', error);
     res.status(400).json({ success: false, error: 'Error al actualizar configuracion de seguridad' });
   }
 };
@@ -760,7 +787,163 @@ export const testAdSettings = async (req: AuthRequest, res: Response): Promise<v
 
     res.status(400).json({ success: false, error: 'Proveedor de Active Directory no soportado.' });
   } catch (error: any) {
-    console.error('Error al probar configuración de AD:', error);
+    logger.error('Error al probar configuración de AD:', error);
     res.status(500).json({ success: false, error: `Error durante la prueba de conexión: ${error.message}` });
+  }
+};
+
+/**
+ * Lista todos los archivos de respaldo locales disponibles en el disco del servidor.
+ */
+export const listLocalBackups = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const backups = await getLocalBackupsList();
+    res.json({
+      success: true,
+      data: backups
+    });
+  } catch (error: any) {
+    logger.error('Error al listar respaldos locales:', error);
+    res.status(500).json({ success: false, error: 'Error al listar los respaldos locales' });
+  }
+};
+
+/**
+ * Genera de forma manual e inmediata un respaldo local en el servidor.
+ */
+export const createManualLocalBackup = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const filename = await runLocalBackup();
+    
+    // Registrar auditoría de creación de backup local
+    await recordAuditLog({
+      action: AuditAction.CREATE,
+      resource: 'backup',
+      resourceId: filename,
+      userId: req.user?._id,
+      userEmail: req.user?.email,
+      userRole: req.user?.role,
+      method: req.method,
+      path: req.originalUrl,
+      ip: req.ip,
+      userAgent: req.headers['user-agent'],
+      statusCode: 200,
+      message: `Respaldo local creado manualmente con éxito: ${filename}`
+    });
+
+    res.json({
+      success: true,
+      data: { filename },
+      message: 'Respaldo local generado exitosamente'
+    });
+  } catch (error: any) {
+    logger.error('Error al crear respaldo local:', error);
+    res.status(500).json({ success: false, error: 'Error al crear el respaldo local' });
+  }
+};
+
+/**
+ * Descarga un archivo de respaldo específico, validando contra Path Traversal.
+ */
+export const downloadLocalBackup = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const filename = req.params.filename;
+
+    // Validar tipo del nombre de archivo y sanitizar contra Path Traversal
+    if (typeof filename !== 'string' || !filename.startsWith('backup-') || !filename.endsWith('.zip') || filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
+      res.status(400).json({ success: false, error: 'Nombre de archivo de respaldo inválido o inseguro.' });
+      return;
+    }
+
+    const backupsDir = path.join(__dirname, '../../backups');
+    const filePath = path.resolve(backupsDir, filename);
+
+    // Asegurar que el archivo final resuelto se encuentre estrictamente dentro de backupsDir
+    if (!filePath.startsWith(path.resolve(backupsDir))) {
+      res.status(400).json({ success: false, error: 'Acceso denegado al archivo especificado.' });
+      return;
+    }
+
+    if (!fs.existsSync(filePath)) {
+      res.status(404).json({ success: false, error: 'El archivo de respaldo solicitado no existe.' });
+      return;
+    }
+
+    // Registrar auditoría de descarga de backup
+    await recordAuditLog({
+      action: AuditAction.DOWNLOAD,
+      resource: 'backup',
+      resourceId: filename,
+      userId: req.user?._id,
+      userEmail: req.user?.email,
+      userRole: req.user?.role,
+      method: req.method,
+      path: req.originalUrl,
+      ip: req.ip,
+      userAgent: req.headers['user-agent'],
+      statusCode: 200,
+      message: `Descarga de respaldo local iniciada: ${filename}`
+    });
+
+    res.download(filePath, filename);
+  } catch (error: any) {
+    logger.error('Error al descargar respaldo local:', error);
+    res.status(500).json({ success: false, error: 'Error al descargar el respaldo local' });
+  }
+};
+
+/**
+ * Elimina manualmente un archivo de respaldo local del disco.
+ */
+export const deleteLocalBackup = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const filename = req.params.filename;
+
+    // Validar tipo del nombre de archivo y sanitizar contra Path Traversal
+    if (typeof filename !== 'string' || !filename.startsWith('backup-') || !filename.endsWith('.zip') || filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
+      res.status(400).json({ success: false, error: 'Nombre de archivo de respaldo inválido.' });
+      return;
+    }
+
+    const backupsDir = path.join(__dirname, '../../backups');
+    const filePath = path.resolve(backupsDir, filename);
+
+    // Validar ubicación física
+    if (!filePath.startsWith(path.resolve(backupsDir))) {
+      res.status(400).json({ success: false, error: 'Acceso denegado.' });
+      return;
+    }
+
+    if (!fs.existsSync(filePath)) {
+      res.status(404).json({ success: false, error: 'El respaldo no existe.' });
+      return;
+    }
+
+    // Eliminar físicamente el archivo
+    fs.unlinkSync(filePath);
+
+    // Registrar auditoría de eliminación exitosa
+    await recordAuditLog({
+      action: AuditAction.DELETE,
+      resource: 'backup',
+      resourceId: filename,
+      userId: req.user?._id,
+      userEmail: req.user?.email,
+      userRole: req.user?.role,
+      method: req.method,
+      path: req.originalUrl,
+      ip: req.ip,
+      userAgent: req.headers['user-agent'],
+      statusCode: 200,
+      message: `Respaldo local eliminado físicamente del servidor: ${filename}`
+    });
+
+    res.json({
+      success: true,
+      message: 'Respaldo local eliminado exitosamente'
+    });
+  } catch (error: any) {
+    logger.error('Error al eliminar respaldo local:', error);
+    res.status(500).json({ success: false, error: 'Error al eliminar el respaldo local' });
   }
 };

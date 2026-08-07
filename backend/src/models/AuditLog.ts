@@ -15,7 +15,10 @@ export enum AuditAction {
   DOWNLOAD_FAILED = 'download_failed',
   VIEW = 'view',
   VIEW_FAILED = 'view_failed',
-  ERROR = 'error'
+  ERROR = 'error',
+  // Acciones de ciclo de vida del servidor (Docker/Host)
+  SYSTEM_START = 'system_start',
+  SYSTEM_STOP = 'system_stop'
 }
 
 export interface IAuditLog extends Document {

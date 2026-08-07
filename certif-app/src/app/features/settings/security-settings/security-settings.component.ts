@@ -4,216 +4,207 @@ import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } 
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { SettingsService, SecuritySettingsData } from '../../../core/services/settings.service';
-import { SettingsNavComponent } from '../settings-nav.component';
-
 @Component({
   selector: 'app-security-settings',
   standalone: true,
-  imports: [CommonModule, FormsModule, ReactiveFormsModule, SettingsNavComponent],
+  imports: [CommonModule, FormsModule, ReactiveFormsModule],
   template: `
-    <div class="container-fluid">
-      <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-        <h1 class="h2">
-          <i class="fas fa-cog me-2"></i> Configuraciones
-        </h1>
-      </div>
+    <div class="row">
+      <div class="col-lg-8">
+        <!-- Encabezado de Sección Plana -->
+        <div class="mb-4">
+          <h5 class="fw-bold text-dark mb-1">
+            <i class="fas fa-shield-alt text-warning me-2"></i>
+            Políticas de Seguridad y Contraseñas
+          </h5>
+          <p class="text-muted small mb-0">Define los requisitos de renovación de credenciales y los intervalos de alertas de vencimiento.</p>
+        </div>
 
-      <app-settings-nav></app-settings-nav>
-
-      <div class="row">
-        <div class="col-lg-8">
-          <div class="card shadow-sm border-0 rounded-3">
-            <div class="card-header bg-dark text-white py-3 rounded-top-3">
-              <h5 class="mb-0 card-title">
-                <i class="fas fa-shield-alt me-2 text-warning"></i>
-                Políticas de Seguridad y Contraseñas
-              </h5>
-            </div>
-            <div class="card-body p-4">
-              <div class="alert alert-info border-0 shadow-sm mb-4">
-                <div class="d-flex align-items-center">
-                  <i class="fas fa-info-circle fa-2x me-3 text-info"></i>
-                  <div>
-                    <h6 class="alert-heading mb-1 fw-bold">Políticas de Expiración de Claves</h6>
-                    <p class="mb-0 text-muted small">
-                      Configure la caducidad obligatoria de contraseñas para los usuarios. Al activarla, el sistema enviará alertas por correo a los 15, 10, 5, 3 y 1 días antes de expirar. Al cumplirse el plazo, se les exigirá cambiar la contraseña en su próximo inicio de sesión.
-                    </p>
-                  </div>
-                </div>
+        <div class="mt-4">
+          <div class="alert alert-info border-0 shadow-sm mb-4">
+            <div class="d-flex align-items-center">
+              <i class="fas fa-info-circle fa-lg me-3 text-info"></i>
+              <div class="small">
+                <h6 class="alert-heading mb-1 fw-bold">Políticas de Expiración de Claves</h6>
+                <p class="mb-0 text-muted">
+                  Configure la caducidad obligatoria de contraseñas para los usuarios. Al activarla, el sistema enviará alertas por correo a los 15, 10, 5, 3 y 1 días antes de expirar. Al cumplirse el plazo, se les exigirá cambiar la contraseña en su próximo inicio de sesión.
+                </p>
               </div>
-
-              <form [formGroup]="securityForm" (ngSubmit)="onSubmit()" novalidate>
-                <!-- Interruptor para Activar/Desactivar Expiración -->
-                <div class="form-check form-switch mb-4 p-3 border rounded bg-light d-flex align-items-center justify-content-between">
-                  <div>
-                    <label class="form-check-label h6 mb-1 fw-bold text-dark" for="passwordExpirationEnabled">
-                      Habilitar Expiración de Contraseñas
-                    </label>
-                    <div class="text-muted small">Activa la caducidad periódica obligatoria de claves de acceso.</div>
-                  </div>
-                  <input 
-                    class="form-check-input fs-4 me-1" 
-                    type="checkbox" 
-                    id="passwordExpirationEnabled" 
-                    formControlName="passwordExpirationEnabled"
-                    style="cursor: pointer;">
-                </div>
-
-                <!-- Interruptor para Activar/Desactivar Alertas de Vencimiento de Certificados -->
-                <div class="form-check form-switch mb-4 p-3 border rounded bg-light d-flex align-items-center justify-content-between">
-                  <div>
-                    <label class="form-check-label h6 mb-1 fw-bold text-dark" for="certificateExpirationAlertsEnabled">
-                      Habilitar Alertas de Vencimiento de Certificados
-                    </label>
-                    <div class="text-muted small">Notificar por correo cuando los certificados estén próximos a vencer (60, 30, 15 y 3 días antes).</div>
-                  </div>
-                  <input 
-                    class="form-check-input fs-4 me-1" 
-                    type="checkbox" 
-                    id="certificateExpirationAlertsEnabled" 
-                    formControlName="certificateExpirationAlertsEnabled"
-                    style="cursor: pointer;">
-                </div>
-
-                <!-- Meses de Duración -->
-                <div class="mb-4" *ngIf="securityForm.get('passwordExpirationEnabled')?.value">
-                  <label for="passwordExpirationMonths" class="form-label fw-bold text-dark">
-                    Duración de la Contraseña (meses) <span class="text-danger">*</span>
-                  </label>
-                  <div class="input-group">
-                    <span class="input-group-text bg-white border-end-0">
-                      <i class="fas fa-calendar-alt text-muted"></i>
-                    </span>
-                    <input 
-                      type="number" 
-                      class="form-control border-start-0 ps-0" 
-                      id="passwordExpirationMonths" 
-                      formControlName="passwordExpirationMonths"
-                      min="1" 
-                      max="12"
-                      [class.is-invalid]="passwordExpirationMonths?.invalid && passwordExpirationMonths?.touched"
-                      placeholder="Ej: 3">
-                    <span class="input-group-text bg-light text-muted">Meses</span>
-                  </div>
-                  <div class="invalid-feedback d-block" *ngIf="passwordExpirationMonths?.invalid && passwordExpirationMonths?.touched">
-                    <small *ngIf="passwordExpirationMonths?.errors?.['required']" class="d-block text-danger">Este campo es requerido</small>
-                    <small *ngIf="passwordExpirationMonths?.errors?.['min']" class="d-block text-danger">La duración mínima es de 1 mes</small>
-                    <small *ngIf="passwordExpirationMonths?.errors?.['max']" class="d-block text-danger">La duración máxima es de 12 meses</small>
-                  </div>
-                  <div class="form-text text-muted mt-1">
-                    Defina el número de meses que una contraseña será válida antes de requerir su renovación.
-                  </div>
-                </div>
-
-                <!-- Integración con Active Directory (SSO) -->
-                <div class="card mt-4 border border-secondary shadow-sm mb-4">
-                  <div class="card-header bg-secondary text-white py-2">
-                    <h6 class="mb-0 fw-bold">
-                      <i class="fas fa-users-cog me-2"></i>
-                      Integración con Directorio Activo (SSO)
-                    </h6>
-                  </div>
-                  <div class="card-body p-3">
-                    <!-- Interruptor Habilitar AD -->
-                    <div class="form-check form-switch mb-3 d-flex align-items-center justify-content-between p-0">
-                      <div>
-                        <label class="form-check-label fw-bold text-dark mb-1" for="adLoginEnabled" style="margin-left: 2.5rem; cursor: pointer;">
-                          Permitir Inicio de Sesión Corporativo (AD/SSO)
-                        </label>
-                        <div class="text-muted small" style="margin-left: 2.5rem;">Habilita a los colaboradores iniciar sesión utilizando sus credenciales corporativas.</div>
-                      </div>
-                      <input 
-                        class="form-check-input fs-4" 
-                        type="checkbox" 
-                        id="adLoginEnabled" 
-                        formControlName="adLoginEnabled"
-                        style="cursor: pointer; margin-left: 0;">
-                    </div>
-
-                    <!-- Configuración Detallada -->
-                    <div *ngIf="securityForm.get('adLoginEnabled')?.value" class="mt-3 border-top pt-3">
-                      <!-- Selector de Proveedor -->
-                      <div class="mb-4">
-                        <label class="form-label fw-bold text-dark d-block">Proveedor de Directorio Activo</label>
-                        <div class="btn-group w-100" role="group">
-                          <input type="radio" class="btn-check" name="adProvider" id="providerAzure" value="azure" formControlName="adProvider">
-                          <label class="btn btn-outline-primary py-2" for="providerAzure">
-                            <i class="fab fa-microsoft me-2"></i>Microsoft Azure AD (Entra ID)
-                          </label>
-
-                          <input type="radio" class="btn-check" name="adProvider" id="providerLdap" value="ldap" formControlName="adProvider">
-                          <label class="btn btn-outline-primary py-2" for="providerLdap">
-                            <i class="fas fa-network-wired me-2"></i>LDAP Tradicional (On-Premise)
-                          </label>
-                        </div>
-                      </div>
-
-                      <!-- Campos Azure AD -->
-                      <div *ngIf="securityForm.get('adProvider')?.value === 'azure'" class="row">
-                        <div class="col-md-6 mb-3">
-                          <label for="azureTenantId" class="form-label fw-bold text-dark">Tenant ID *</label>
-                          <input type="text" class="form-control" id="azureTenantId" formControlName="azureTenantId" placeholder="Ej: f81d4fae-7dec-11d0-a765-00a0c91e6bf6">
-                        </div>
-                        <div class="col-md-6 mb-3">
-                          <label for="azureClientId" class="form-label fw-bold text-dark">Client ID *</label>
-                          <input type="text" class="form-control" id="azureClientId" formControlName="azureClientId" placeholder="Ej: a33e4bbd-5cc4-4aa2-88ef-339ac92ffdd3">
-                        </div>
-                        <div class="col-md-12 mb-3">
-                          <label for="azureClientSecret" class="form-label fw-bold text-dark">Client Secret *</label>
-                          <input type="password" class="form-control" id="azureClientSecret" formControlName="azureClientSecret" placeholder="••••••••••••••••••••">
-                        </div>
-                      </div>
-
-                      <!-- Campos LDAP -->
-                      <div *ngIf="securityForm.get('adProvider')?.value === 'ldap'" class="row">
-                        <div class="col-md-6 mb-3">
-                          <label for="ldapUrl" class="form-label fw-bold text-dark">LDAP URL Server *</label>
-                          <input type="text" class="form-control" id="ldapUrl" formControlName="ldapUrl" placeholder="Ej: ldap://192.168.1.100:389">
-                        </div>
-                        <div class="col-md-6 mb-3">
-                          <label for="ldapBaseDN" class="form-label fw-bold text-dark">Base DN *</label>
-                          <input type="text" class="form-control" id="ldapBaseDN" formControlName="ldapBaseDN" placeholder="Ej: dc=empresa,dc=local">
-                        </div>
-                        <div class="col-md-6 mb-3">
-                          <label for="ldapBindDN" class="form-label fw-bold text-dark">Bind DN (Usuario de Servicio) *</label>
-                          <input type="text" class="form-control" id="ldapBindDN" formControlName="ldapBindDN" placeholder="Ej: cn=admin,dc=empresa,dc=local">
-                        </div>
-                        <div class="col-md-6 mb-3">
-                          <label for="ldapBindPassword" class="form-label fw-bold text-dark">Contraseña del Bind DN *</label>
-                          <input type="password" class="form-control" id="ldapBindPassword" formControlName="ldapBindPassword" placeholder="••••••••••••••••••••">
-                        </div>
-                      </div>
-
-                      <!-- Botón Probar Conexión -->
-                      <div class="d-flex justify-content-start mb-2">
-                        <button 
-                          type="button" 
-                          class="btn btn-outline-secondary btn-sm fw-semibold d-flex align-items-center gap-2"
-                          (click)="testConnection()"
-                          [disabled]="testingAd">
-                          <span *ngIf="testingAd" class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                          <i *ngIf="!testingAd" class="fas fa-plug"></i>
-                          {{ testingAd ? 'Probando...' : 'Probar Conexión con Directorio Activo' }}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Botones -->
-                <div class="d-flex justify-content-end gap-2 pt-3 border-top mt-4">
-                  <button 
-                    type="submit" 
-                    class="btn btn-primary px-4 py-2 fw-semibold d-flex align-items-center gap-2 shadow-sm"
-                    [disabled]="securityForm.invalid || loading">
-                    <span *ngIf="loading" class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                    <i *ngIf="!loading" class="fas fa-save"></i>
-                    {{ loading ? 'Guardando...' : 'Guardar Cambios' }}
-                  </button>
-                </div>
-              </form>
             </div>
           </div>
+
+          <form [formGroup]="securityForm" (ngSubmit)="onSubmit()" novalidate>
+            <!-- Interruptor para Activar/Desactivar Expiración -->
+            <div class="form-check form-switch mb-4 p-3 border rounded-3 bg-light d-flex align-items-center justify-content-between">
+              <div class="ps-1">
+                <label class="form-check-label h6 mb-1 fw-bold text-dark cursor-pointer" for="passwordExpirationEnabled">
+                  Habilitar Expiración de Contraseñas
+                </label>
+                <div class="text-muted small">Activa la caducidad periódica obligatoria de claves de acceso.</div>
+              </div>
+              <input 
+                class="form-check-input fs-4 me-0" 
+                type="checkbox" 
+                id="passwordExpirationEnabled" 
+                formControlName="passwordExpirationEnabled"
+                style="cursor: pointer;">
+            </div>
+
+            <!-- Interruptor para Activar/Desactivar Alertas de Vencimiento de Certificados -->
+            <div class="form-check form-switch mb-4 p-3 border rounded-3 bg-light d-flex align-items-center justify-content-between">
+              <div class="ps-1">
+                <label class="form-check-label h6 mb-1 fw-bold text-dark cursor-pointer" for="certificateExpirationAlertsEnabled">
+                  Habilitar Alertas de Vencimiento de Certificados
+                </label>
+                <div class="text-muted small">Notificar por correo cuando los certificados estén próximos a vencer (60, 30, 15 y 3 días antes).</div>
+              </div>
+              <input 
+                class="form-check-input fs-4 me-0" 
+                type="checkbox" 
+                id="certificateExpirationAlertsEnabled" 
+                formControlName="certificateExpirationAlertsEnabled"
+                style="cursor: pointer;">
+            </div>
+
+            <!-- Meses de Duración -->
+            <div class="mb-4" *ngIf="securityForm.get('passwordExpirationEnabled')?.value">
+              <label for="passwordExpirationMonths" class="form-label fw-semibold text-secondary small">
+                Duración de la Contraseña (meses) <span class="text-danger">*</span>
+              </label>
+              <div class="input-group">
+                <span class="input-group-text bg-white border-end-0">
+                  <i class="fas fa-calendar-alt text-muted"></i>
+                </span>
+                <input 
+                  type="number" 
+                  class="form-control border-start-0 ps-0" 
+                  id="passwordExpirationMonths" 
+                  formControlName="passwordExpirationMonths"
+                  min="1" 
+                  max="12"
+                  [class.is-invalid]="passwordExpirationMonths?.invalid && passwordExpirationMonths?.touched"
+                  placeholder="Ej: 3">
+                <span class="input-group-text bg-light text-muted">Meses</span>
+              </div>
+              <div class="invalid-feedback d-block" *ngIf="passwordExpirationMonths?.invalid && passwordExpirationMonths?.touched">
+                <small *ngIf="passwordExpirationMonths?.errors?.['required']" class="d-block text-danger">Este campo es requerido</small>
+                <small *ngIf="passwordExpirationMonths?.errors?.['min']" class="d-block text-danger">La duración mínima es de 1 mes</small>
+                <small *ngIf="passwordExpirationMonths?.errors?.['max']" class="d-block text-danger">La duración máxima es de 12 meses</small>
+              </div>
+              <div class="form-text text-muted mt-1 small">
+                Defina el número de meses que una contraseña será válida antes de requerir su renovación.
+              </div>
+            </div>
+
+            <hr class="my-5 text-muted opacity-10">
+
+            <!-- Integración con Active Directory (SSO) Plano -->
+            <div class="mb-4">
+              <h5 class="fw-bold text-dark mb-1">
+                <i class="fas fa-users-cog text-primary me-2"></i>
+                Integración con Directorio Activo (SSO)
+              </h5>
+              <p class="text-muted small mb-3">Habilita a los colaboradores iniciar sesión utilizando sus credenciales corporativas.</p>
+            </div>
+
+            <div class="mt-4">
+              <!-- Interruptor Habilitar AD -->
+              <div class="form-check form-switch mb-4 p-3 border rounded-3 bg-light d-flex align-items-center justify-content-between">
+                <div class="ps-1">
+                  <label class="form-check-label h6 mb-1 fw-bold text-dark cursor-pointer" for="adLoginEnabled">
+                    Permitir Inicio de Sesión Corporativo (AD/SSO)
+                  </label>
+                  <div class="text-muted small">Habilita el login institucional con Azure AD o LDAP tradicional.</div>
+                </div>
+                <input 
+                  class="form-check-input fs-4 me-0" 
+                  type="checkbox" 
+                  id="adLoginEnabled" 
+                  formControlName="adLoginEnabled"
+                  style="cursor: pointer;">
+              </div>
+
+              <!-- Configuración Detallada -->
+              <div *ngIf="securityForm.get('adLoginEnabled')?.value" class="mt-3 border-top pt-4">
+                <!-- Selector de Proveedor -->
+                <div class="mb-4">
+                  <label class="form-label fw-semibold text-secondary small d-block">Proveedor de Directorio Activo</label>
+                  <div class="btn-group w-100" role="group">
+                    <input type="radio" class="btn-check" name="adProvider" id="providerAzure" value="azure" formControlName="adProvider">
+                    <label class="btn btn-outline-primary py-2 fw-medium" for="providerAzure">
+                      <i class="fab fa-microsoft me-2"></i>Microsoft Azure AD (Entra ID)
+                    </label>
+
+                    <input type="radio" class="btn-check" name="adProvider" id="providerLdap" value="ldap" formControlName="adProvider">
+                    <label class="btn btn-outline-primary py-2 fw-medium" for="providerLdap">
+                      <i class="fas fa-network-wired me-2"></i>LDAP Tradicional (On-Premise)
+                    </label>
+                  </div>
+                </div>
+
+                <!-- Campos Azure AD -->
+                <div *ngIf="securityForm.get('adProvider')?.value === 'azure'" class="row">
+                  <div class="col-md-6 mb-3">
+                    <label for="azureTenantId" class="form-label fw-semibold text-secondary small">Tenant ID *</label>
+                    <input type="text" class="form-control" id="azureTenantId" formControlName="azureTenantId" placeholder="Ej: f81d4fae-7dec-11d0-a765-00a0c91e6bf6">
+                  </div>
+                  <div class="col-md-6 mb-3">
+                    <label for="azureClientId" class="form-label fw-semibold text-secondary small">Client ID *</label>
+                    <input type="text" class="form-control" id="azureClientId" formControlName="azureClientId" placeholder="Ej: a33e4bbd-5cc4-4aa2-88ef-339ac92ffdd3">
+                  </div>
+                  <div class="col-md-12 mb-3">
+                    <label for="azureClientSecret" class="form-label fw-semibold text-secondary small">Client Secret *</label>
+                    <input type="password" class="form-control" id="azureClientSecret" formControlName="azureClientSecret" placeholder="••••••••••••••••••••">
+                  </div>
+                </div>
+
+                <!-- Campos LDAP -->
+                <div *ngIf="securityForm.get('adProvider')?.value === 'ldap'" class="row">
+                  <div class="col-md-6 mb-3">
+                    <label for="ldapUrl" class="form-label fw-semibold text-secondary small">LDAP URL Server *</label>
+                    <input type="text" class="form-control" id="ldapUrl" formControlName="ldapUrl" placeholder="Ej: ldap://192.168.1.100:389">
+                  </div>
+                  <div class="col-md-6 mb-3">
+                    <label for="ldapBaseDN" class="form-label fw-semibold text-secondary small">Base DN *</label>
+                    <input type="text" class="form-control" id="ldapBaseDN" formControlName="ldapBaseDN" placeholder="Ej: dc=empresa,dc=local">
+                  </div>
+                  <div class="col-md-6 mb-3">
+                    <label for="ldapBindDN" class="form-label fw-semibold text-secondary small">Bind DN (Usuario de Servicio) *</label>
+                    <input type="text" class="form-control" id="ldapBindDN" formControlName="ldapBindDN" placeholder="Ej: cn=admin,dc=empresa,dc=local">
+                  </div>
+                  <div class="col-md-6 mb-3">
+                    <label for="ldapBindPassword" class="form-label fw-semibold text-secondary small">Contraseña del Bind DN *</label>
+                    <input type="password" class="form-control" id="ldapBindPassword" formControlName="ldapBindPassword" placeholder="••••••••••••••••••••">
+                  </div>
+                </div>
+
+                <!-- Botón Probar Conexión -->
+                <div class="d-flex justify-content-start mb-4">
+                  <button 
+                    type="button" 
+                    class="btn btn-outline-secondary btn-sm fw-semibold d-flex align-items-center gap-2"
+                    (click)="testConnection()"
+                    [disabled]="testingAd">
+                    <span *ngIf="testingAd" class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                    <i *ngIf="!testingAd" class="fas fa-plug"></i>
+                    {{ testingAd ? 'Probando...' : 'Probar Conexión con Directorio Activo' }}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Botones de Acción -->
+            <div class="d-flex justify-content-end gap-2 pt-4 border-top mt-5">
+              <button 
+                type="submit" 
+                class="btn btn-primary px-4 py-2 fw-semibold d-flex align-items-center gap-2 shadow-sm"
+                [disabled]="securityForm.invalid || loading">
+                <span *ngIf="loading" class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                <i *ngIf="!loading" class="fas fa-save"></i>
+                {{ loading ? 'Guardando...' : 'Guardar Cambios' }}
+              </button>
+            </div>
+          </form>
         </div>
       </div>
     </div>

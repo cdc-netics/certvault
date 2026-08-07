@@ -4,6 +4,7 @@ import { ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angula
 import { Router, RouterModule, ActivatedRoute } from '@angular/router';
 import { CertificationService } from '../../../core/services/certification.service';
 import { AuthService } from '../../../core/services/auth.service';
+import { UserService } from '../../../core/services/user.service';
 import { CertificationType, CertificationLevel, CertificationStatus, Certification } from '../../../core/models/certification.model';
 import { BackButtonComponent } from '../../../shared/components/back-button/back-button.component';
 
@@ -25,11 +26,11 @@ import { BackButtonComponent } from '../../../shared/components/back-button/back
           <div class="card">
             <div class="card-body">
               <form [formGroup]="certificationForm" (ngSubmit)="onSubmit()" enctype="multipart/form-data">
-                
+
                 <!-- Informacion Basica -->
                 <div class="mb-4">
                   <h5 class="card-title mb-3">Informacion Basica</h5>
-                  
+
                   <div class="row">
                     <!-- Certificacion -->
                     <div class="col-md-6 mb-3">
@@ -89,6 +90,7 @@ import { BackButtonComponent } from '../../../shared/components/back-button/back
                         <option value="intermediate">Intermedio</option>
                         <option value="advanced">Avanzado</option>
                         <option value="expert">Experto</option>
+                        <option value="academic">Académico</option>
                       </select>
                       <div class="invalid-feedback" *ngIf="certificationForm.get('level')?.invalid && certificationForm.get('level')?.touched">
                         <small *ngIf="certificationForm.get('level')?.errors?.['required']">El nivel es requerido</small>
@@ -146,10 +148,70 @@ import { BackButtonComponent } from '../../../shared/components/back-button/back
                   </div>
                 </div>
 
+                <!-- Configuracion Organizacional (Solo para Admin o Lider) -->
+                <div class="mb-4" *ngIf="isUserAdminOrLeader">
+                  <h5 class="card-title mb-3">Configuracion de Alcance Organizacional</h5>
+                  <div class="row">
+                    <div class="col-md-12 mb-3">
+                      <div class="form-check form-switch">
+                        <input 
+                          type="checkbox" 
+                          id="isOrganizational" 
+                          class="form-check-input" 
+                          formControlName="isOrganizational"
+                        >
+                        <label class="form-check-label" for="isOrganizational">
+                          ¿Es una certificacion organizacional o de compliance? (Aplica a areas o a toda la empresa)
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="row" *ngIf="certificationForm.get('isOrganizational')?.value">
+                    <div class="col-md-12 mb-3">
+                      <div class="form-check form-switch mb-3">
+                        <input 
+                          type="checkbox" 
+                          id="appliesToAllCompany" 
+                          class="form-check-input" 
+                          formControlName="appliesToAllCompany"
+                        >
+                        <label class="form-check-label" for="appliesToAllCompany">
+                          Aplica a toda la empresa por igual
+                        </label>
+                      </div>
+                    </div>
+
+                    <!-- Seleccion de Departamentos -->
+                    <div class="col-md-12 mb-3" *ngIf="!certificationForm.get('appliesToAllCompany')?.value">
+                      <label class="form-label d-block fw-bold">Seleccionar Areas/Departamentos Aplicables *</label>
+                      <div class="row px-3">
+                        <div class="col-md-4 mb-2" *ngFor="let dept of departmentsList">
+                          <div class="form-check">
+                            <input 
+                              type="checkbox" 
+                              [id]="'dept-' + dept._id" 
+                              class="form-check-input" 
+                              [checked]="isDepartmentChecked(dept._id)"
+                              (change)="onDepartmentCheckChange(dept._id, $event)"
+                            >
+                            <label class="form-check-label text-muted" [for]="'dept-' + dept._id">
+                              {{ dept.name }}
+                            </label>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="text-danger mt-1" *ngIf="(certificationForm.get('applicableDepartments')?.value || []).length === 0">
+                        <small>Debe seleccionar al menos un departamento aplicable.</small>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 <!-- Fechas -->
                 <div class="mb-4">
                   <h5 class="card-title mb-3">Fechas</h5>
-                  
+
                   <div class="row">
                     <!-- Fecha de Emision -->
                     <div class="col-md-6 mb-3">
@@ -185,7 +247,7 @@ import { BackButtonComponent } from '../../../shared/components/back-button/back
                 <!-- Informacion Adicional -->
                 <div class="mb-4">
                   <h5 class="card-title mb-3">Informacion Adicional</h5>
-                  
+
                   <div class="row">
                     <!-- Tags -->
                     <div class="col-md-6 mb-3">
@@ -307,12 +369,12 @@ import { BackButtonComponent } from '../../../shared/components/back-button/back
       border: none;
       box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
     }
-    
+
     .form-control:focus {
       border-color: var(--primary-color);
       box-shadow: 0 0 0 0.2rem rgba(37, 99, 235, 0.25);
     }
-    
+
     .card-title {
       color: var(--primary-color);
       border-bottom: 1px solid #e9ecef;
@@ -332,11 +394,17 @@ export class CertificationFormComponent implements OnInit {
   existingCertificateUrl: string | null = null;
   existingCertificateName: string | null = null;
   private originalCertification: Certification | null = null;
+  
+  // Lista de departamentos para certificaciones organizacionales
+  departmentsList: any[] = [];
+  // Bandera para saber si el usuario actual es admin o líder
+  isUserAdminOrLeader = false;
 
   constructor(
     private readonly fb: FormBuilder,
     private readonly certificationService: CertificationService,
     private readonly authService: AuthService,
+    private readonly userService: UserService,
     private readonly router: Router,
     private readonly route: ActivatedRoute
   ) {
@@ -352,13 +420,21 @@ export class CertificationFormComponent implements OnInit {
       certificateNumber: [''],
       validationUrl: [''],
       tagsInput: [''],
-      hasBadge: ['false']
+      hasBadge: ['false'],
+      isOrganizational: [false],
+      appliesToAllCompany: [false],
+      applicableDepartments: [[]]
     });
   }
 
   ngOnInit(): void {
     this.currentUser = this.authService.getCurrentUser();
-    
+    this.isUserAdminOrLeader = this.currentUser?.role === 'admin' || this.currentUser?.role === 'lider';
+
+    if (this.isUserAdminOrLeader) {
+      this.loadDepartments();
+    }
+
     // Verificar si es modo edicion
     this.route.params.subscribe(params => {
       if (params['id']) {
@@ -367,6 +443,41 @@ export class CertificationFormComponent implements OnInit {
         this.loadCertification(params['id']);
       }
     });
+  }
+
+  // Cargar departamentos activos para la configuración organizacional
+  loadDepartments(): void {
+    this.userService.getDepartmentsList(true).subscribe({
+      next: (response) => {
+        if (response.success && response.data) {
+          this.departmentsList = response.data;
+        }
+      },
+      error: () => {
+        console.error('Error al cargar departamentos');
+      }
+    });
+  }
+
+  // Manejar cambios en la selección de departamentos
+  onDepartmentCheckChange(deptId: string, event: Event): void {
+    const checked = (event.target as HTMLInputElement).checked;
+    const currentDepts: string[] = this.certificationForm.get('applicableDepartments')?.value || [];
+    if (checked) {
+      this.certificationForm.patchValue({
+        applicableDepartments: [...currentDepts, deptId]
+      });
+    } else {
+      this.certificationForm.patchValue({
+        applicableDepartments: currentDepts.filter(id => id !== deptId)
+      });
+    }
+  }
+
+  // Verificar si un departamento específico está seleccionado
+  isDepartmentChecked(deptId: string): boolean {
+    const currentDepts: string[] = this.certificationForm.get('applicableDepartments')?.value || [];
+    return currentDepts.includes(deptId);
   }
 
   loadCertification(id: string): void {
@@ -392,7 +503,10 @@ export class CertificationFormComponent implements OnInit {
             certificateNumber: cert.certificateNumber,
             validationUrl: cert.validationUrl,
             tagsInput: cert.tags?.join(', ') || '',
-            hasBadge: cert.validationUrl ? 'true' : 'false'
+            hasBadge: cert.validationUrl ? 'true' : 'false',
+            isOrganizational: cert.isOrganizational || false,
+            appliesToAllCompany: cert.appliesToAllCompany || false,
+            applicableDepartments: cert.applicableDepartments ? cert.applicableDepartments.map((d: any) => typeof d === 'object' ? d._id : d) : []
           });
         }
         this.isLoading = false;
@@ -412,14 +526,14 @@ export class CertificationFormComponent implements OnInit {
         this.errorMessage = 'El archivo no puede superar los 5MB';
         return;
       }
-      
+
       // Validar tipo
       const allowedTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
       if (!allowedTypes.includes(file.type)) {
         this.errorMessage = 'Formato de archivo no valido. Use PDF, JPG o PNG';
         return;
       }
-      
+
       this.selectedFile = file;
       this.errorMessage = '';
     }
@@ -432,17 +546,35 @@ export class CertificationFormComponent implements OnInit {
       this.successMessage = '';
 
       const formValue = this.certificationForm.value;
-      const employeeIdValue = this.isEditMode && this.originalCertification
-        ? (this.originalCertification as any).employeeId || this.originalCertification.employeeId
-        : this.currentUser._id;
+      const isOrg = this.isUserAdminOrLeader && formValue.isOrganizational;
+      const appliesToAll = formValue.appliesToAllCompany;
+      const depts = formValue.applicableDepartments || [];
 
-      const employeeNameValue = this.isEditMode && this.originalCertification
-        ? (this.originalCertification as any).employeeName || this.originalCertification.employeeName || ''
-        : `${this.currentUser.firstName} ${this.currentUser.lastName}`;
+      // Validar que se seleccione al menos un departamento si es organizacional y no global
+      if (isOrg && !appliesToAll && depts.length === 0) {
+        this.errorMessage = 'Debe seleccionar al menos un departamento aplicable para certificaciones organizacionales.';
+        this.isLoading = false;
+        return;
+      }
 
-      const departmentValue = this.isEditMode && this.originalCertification
-        ? this.originalCertification.department
-        : this.currentUser.department;
+      // Si es organizacional, los datos del empleado individual no son aplicables
+      const employeeIdValue = isOrg
+        ? null
+        : (this.isEditMode && this.originalCertification
+          ? (this.originalCertification as any).employeeId || this.originalCertification.employeeId
+          : this.currentUser._id);
+
+      const employeeNameValue = isOrg
+        ? null
+        : (this.isEditMode && this.originalCertification
+          ? (this.originalCertification as any).employeeName || this.originalCertification.employeeName || ''
+          : `${this.currentUser.firstName} ${this.currentUser.lastName}`);
+
+      const departmentValue = isOrg
+        ? null
+        : (this.isEditMode && this.originalCertification
+          ? this.originalCertification.department
+          : this.currentUser.department);
 
       const certificateNumberValue = (formValue.certificateNumber || '').trim();
       const validationUrlValue = (formValue.validationUrl || '').trim();
@@ -463,7 +595,11 @@ export class CertificationFormComponent implements OnInit {
         certificateNumber: certificateNumberValue ? certificateNumberValue : null,
         validationUrl: validationUrlValue ? validationUrlValue : null,
         tags: formValue.tagsInput ? formValue.tagsInput.split(',').map((tag: string) => tag.trim()) : [],
-        status: CertificationStatus.ACTIVE
+        status: CertificationStatus.ACTIVE,
+        // Propiedades organizacionales
+        isOrganizational: isOrg,
+        appliesToAllCompany: isOrg ? appliesToAll : false,
+        applicableDepartments: (isOrg && !appliesToAll) ? depts : []
       };
 
       const buildDiffPayload = (): Partial<Certification> => {
@@ -484,9 +620,12 @@ export class CertificationFormComponent implements OnInit {
           issueDate: this.originalCertification.issueDate ? new Date(this.originalCertification.issueDate) : undefined,
           expirationDate: this.originalCertification.expirationDate ? new Date(this.originalCertification.expirationDate) : undefined,
           certificateNumber: this.originalCertification.certificateNumber,
-        validationUrl: this.originalCertification.validationUrl || null,
+          validationUrl: this.originalCertification.validationUrl || null,
           tags: this.originalCertification.tags || [],
-          status: this.originalCertification.status || CertificationStatus.ACTIVE
+          status: this.originalCertification.status || CertificationStatus.ACTIVE,
+          isOrganizational: this.originalCertification.isOrganizational || false,
+          appliesToAllCompany: this.originalCertification.appliesToAllCompany || false,
+          applicableDepartments: this.originalCertification.applicableDepartments ? this.originalCertification.applicableDepartments.map((d: any) => typeof d === 'object' ? d._id : d) : []
         };
 
         const diff: Partial<Certification> = {};
@@ -525,10 +664,10 @@ export class CertificationFormComponent implements OnInit {
       operation.subscribe({
         next: (response) => {
           if (response.success) {
-            this.successMessage = this.isEditMode 
+            this.successMessage = this.isEditMode
               ? 'Certificacion actualizada exitosamente'
               : 'Certificacion creada exitosamente';
-            
+
             // Si hay archivo, subirlo
             if (this.selectedFile && response.data?._id) {
               this.uploadFile(response.data._id);

@@ -4,6 +4,7 @@ import { Observable, BehaviorSubject, throwError, of } from 'rxjs';
 import { catchError, map, tap } from 'rxjs/operators';
 import { User, LoginRequest, LoginResponse, RegisterRequest, UserRole } from '../models/user.model';
 import { ApiResponse } from '../models/common.model';
+import { extractHttpErrorMessage } from '../utils/http-error.util';
 
 @Injectable({
   providedIn: 'root'
@@ -45,8 +46,15 @@ export class AuthService {
       .pipe(catchError(this.handleError));
   }
 
-  resetPassword(payload: { token: string; newPassword: string; email?: string }): Observable<ApiResponse<void>> {
+  // Envía la solicitud de restablecimiento con la nueva contraseña y, opcionalmente, el correo personal de respaldo configurado.
+  resetPassword(payload: { token: string; newPassword: string; email?: string; personalEmail?: string }): Observable<ApiResponse<void>> {
     return this.http.post<ApiResponse<void>>(`${this.API_URL}/reset-password`, payload)
+      .pipe(catchError(this.handleError));
+  }
+
+  // Consulta al backend para validar el token y determinar si el usuario debe proveer un correo personal.
+  verifyResetToken(payload: { token: string; email?: string }): Observable<ApiResponse<{ valid: boolean; email: string; requiresPersonalEmail: boolean }>> {
+    return this.http.post<ApiResponse<{ valid: boolean; email: string; requiresPersonalEmail: boolean }>>(`${this.API_URL}/verify-reset-token`, payload)
       .pipe(catchError(this.handleError));
   }
 
@@ -171,30 +179,7 @@ export class AuthService {
   }
 
   private handleError(error: HttpErrorResponse): Observable<never> {
-    // Se extrae el mensaje principal provisto por la API
-    const apiMessage = error.error?.message || error.error?.error;
-    const status = error.status;
-
-    let friendlyMessage = apiMessage || 'Ha ocurrido un error inesperado';
-
-    if (status === 0) {
-      friendlyMessage = 'No pudimos conectarnos con el servidor. Verifica tu conexion o intenta mas tarde.';
-    } else if (status === 400) {
-      // Si el backend retorna una lista detallada de errores de validacion (p. ej., express-validator)
-      // se formatean dichos mensajes para brindar feedback claro al usuario sobre que campos fallaron.
-      if (error.error?.details && Array.isArray(error.error.details)) {
-        const detailsMsg = error.error.details.map((d: any) => d.msg).join(', ');
-        friendlyMessage = `${apiMessage || 'Datos de entrada invalidos'}: ${detailsMsg}`;
-      } else {
-        friendlyMessage = apiMessage || 'Revisa los datos ingresados e intenta nuevamente.';
-      }
-    } else if (status === 401) {
-      friendlyMessage = apiMessage || 'Tu sesion expiro o las credenciales no son validas.';
-    } else if (status >= 500) {
-      friendlyMessage = 'Tuvimos un problema temporal. Intenta de nuevo en unos minutos.';
-    }
-
-    return throwError(() => new Error(friendlyMessage));
+    return throwError(() => new Error(extractHttpErrorMessage(error)));
   }
 
   // Actualizar perfil de usuario

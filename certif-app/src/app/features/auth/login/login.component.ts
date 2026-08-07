@@ -2,6 +2,8 @@ import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { Router, RouterModule } from '@angular/router';
+import { Subject } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
 import { AuthService } from '../../../core/services/auth.service';
 import { MsalBrowserService } from '../../../core/services/msal-browser.service';
 
@@ -10,7 +12,7 @@ import { MsalBrowserService } from '../../../core/services/msal-browser.service'
   standalone: true,
   imports: [CommonModule, ReactiveFormsModule, RouterModule],
   template: `
-    <div class="min-vh-100 d-flex align-items-center justify-content-center bg-light-custom">
+    <div class="min-vh-100 d-flex align-items-center justify-content-center" [style.background]="getBackgroundStyle()">
       <div class="container">
         <div class="row justify-content-center">
           <div class="col-md-6 col-lg-4">
@@ -18,11 +20,11 @@ import { MsalBrowserService } from '../../../core/services/msal-browser.service'
               <div class="card-body p-4">
                 <div class="text-center mb-4">
                   <img
-                    src="/resources/NETICS-Isotipo.png"
-                    alt="Netics isotipo"
+                    [src]="loginLogo"
+                    alt="Logo"
                     class="login-logo mb-3"
                   />
-                  <h2 class="text-primary fw-bold mb-1">CertiVault</h2>
+                  <h2 class="text-primary fw-bold mb-1">{{ appName }}</h2>
                   <p class="text-muted small">Gestión de Certificaciones Profesionales</p>
                 </div>
 
@@ -295,5 +297,14 @@ export class LoginComponent implements OnInit {
         this.loginForm.get(key)?.markAsTouched();
       }
     }
+  }
+
+  getBackgroundStyle(): string {
+    return `linear-gradient(135deg, ${this.primaryColor} 0%, ${this.secondaryColor} 100%)`;
+  }
+
+  ngOnDestroy(): void {
+    this.destroy$.next();
+    this.destroy$.complete();
   }
 }

@@ -1,9 +1,13 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { Router, RouterModule } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
+import { UserService } from '../../../core/services/user.service';
 import { BackButtonComponent } from '../../../shared/components/back-button/back-button.component';
+import { SettingsService } from '../../../core/services/settings.service';
+import { Subject } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
 
 @Component({
   selector: 'app-register',
@@ -90,7 +94,7 @@ import { BackButtonComponent } from '../../../shared/components/back-button/back
                     </div>
                   </div>
 
-                  <div class="mb-3">
+                  <div class="mb-3" *ngIf="requirePersonalEmail">
                     <label for="personalEmail" class="form-label">Correo Personal</label>
                     <input
                       type="email"
@@ -128,42 +132,65 @@ import { BackButtonComponent } from '../../../shared/components/back-button/back
                       <label for="department" class="form-label">Departamento</label>
                       <select
                         id="department"
-                        class="form-control"
+                        class="form-select"
                         formControlName="department"
                         [class.is-invalid]="department?.invalid && department?.touched"
                       >
                         <option value="">Seleccionar departamento</option>
-                        <option value="Administracion">Administración</option>
-                        <option value="Infraestructura">Infraestructura</option>
-                        <option value="Proyectos">Proyectos</option>
-                        <option value="TI">Tecnología de la Información</option>
-                        <option value="RRHH">Recursos Humanos</option>
-                        <option value="Finanzas">Finanzas</option>
-                        <option value="Operaciones">Operaciones</option>
-                        <option value="Ventas">Ventas</option>
-                        <option value="Marketing">Marketing</option>
-                        <option value="Ingenieria">Ingeniería</option>
-                        <option value="Calidad">Calidad</option>
-                        <option value="Seguridad">Seguridad</option>
-                        <option value="Ciberseguridad">Ciberseguridad</option>
+                        <option *ngFor="let dept of availableDepartments" [value]="dept.value">
+                          {{ dept.label }}
+                        </option>
                       </select>
                       <div class="invalid-feedback" *ngIf="department?.invalid && department?.touched">
                         <small>El departamento es requerido</small>
+                      </div>
+
+                      <!-- Campo dinámico al seleccionar "Otro" departamento -->
+                      <div class="mt-2" *ngIf="showCustomDept">
+                        <label for="customDepartment" class="form-label text-info fw-semibold">¿Cuál departamento? <span class="text-danger">*</span></label>
+                        <input
+                          type="text"
+                          class="form-control"
+                          id="customDepartment"
+                          formControlName="customDepartment"
+                          [class.is-invalid]="registerForm.get('customDepartment')?.invalid && registerForm.get('customDepartment')?.touched"
+                          placeholder="Nombre del departamento">
+                        <div class="invalid-feedback" *ngIf="registerForm.get('customDepartment')?.invalid && registerForm.get('customDepartment')?.touched">
+                          <small>El nombre es requerido</small>
+                        </div>
                       </div>
                     </div>
 
                     <div class="col-md-6 mb-3">
                       <label for="position" class="form-label">Cargo</label>
-                      <input
-                        type="text"
+                      <select
                         id="position"
-                        class="form-control"
+                        class="form-select"
                         formControlName="position"
                         [class.is-invalid]="position?.invalid && position?.touched"
-                        placeholder="Tu cargo"
-                      />
+                      >
+                        <option value="">Seleccionar cargo</option>
+                        <option *ngFor="let pos of availablePositions" [value]="pos.value">
+                          {{ pos.label }}
+                        </option>
+                      </select>
                       <div class="invalid-feedback" *ngIf="position?.invalid && position?.touched">
-                        <small *ngIf="position?.errors?.['required']">El cargo es requerido</small>
+                        <small>El cargo es requerido</small>
+                      </div>
+
+                      <!-- Campo dinámico al seleccionar "Otro" cargo -->
+                      <div class="mt-2" *ngIf="showCustomPos">
+                        <label for="customPosition" class="form-label text-info fw-semibold">¿Cuál cargo? <span class="text-danger">*</span></label>
+                        <input
+                          type="text"
+                          class="form-control"
+                          id="customPosition"
+                          formControlName="customPosition"
+                          [class.is-invalid]="registerForm.get('customPosition')?.invalid && registerForm.get('customPosition')?.touched"
+                          placeholder="Nombre del cargo">
+                        <div class="invalid-feedback" *ngIf="registerForm.get('customPosition')?.invalid && registerForm.get('customPosition')?.touched">
+                          <small>El cargo es requerido</small>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -223,19 +250,26 @@ import { BackButtonComponent } from '../../../shared/components/back-button/back
     }
   `]
 })
-export class RegisterComponent implements OnInit {
+export class RegisterComponent implements OnInit, OnDestroy {
   registerForm: FormGroup;
   isLoading = false;
   errorMessage = '';
   successMessage = '';
+  availableDepartments: any[] = [];
+  availablePositions: any[] = [];
+  showCustomDept = false;
+  showCustomPos = false;
+  requirePersonalEmail = true;
+
+  private readonly destroy$ = new Subject<void>();
 
   constructor(
     private readonly fb: FormBuilder,
     private readonly authService: AuthService,
-    private readonly router: Router
+    private readonly userService: UserService,
+    private readonly router: Router,
+    private readonly settingsService: SettingsService
   ) {
-    // Se define el formulario con las validaciones de negocio requeridas.
-    // Para la contrasena, se exige una longitud minima y un patron con al menos una mayuscula, una minuscula y un numero.
     this.registerForm = this.fb.group({
       firstName: ['', Validators.required],
       lastName: ['', Validators.required],
@@ -248,7 +282,9 @@ export class RegisterComponent implements OnInit {
         Validators.pattern(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/)
       ]],
       department: ['', Validators.required],
+      customDepartment: [''],
       position: ['', Validators.required],
+      customPosition: [''],
       phone: ['']
     });
   }
@@ -256,7 +292,96 @@ export class RegisterComponent implements OnInit {
   ngOnInit(): void {
     if (this.authService.isLoggedIn()) {
       this.router.navigate(['/dashboard']);
+      return;
     }
+
+    // Cargar directivas de políticas SMTP
+    this.settingsService.getActiveSmtpPolicy()
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (response) => {
+          if (response.success && response.data) {
+            this.requirePersonalEmail = response.data.requirePersonalEmail;
+            if (!this.requirePersonalEmail) {
+              const personalEmailCtrl = this.registerForm.get('personalEmail');
+              personalEmailCtrl?.clearValidators();
+              personalEmailCtrl?.setValidators([Validators.email]);
+              personalEmailCtrl?.updateValueAndValidity();
+            }
+          }
+        },
+        error: (err) => console.error('Error al obtener politicas SMTP:', err)
+      });
+
+    this.loadDepartments();
+    this.loadPositions();
+
+    // Escuchar cambios para mostrar campos condicionales
+    this.registerForm.get('department')?.valueChanges
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(val => {
+        this.showCustomDept = val === 'OTHER';
+        const ctrl = this.registerForm.get('customDepartment');
+        if (this.showCustomDept) {
+          ctrl?.setValidators([Validators.required, Validators.maxLength(100)]);
+        } else {
+          ctrl?.clearValidators();
+        }
+        ctrl?.updateValueAndValidity({ emitEvent: false });
+      });
+
+    this.registerForm.get('position')?.valueChanges
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(val => {
+        this.showCustomPos = val === 'OTHER';
+        const ctrl = this.registerForm.get('customPosition');
+        if (this.showCustomPos) {
+          ctrl?.setValidators([Validators.required, Validators.maxLength(100)]);
+        } else {
+          ctrl?.clearValidators();
+        }
+        ctrl?.updateValueAndValidity({ emitEvent: false });
+      });
+  }
+
+  ngOnDestroy(): void {
+    this.destroy$.next();
+    this.destroy$.complete();
+  }
+
+  private loadDepartments(): void {
+    this.userService.getDepartments()
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (response) => {
+          if (response.success && response.data) {
+            this.availableDepartments = [...response.data, { key: 'OTHER', value: 'OTHER', label: 'Otro (Crear al vuelo)' }];
+          }
+        },
+        error: (error) => {
+          console.error('Error cargando departamentos:', error);
+        }
+      });
+  }
+
+  private loadPositions(): void {
+    this.userService.getPositions()
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (response) => {
+          if (response.success && response.data) {
+            const list = response.data.map((p: any) => ({
+              key: p._id,
+              value: p._id,
+              label: p.name
+            }));
+            this.availablePositions = [...list, { key: 'OTHER', value: 'OTHER', label: 'Otro (Crear al vuelo)' }];
+          }
+        },
+        error: (error) => {
+          console.error('Error cargando cargos:', error);
+        }
+      });
   }
 
   onSubmit(): void {
@@ -265,7 +390,18 @@ export class RegisterComponent implements OnInit {
       this.errorMessage = '';
       this.successMessage = '';
 
-      this.authService.register(this.registerForm.value).subscribe({
+      const payload = { ...this.registerForm.value };
+      if (payload.department === 'OTHER') {
+        payload.department = payload.customDepartment;
+      }
+      if (payload.position === 'OTHER') {
+        payload.position = payload.customPosition;
+      }
+
+      delete payload.customDepartment;
+      delete payload.customPosition;
+
+      this.authService.register(payload).subscribe({
         next: (response) => {
           if (response.success) {
             this.successMessage = 'Te enviamos un correo para validar tu cuenta. Revisa tu bandeja y sigue el enlace para activar el acceso.';

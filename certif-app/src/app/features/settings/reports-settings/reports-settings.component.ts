@@ -1,9 +1,9 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { BackButtonComponent } from '../../../shared/components/back-button/back-button.component';
 import { SettingsService } from '../../../core/services/settings.service';
-import { SettingsNavComponent } from '../settings-nav.component';
+
+import { UserService } from '../../../core/services/user.service';
 
 interface ReportFilters {
   department: string;
@@ -15,77 +15,70 @@ interface ReportFilters {
 @Component({
   selector: 'app-reports-settings',
   standalone: true,
-  imports: [CommonModule, FormsModule, BackButtonComponent, SettingsNavComponent],
+  imports: [CommonModule, FormsModule],
   template: `
-    <div class="container-fluid">
-      <div class="d-flex justify-content-between align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <!-- Barra de Filtros Plana -->
+    <div class="row g-2 align-items-center mb-4 p-3 bg-light rounded-3 border border-light-subtle">
+      <div class="col-md-3">
+        <label class="form-label small fw-semibold text-secondary mb-1">Departamento</label>
+        <select class="form-select form-select-sm" [(ngModel)]="filters.department">
+          <option value="">Todos los departamentos</option>
+          <option *ngFor="let dept of departments" [value]="dept._id">
+            {{ dept.name }}
+          </option>
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small fw-semibold text-secondary mb-1">Estado</label>
+        <select class="form-select form-select-sm" [(ngModel)]="filters.status">
+          <option value="">Todos</option>
+          <option value="active">Activas</option>
+          <option value="expired">Expiradas</option>
+          <option value="expiring_soon">Por vencer</option>
+          <option value="pending">Pendientes</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small fw-semibold text-secondary mb-1">Desde</label>
+        <input class="form-control form-control-sm" type="date" [(ngModel)]="filters.from">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small fw-semibold text-secondary mb-1">Hasta</label>
+        <input class="form-control form-control-sm" type="date" [(ngModel)]="filters.to">
+      </div>
+      <div class="col-md-2 d-flex align-items-end gap-1" style="height: 55px;">
+        <button class="btn btn-primary btn-sm flex-fill fw-semibold h-100" style="max-height: 31px;" (click)="loadReport()">Generar</button>
+        <button class="btn btn-outline-success btn-sm fw-semibold h-100" style="max-height: 31px;" title="Exportar CSV" (click)="exportCsv()">
+          <i class="fas fa-download"></i>
+        </button>
+      </div>
+    </div>
+
+    <div class="alert alert-danger" *ngIf="errorMessage">{{ errorMessage }}</div>
+
+    <!-- Módulo de Métricas Planas -->
+    <div class="row g-3 mb-5">
+      <div class="col-md-2" *ngFor="let item of totals">
+        <div class="p-3 bg-light rounded-3 border border-light-subtle text-center">
+          <h4 class="fw-bold text-dark mb-1">{{ item.value }}</h4>
+          <span class="text-muted small fw-medium d-block" style="font-size: 0.75rem;">{{ item.label }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Distribuciones y Desgloses Planos -->
+    <div class="row g-5">
+      <div class="col-lg-6" *ngFor="let block of blocks">
         <div>
-          <h1 class="h2 mb-1"><i class="fas fa-chart-bar me-2"></i>Reportes</h1>
-          <p class="text-muted mb-0">Informes de certificaciones, usuarios, vencimientos y proveedores.</p>
-        </div>
-        <app-back-button [customRoute]="'/dashboard'" [label]="'Volver al Dashboard'"></app-back-button>
-      </div>
-      <app-settings-nav></app-settings-nav>
-
-      <div class="card mb-4">
-        <div class="card-body">
-          <div class="row g-2 align-items-end">
-            <div class="col-md-3">
-              <label class="form-label">Departamento</label>
-              <input class="form-control" [(ngModel)]="filters.department">
+          <h5 class="fw-bold text-dark mb-3 border-bottom pb-2">
+            {{ block.title }}
+          </h5>
+          <div class="mt-3">
+            <div class="d-flex justify-content-between align-items-center py-2 border-bottom border-light-subtle" *ngFor="let item of block.items">
+              <span class="text-dark fw-medium">{{ item._id || 'Sin dato' }}</span>
+              <span class="badge bg-secondary-subtle text-dark border px-2 py-1">{{ item.count }}</span>
             </div>
-            <div class="col-md-3">
-              <label class="form-label">Estado</label>
-              <select class="form-select" [(ngModel)]="filters.status">
-                <option value="">Todos</option>
-                <option value="active">Activas</option>
-                <option value="expired">Expiradas</option>
-                <option value="expiring_soon">Por vencer</option>
-                <option value="pending">Pendientes</option>
-              </select>
-            </div>
-            <div class="col-md-2">
-              <label class="form-label">Desde</label>
-              <input class="form-control" type="date" [(ngModel)]="filters.from">
-            </div>
-            <div class="col-md-2">
-              <label class="form-label">Hasta</label>
-              <input class="form-control" type="date" [(ngModel)]="filters.to">
-            </div>
-            <div class="col-md-2 d-flex gap-2">
-              <button class="btn btn-primary w-100" (click)="loadReport()">Generar</button>
-              <button class="btn btn-outline-success" (click)="exportCsv()">
-                <i class="fas fa-download"></i>
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="alert alert-danger" *ngIf="errorMessage">{{ errorMessage }}</div>
-
-      <div class="row mb-4">
-        <div class="col-md-2" *ngFor="let item of totals">
-          <div class="card text-center">
-            <div class="card-body">
-              <h4>{{ item.value }}</h4>
-              <small class="text-muted">{{ item.label }}</small>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="row g-4">
-        <div class="col-lg-6" *ngFor="let block of blocks">
-          <div class="card h-100">
-            <div class="card-header"><h5 class="mb-0">{{ block.title }}</h5></div>
-            <div class="card-body">
-              <div class="d-flex justify-content-between border-bottom py-2" *ngFor="let item of block.items">
-                <span>{{ item._id || 'Sin dato' }}</span>
-                <strong>{{ item.count }}</strong>
-              </div>
-              <p class="text-muted mb-0" *ngIf="block.items.length === 0">Sin datos.</p>
-            </div>
+            <p class="text-muted small py-3 text-center" *ngIf="block.items.length === 0">Sin datos de distribución.</p>
           </div>
         </div>
       </div>
@@ -96,8 +89,12 @@ export class ReportsSettingsComponent implements OnInit {
   report: any = {};
   errorMessage = '';
   filters: ReportFilters = { department: '', status: '', from: '', to: '' };
+  departments: any[] = []; // Listado de departamentos activos para el select
 
-  constructor(private readonly settingsService: SettingsService) {}
+  constructor(
+    private readonly settingsService: SettingsService,
+    private readonly userService: UserService
+  ) {}
 
   get totals() {
     const totals = this.report.totals || {};
@@ -122,6 +119,19 @@ export class ReportsSettingsComponent implements OnInit {
 
   ngOnInit(): void {
     this.loadReport();
+    this.loadDepartments();
+  }
+
+  loadDepartments(): void {
+    // Obtener únicamente los departamentos activos
+    this.userService.getDepartmentsList(true).subscribe({
+      next: (response) => {
+        if (response.success && response.data) {
+          this.departments = response.data.sort((a, b) => a.name.localeCompare(b.name));
+        }
+      },
+      error: (err) => console.error('Error al cargar departamentos:', err)
+    });
   }
 
   loadReport(): void {
@@ -133,7 +143,7 @@ export class ReportsSettingsComponent implements OnInit {
   }
 
   exportCsv(): void {
-    this.settingsService.exportReport().subscribe({
+    this.settingsService.exportReport({ ...this.filters }).subscribe({
       next: (blob) => this.downloadBlob(blob, `certificaciones-reporte-${Date.now()}.csv`),
       error: (error) => this.errorMessage = error.message
     });

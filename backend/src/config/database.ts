@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { logger } from './logger';
 
 export class DatabaseConnection {
   private static instance: DatabaseConnection;
@@ -21,7 +22,7 @@ export class DatabaseConnection {
    */
   public async connect(retries = 5, delay = 5000): Promise<void> {
     if (this.isConnected) {
-      console.log('📄 Ya está conectado a MongoDB');
+      logger.info('📄 Ya está conectado a MongoDB');
       return;
     }
 
@@ -40,24 +41,24 @@ export class DatabaseConnection {
 
     for (let attempt = 1; attempt <= retries; attempt++) {
       try {
-        console.log(`🔌 Intentando conectar a MongoDB (Intento ${attempt}/${retries})...`);
+        logger.info(`🔌 Intentando conectar a MongoDB (Intento ${attempt}/${retries})...`);
         await mongoose.connect(mongoURI, options);
         
         this.isConnected = true;
-        console.log('🟢 Conectado exitosamente a MongoDB');
-        console.log(`📊 Base de datos: ${mongoose.connection.db?.databaseName || 'unknown'}`);
-        console.log(`🔗 Host: ${mongoose.connection.host}:${mongoose.connection.port}`);
+        logger.info('🟢 Conectado exitosamente a MongoDB');
+        logger.info(`📊 Base de datos: ${mongoose.connection.db?.databaseName || 'unknown'}`);
+        logger.info(`🔗 Host: ${mongoose.connection.host}:${mongoose.connection.port}`);
         return;
         
       } catch (error) {
-        console.error(`🔴 Intento ${attempt} fallido al conectar a MongoDB:`, error);
+        logger.error(`🔴 Intento ${attempt} fallido al conectar a MongoDB:`, error);
         
         if (attempt === retries) {
-          console.error('🚨 Se han agotado todos los intentos de conexión a la base de datos.');
+          logger.error('🚨 Se han agotado todos los intentos de conexión a la base de datos.');
           throw error;
         }
         
-        console.log(`⏳ Esperando ${delay / 1000} segundos antes de realizar el siguiente intento...`);
+        logger.info(`⏳ Esperando ${delay / 1000} segundos antes de realizar el siguiente intento...`);
         await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
@@ -65,16 +66,16 @@ export class DatabaseConnection {
 
   public async disconnect(): Promise<void> {
     if (!this.isConnected) {
-      console.log('📄 No hay conexión activa a MongoDB');
+      logger.info('📄 No hay conexión activa a MongoDB');
       return;
     }
 
     try {
       await mongoose.disconnect();
       this.isConnected = false;
-      console.log('🟡 Desconectado de MongoDB');
+      logger.info('🟡 Desconectado de MongoDB');
     } catch (error) {
-      console.error('🔴 Error desconectando de MongoDB:', error);
+      logger.error('🔴 Error desconectando de MongoDB:', error);
       throw error;
     }
   }
@@ -100,25 +101,25 @@ export class DatabaseConnection {
 
 // Eventos de conexión
 mongoose.connection.on('connected', () => {
-  console.log('🟢 Mongoose conectado a MongoDB');
+  logger.info('🟢 Mongoose conectado a MongoDB');
 });
 
 mongoose.connection.on('error', (err) => {
-  console.error('🔴 Error de conexión de Mongoose:', err);
+  logger.error('🔴 Error de conexión de Mongoose:', err);
 });
 
 mongoose.connection.on('disconnected', () => {
-  console.log('🟡 Mongoose desconectado de MongoDB');
+  logger.info('🟡 Mongoose desconectado de MongoDB');
 });
 
 // Manejo de cierre de aplicación
 process.on('SIGINT', async () => {
   try {
     await mongoose.connection.close();
-    console.log('🟡 Conexión de MongoDB cerrada por terminación de aplicación');
+    logger.info('🟡 Conexión de MongoDB cerrada por terminación de aplicación');
     process.exit(0);
   } catch (error) {
-    console.error('🔴 Error cerrando conexión de MongoDB:', error);
+    logger.error('🔴 Error cerrando conexión de MongoDB:', error);
     process.exit(1);
   }
 });

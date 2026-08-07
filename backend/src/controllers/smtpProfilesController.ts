@@ -8,6 +8,8 @@ import {
   SmtpProfileInput,
   toSafeSmtpProfile
 } from '../services/smtpProfileService';
+import { ServerPolicy } from '../models/ServerPolicy';
+import { logger } from '../config/logger';
 
 const buildUpdatePayload = (body: Partial<SmtpProfileInput>) => {
   const payload: Record<string, unknown> = {};
@@ -44,7 +46,7 @@ export const getSmtpProfiles = async (_req: Request, res: Response): Promise<voi
       data: profiles.map(toSafeSmtpProfile)
     });
   } catch (error) {
-    console.error('Error listando perfiles SMTP:', error);
+    logger.error('Error listando perfiles SMTP:', error);
     res.status(500).json({
       success: false,
       error: 'Error al listar perfiles SMTP'
@@ -73,7 +75,7 @@ export const createSmtpProfile = async (req: AuthRequest, res: Response): Promis
       message: 'Perfil SMTP creado exitosamente'
     });
   } catch (error: any) {
-    console.error('Error creando perfil SMTP:', error);
+    logger.error('Error creando perfil SMTP:', error);
     res.status(400).json({
       success: false,
       error: error.code === 11000 ? 'Ya existe un perfil SMTP con ese nombre' : 'Error al crear perfil SMTP'
@@ -109,7 +111,7 @@ export const updateSmtpProfile = async (req: AuthRequest, res: Response): Promis
       message: 'Perfil SMTP actualizado exitosamente'
     });
   } catch (error: any) {
-    console.error('Error actualizando perfil SMTP:', error);
+    logger.error('Error actualizando perfil SMTP:', error);
     res.status(400).json({
       success: false,
       error: error.code === 11000 ? 'Ya existe un perfil SMTP con ese nombre' : 'Error al actualizar perfil SMTP'
@@ -133,7 +135,7 @@ export const deleteSmtpProfile = async (req: Request, res: Response): Promise<vo
       message: 'Perfil SMTP eliminado exitosamente'
     });
   } catch (error) {
-    console.error('Error eliminando perfil SMTP:', error);
+    logger.error('Error eliminando perfil SMTP:', error);
     res.status(500).json({
       success: false,
       error: 'Error al eliminar perfil SMTP'
@@ -168,7 +170,7 @@ export const activateSmtpProfile = async (req: Request, res: Response): Promise<
       message: 'Perfil SMTP activado exitosamente'
     });
   } catch (error) {
-    console.error('Error activando perfil SMTP:', error);
+    logger.error('Error activando perfil SMTP:', error);
     res.status(500).json({
       success: false,
       error: 'Error al activar perfil SMTP'
@@ -196,7 +198,7 @@ export const deactivateSmtpProfile = async (req: Request, res: Response): Promis
       message: 'Perfil SMTP desactivado exitosamente'
     });
   } catch (error) {
-    console.error('Error desactivando perfil SMTP:', error);
+    logger.error('Error desactivando perfil SMTP:', error);
     res.status(500).json({
       success: false,
       error: 'Error al desactivar perfil SMTP'
@@ -252,6 +254,61 @@ export const testSmtpProfile = async (req: Request, res: Response): Promise<void
     res.status(400).json({
       success: false,
       error: error?.message || 'Error verificando SMTP'
+    });
+  }
+};
+
+// Obtener las políticas globales del servidor (independientes de los perfiles SMTP)
+export const getActiveSmtpPolicy = async (req: Request, res: Response): Promise<void> => {
+  try {
+    // Leer de la colección global; si no existe, usar defaults
+    const policy = await ServerPolicy.findOne();
+    res.json({
+      success: true,
+      data: {
+        sendBackupOnDelete: policy ? policy.sendBackupOnDelete : true,
+        requirePersonalEmail: policy ? policy.requirePersonalEmail : true
+      }
+    });
+  } catch (error) {
+    logger.error('Error al obtener las políticas del servidor:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Error al obtener políticas del servidor'
+    });
+  }
+};
+
+// Actualizar las políticas globales del servidor (upsert: crea si no existe)
+export const updateServerPolicy = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { sendBackupOnDelete, requirePersonalEmail } = req.body;
+    const updateData: Record<string, unknown> = {};
+
+    if (sendBackupOnDelete !== undefined) updateData.sendBackupOnDelete = Boolean(sendBackupOnDelete);
+    if (requirePersonalEmail !== undefined) updateData.requirePersonalEmail = Boolean(requirePersonalEmail);
+    updateData.updatedBy = req.user?._id;
+
+    // Upsert: actualizar el documento único o crearlo si no existe
+    const policy = await ServerPolicy.findOneAndUpdate(
+      {},
+      { $set: updateData },
+      { new: true, upsert: true, runValidators: true }
+    );
+
+    res.json({
+      success: true,
+      data: {
+        sendBackupOnDelete: policy.sendBackupOnDelete,
+        requirePersonalEmail: policy.requirePersonalEmail
+      },
+      message: 'Políticas del servidor actualizadas correctamente'
+    });
+  } catch (error) {
+    logger.error('Error al actualizar las políticas del servidor:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Error al actualizar políticas del servidor'
     });
   }
 };

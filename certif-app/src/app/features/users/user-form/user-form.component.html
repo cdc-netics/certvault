@@ -93,7 +93,7 @@
               </div>
             </div>
 
-            <div class="row">
+            <div class="row" *ngIf="requirePersonalEmail">
               <div class="col-md-6 mb-3">
                 <label for="personalEmail" class="form-label">
                   Correo Personal <span class="text-danger">*</span>
@@ -166,33 +166,63 @@
                   class="form-select"
                   id="department"
                   formControlName="department"
-                  [disabled]="!canEditDepartmentField"
                   [class.is-invalid]="department?.invalid && department?.touched">
                   <option value="">Selecciona un departamento</option>
                   <option *ngFor="let dept of availableDepartments" [value]="dept.value">
-                    {{ getDepartmentLabel(dept.value) }}
+                    {{ dept.label }}
                   </option>
                 </select>
                 <div class="invalid-feedback" *ngIf="department?.invalid && department?.touched">
                   <small *ngIf="department?.errors?.['required']">El departamento es requerido</small>
                 </div>
+
+                <!-- Campo dinámico al seleccionar "Otro" departamento -->
+                <div class="mt-2" *ngIf="showCustomDept">
+                  <label for="customDepartment" class="form-label text-info fw-semibold">Nombre del Nuevo Departamento <span class="text-danger">*</span></label>
+                  <input
+                    type="text"
+                    class="form-control"
+                    id="customDepartment"
+                    formControlName="customDepartment"
+                    [class.is-invalid]="userForm.get('customDepartment')?.invalid && userForm.get('customDepartment')?.touched"
+                    placeholder="Ej: Desarrollo Humano">
+                  <div class="invalid-feedback" *ngIf="userForm.get('customDepartment')?.invalid && userForm.get('customDepartment')?.touched">
+                    <small>El nombre del nuevo departamento es requerido (máx. 100 caracteres)</small>
+                  </div>
+                </div>
               </div>
 
               <div class="col-md-6 mb-3">
                 <label for="position" class="form-label">
-                  Cargo/Posicion <span class="text-danger">*</span>
+                  Cargo/Posición <span class="text-danger">*</span>
                 </label>
-                <input
-                  type="text"
-                  class="form-control"
+                <select
+                  class="form-select"
                   id="position"
                   formControlName="position"
-                  [disabled]="!canEditPositionField"
-                  [class.is-invalid]="position?.invalid && position?.touched"
-                  placeholder="Ej: Analista, Gerente, Tecnico">
+                  [class.is-invalid]="position?.invalid && position?.touched">
+                  <option value="">Selecciona un cargo</option>
+                  <option *ngFor="let pos of availablePositions" [value]="pos.value">
+                    {{ pos.label }}
+                  </option>
+                </select>
                 <div class="invalid-feedback" *ngIf="position?.invalid && position?.touched">
                   <small *ngIf="position?.errors?.['required']">El cargo es requerido</small>
-                  <small *ngIf="position?.errors?.['maxlength']">Maximo 100 caracteres</small>
+                </div>
+
+                <!-- Campo dinámico al seleccionar "Otro" cargo -->
+                <div class="mt-2" *ngIf="showCustomPos">
+                  <label for="customPosition" class="form-label text-info fw-semibold">Nombre del Nuevo Cargo <span class="text-danger">*</span></label>
+                  <input
+                    type="text"
+                    class="form-control"
+                    id="customPosition"
+                    formControlName="customPosition"
+                    [class.is-invalid]="userForm.get('customPosition')?.invalid && userForm.get('customPosition')?.touched"
+                    placeholder="Ej: Arquitecto DevOps">
+                  <div class="invalid-feedback" *ngIf="userForm.get('customPosition')?.invalid && userForm.get('customPosition')?.touched">
+                    <small>El nombre del nuevo cargo es requerido (máx. 100 caracteres)</small>
+                  </div>
                 </div>
               </div>
             </div>
@@ -281,6 +311,10 @@
               </div>
             </div>
 
+            <div class="alert alert-danger" *ngIf="submitErrorMessage">
+              <small>{{ submitErrorMessage }}</small>
+            </div>
+
             <div class="d-flex justify-content-end gap-2 pt-3 border-top">
               <button
                 type="button"
@@ -293,7 +327,7 @@
               <button
                 type="submit"
                 class="btn btn-primary"
-                [disabled]="userForm.invalid || loading">
+                [disabled]="loading">
                 <output *ngIf="loading" class="spinner-border spinner-border-sm me-2"></output>
                 <i *ngIf="!loading" [class]="isEditMode ? 'fas fa-save' : 'fas fa-plus'" class="me-1"></i>
                 {{ isEditMode ? 'Actualizar Usuario' : 'Crear Usuario' }}

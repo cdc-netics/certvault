@@ -2,9 +2,7 @@
 # Uso: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 services:
   backend:
-    build: null
-    image: localhost:5000/certvault-backend:${IMAGE_TAG}
+    image: localhost:5000/certvault-backend:${IMAGE_TAG:-latest}
 
   frontend:
-    build: null
-    image: localhost:5000/certvault-frontend:${IMAGE_TAG}
+    image: localhost:5000/certvault-frontend:${IMAGE_TAG:-latest}

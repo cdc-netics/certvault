@@ -1,3 +1,5 @@
+import { Department } from './user.model';
+
 export interface Certification {
   _id?: string;
   title: string;
@@ -6,9 +8,13 @@ export interface Certification {
   technology: string;
   provider: string;
   level: CertificationLevel;
-  employeeId: string;
-  employeeName: string;
-  department: string;
+  employeeId?: string;
+  employeeName?: string;
+  department?: Department | string;
+  // Propiedades para certificaciones de tipo organizacional
+  isOrganizational?: boolean; // Indica si la certificación aplica a nivel de organización o área
+  applicableDepartments?: (Department | string)[]; // Lista de departamentos a los que aplica
+  appliesToAllCompany?: boolean; // Indica si aplica a toda la empresa por igual
   issueDate: Date;
   expirationDate: Date;
   certificateNumber: string;
@@ -25,7 +31,7 @@ export interface Certification {
   createdBy?: string;
   updatedBy?: string;
   userIsActive?: boolean;
-  userDepartment?: string;
+  userDepartment?: Department | string;
   userReferenceMissing?: boolean;
 }
 
@@ -44,7 +50,8 @@ export enum CertificationLevel {
   BEGINNER = 'beginner',
   INTERMEDIATE = 'intermediate',
   ADVANCED = 'advanced',
-  EXPERT = 'expert'
+  EXPERT = 'expert',
+  ACADEMIC = 'academic'
 }
 
 export enum CertificationStatus {

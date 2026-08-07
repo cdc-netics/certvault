@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { logger } from '../config/logger';
 
 export interface CustomError extends Error {
   statusCode?: number;
@@ -16,11 +17,11 @@ export const errorHandler = (
   let error = { ...err };
   error.message = err.message;
 
-  console.error('Error en peticion:', {
+  logger.error('Error en peticion', {
     path: req.path,
     method: req.method,
     message: err.message,
-    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+    stack: err.stack
   });
 
   if (err.name === 'ValidationError') {

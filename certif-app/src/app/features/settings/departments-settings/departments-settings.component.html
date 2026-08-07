@@ -1,0 +1,192 @@
+  <!-- Mensajes de Estado -->
+  <div class="alert alert-danger shadow-sm border-0 d-flex align-items-center mb-3" *ngIf="errorMessage">
+    <i class="fas fa-exclamation-triangle fa-lg me-2"></i>
+    <span>{{ errorMessage }}</span>
+  </div>
+  <div class="alert alert-success shadow-sm border-0 d-flex align-items-center mb-3" *ngIf="successMessage">
+    <i class="fas fa-check-circle fa-lg me-2"></i>
+    <span>{{ successMessage }}</span>
+  </div>
+
+  <!-- Contenedor Principal de Departamentos Plano -->
+  <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
+    <div>
+      <h5 class="fw-bold text-dark mb-1">
+        <i class="fas fa-sitemap text-primary me-2"></i>
+        Gestión de Departamentos / Áreas
+      </h5>
+      <p class="text-muted small mb-0">Administra las unidades organizacionales de tu empresa y define quién lidera cada departamento.</p>
+    </div>
+    <button class="btn btn-primary btn-sm px-3 fw-semibold shadow-sm" (click)="openCreateModal()" [disabled]="loading">
+      <i class="fas fa-plus me-1"></i>
+      Nuevo Departamento
+    </button>
+  </div>
+
+  <!-- Panel de Acciones Masivas Plano -->
+  <div class="d-flex align-items-center gap-2 mb-3 p-3 bg-light rounded-3 border border-light-subtle flex-wrap" *ngIf="selectedDeptIds.size > 0">
+    <span class="text-muted small fw-semibold me-2"><i class="fas fa-check-square text-primary me-1"></i>{{ selectedDeptIds.size }} departamentos seleccionados:</span>
+    <button class="btn btn-outline-warning btn-sm fw-semibold px-3" (click)="bulkInactivate()" [disabled]="loading">
+      <i class="fas fa-eye-slash me-1"></i> Inactivar
+    </button>
+    <button class="btn btn-outline-danger btn-sm fw-semibold px-3" (click)="bulkDelete()" [disabled]="loading">
+      <i class="fas fa-trash-alt me-1"></i> Borrar
+    </button>
+  </div>
+
+  <div class="table-responsive border rounded-3 bg-white">
+    <table class="table table-hover align-middle mb-0" style="font-size: 0.9rem;">
+      <thead class="table-light text-secondary">
+        <tr>
+          <th scope="col" class="ps-3" style="width: 50px;">
+            <input 
+              type="checkbox" 
+              class="form-check-input border-2 cursor-pointer mb-0"
+              [checked]="isAllSelected && departments.length > 0"
+              (change)="toggleSelectAll()"
+              [disabled]="loading || departments.length === 0">
+          </th>
+          <th scope="col">Código</th>
+          <th scope="col">Nombre del Departamento</th>
+          <th scope="col">Líder Asignado</th>
+          <th scope="col">Estado</th>
+          <th scope="col" class="text-end pe-3">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let dept of departments" [class.table-light]="!dept.isActive">
+          <td class="ps-3">
+            <input 
+              type="checkbox" 
+              class="form-check-input border-2 cursor-pointer mb-0"
+              [checked]="selectedDeptIds.has(dept._id)"
+              (change)="toggleSelect(dept._id)"
+              [disabled]="loading">
+          </td>
+          <td>
+            <span class="badge bg-secondary-subtle text-secondary px-2 py-1 text-uppercase fw-bold font-monospace border" style="font-size: 0.75rem;">
+              {{ dept.code }}
+            </span>
+          </td>
+          <td>
+            <div class="fw-semibold text-dark">{{ dept.name }}</div>
+          </td>
+          <td>
+            <div class="d-flex align-items-center text-muted">
+              <i class="fas fa-user-tie me-2 text-primary" *ngIf="dept.leaderId"></i>
+              <span>{{ getLeaderName(dept) }}</span>
+            </div>
+          </td>
+          <td>
+            <span class="badge" [class]="dept.isActive ? 'bg-success-subtle text-success' : 'bg-danger-subtle text-danger'">
+              <i [class]="dept.isActive ? 'fas fa-check-circle me-1' : 'fas fa-times-circle me-1'"></i>
+              {{ dept.isActive ? 'Activo' : 'Inactivo' }}
+            </span>
+          </td>
+          <td class="text-end pe-3">
+            <div class="btn-group btn-group-sm shadow-sm" role="group">
+              <button 
+                type="button" 
+                class="btn btn-outline-secondary" 
+                title="Editar"
+                (click)="openEditModal(dept)"
+                [disabled]="loading">
+                <i class="fas fa-edit"></i>
+              </button>
+              <button 
+                type="button" 
+                class="btn btn-outline-warning" 
+                [title]="dept.isActive ? 'Inactivar' : 'Activar'"
+                (click)="toggleDeptActive(dept)"
+                [disabled]="loading">
+                <i [class]="dept.isActive ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
+              </button>
+              <button 
+                type="button" 
+                class="btn btn-outline-danger" 
+                title="Eliminar permanentemente"
+                (click)="deleteDept(dept)"
+                [disabled]="loading">
+                <i class="fas fa-trash-alt"></i>
+              </button>
+            </div>
+          </td>
+        </tr>
+        <tr *ngIf="!loading && departments.length === 0">
+          <td colspan="6" class="text-center py-5 text-muted border border-dashed rounded-3 bg-light">
+            <i class="fas fa-sitemap fa-3x mb-3 text-secondary"></i>
+            <h5>No se encontraron departamentos registrados</h5>
+            <p class="small mb-0">Comienza registrando un área nueva para tu organización.</p>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Loading Overlay -->
+  <div class="text-center py-5" *ngIf="loading">
+    <div class="spinner-border text-primary" role="status">
+      <span class="visually-hidden">Procesando...</span>
+    </div>
+    <p class="mt-2 text-muted">Actualizando información...</p>
+  </div>
+
+  <!-- Modal de Formulario de Departamento -->
+  <div class="modal fade show d-block" tabindex="-1" style="background: rgba(0,0,0,0.5);" *ngIf="showModal">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content border-0 shadow-lg">
+        <div class="modal-header bg-primary text-white border-bottom-0">
+          <h5 class="modal-title fw-bold">
+            <i class="fas fa-sitemap me-2"></i>
+            {{ isEditMode ? 'Editar Departamento' : 'Nuevo Departamento' }}
+          </h5>
+          <button type="button" class="btn-close btn-close-white" (click)="closeModal()"></button>
+        </div>
+        <form [formGroup]="deptForm" (ngSubmit)="onSubmit()" novalidate>
+          <div class="modal-body p-4">
+            <div class="mb-3">
+              <label for="deptName" class="form-label fw-semibold text-secondary">Nombre del Departamento</label>
+              <input 
+                type="text" 
+                class="form-control border-2" 
+                id="deptName" 
+                formControlName="name"
+                [class.is-invalid]="deptForm.get('name')?.invalid && deptForm.get('name')?.touched"
+                placeholder="Ej: Ingeniería de Datos">
+              <div class="invalid-feedback" *ngIf="deptForm.get('name')?.invalid && deptForm.get('name')?.touched">
+                <small>El nombre es requerido (máx. 100 caracteres)</small>
+              </div>
+            </div>
+
+            <div class="mb-3">
+              <label for="deptLeader" class="form-label fw-semibold text-secondary">Líder del Área (Opcional)</label>
+              <select class="form-select border-2" id="deptLeader" formControlName="leaderId">
+                <option value="">Sin líder asignado (Asignar más tarde)</option>
+                <option *ngFor="let user of users" [value]="user._id">
+                  {{ user.firstName }} {{ user.lastName }} ({{ user.email }})
+                </option>
+              </select>
+              <small class="form-text text-muted">
+                Al asignar un líder de área, automáticamente se elevará su rol a "Líder" y se agregará este departamento a sus áreas gestionadas.
+              </small>
+            </div>
+
+            <div class="form-check form-switch mb-2" *ngIf="isEditMode">
+              <input 
+                class="form-check-input border-2" 
+                type="checkbox" 
+                id="deptStatus" 
+                formControlName="isActive">
+              <label class="form-check-label fw-semibold text-secondary" for="deptStatus">Departamento Activo</label>
+            </div>
+          </div>
+          <div class="modal-footer bg-light border-top-0">
+            <button type="button" class="btn btn-outline-secondary px-3" (click)="closeModal()">Cancelar</button>
+            <button type="submit" class="btn btn-primary px-4 fw-bold" [disabled]="deptForm.invalid || loading">
+              Guardar Cambios
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>

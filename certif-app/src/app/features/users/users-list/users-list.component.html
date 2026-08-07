@@ -111,7 +111,7 @@
             (ngModelChange)="loadUsers()">
             <option value="">Todos los departamentos</option>
             <option *ngFor="let dept of availableDepartments" [value]="dept.value">
-              {{ getDepartmentLabel(dept.value) }}
+              {{ dept.label || dept.name }}
             </option>
           </select>
         </div>
@@ -152,6 +152,14 @@
           (click)="forcePasswordChangeBulk()">
           <i class="fas fa-key me-1"></i>
           Forzar Cambio Clave ({{ selectedUserIds.length }})
+        </button>
+        <button
+          *ngIf="currentUser?.role === 'admin' && selectedUserIds.length > 0"
+          type="button"
+          class="btn btn-sm btn-info text-dark fw-bold"
+          (click)="openBulkDepartmentModal()">
+          <i class="fas fa-sitemap me-1"></i>
+          Cambiar Área ({{ selectedUserIds.length }})
         </button>
         <small class="text-muted">
           Mostrando {{ users.length }} de {{ pagination.totalUsers }} usuarios
@@ -216,7 +224,7 @@
                   {{ getDepartmentLabel(user.department) }}
                 </span>
               </td>
-              <td>{{ user.position }}</td>
+              <td>{{ getPositionLabel(user.position) }}</td>
               <td>
                 <span [class]="user.isActive ? 'badge bg-success' : 'badge bg-danger'">
                   <i [class]="user.isActive ? 'fas fa-check' : 'fas fa-times'" class="me-1"></i>
@@ -305,5 +313,44 @@
       <i class="fas fa-plus me-1"></i>
       Crear primer usuario
     </button>
+  </div>
+
+  <!-- Modal Cambio Masivo de Departamento -->
+  <div class="modal fade show d-block" tabindex="-1" style="background: rgba(0,0,0,0.5);" *ngIf="showBulkDeptModal">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content border-0 shadow-lg">
+        <div class="modal-header bg-info text-dark">
+          <h5 class="modal-title fw-bold">
+            <i class="fas fa-sitemap me-2"></i>
+            Cambiar Departamento Masivo
+          </h5>
+          <button type="button" class="btn-close" (click)="closeBulkDeptModal()"></button>
+        </div>
+        <div class="modal-body p-4">
+          <p class="text-muted">
+            Selecciona el nuevo departamento de destino para los <strong>{{ selectedUserIds.length }}</strong> usuarios seleccionados:
+          </p>
+          <div class="mb-3">
+            <label for="bulkDeptSelect" class="form-label fw-semibold text-secondary">Departamento de Destino</label>
+            <select class="form-select border-2" id="bulkDeptSelect" [(ngModel)]="bulkDepartmentId">
+              <option value="">Selecciona un departamento...</option>
+              <option *ngFor="let dept of availableDepartments" [value]="dept.value">
+                {{ dept.label }}
+              </option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer bg-light border-top-0">
+          <button type="button" class="btn btn-outline-secondary px-3" (click)="closeBulkDeptModal()">Cancelar</button>
+          <button 
+            type="button" 
+            class="btn btn-info text-dark fw-bold px-4" 
+            [disabled]="!bulkDepartmentId" 
+            (click)="applyBulkDepartmentChange()">
+            Aplicar Cambio
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </div>

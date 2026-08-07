@@ -65,6 +65,7 @@ router.get('/ad-config', getAdConfig);
 router.post('/register', registerValidation, validateRequest, register);
 router.post('/login', loginValidation, validateRequest, login);
 router.post('/ad-login', adLogin);
+router.get('/ad-config', getAdConfig);
 router.post('/refresh', refreshToken);
 router.post('/forgot-password', forgotPasswordValidation, validateRequest, forgotPassword);
 router.post('/reset-password', resetPasswordValidation, validateRequest, resetPassword);

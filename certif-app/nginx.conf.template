@@ -14,13 +14,30 @@ server {
     root /usr/share/nginx/html;
     index index.html;
 
+    # El index.html referencia los bundles por su nombre hasheado, por lo que debe
+    # revalidarse siempre: si el navegador lo sirve desde caché, sigue cargando el
+    # bundle del despliegue anterior y el usuario nunca recibe la versión nueva.
+    location = /index.html {
+        add_header Cache-Control "no-cache, must-revalidate" always;
+    }
+
+    # Los artefactos de build de Angular llevan hash de contenido en el nombre, así que
+    # una URL dada nunca cambia de contenido y puede cachearse indefinidamente.
+    location ~* \.(?:js|css|woff2?|ttf|eot|svg|png|jpe?g|gif|webp|ico)$ {
+        add_header Cache-Control "public, max-age=31536000, immutable" always;
+        access_log off;
+    }
+
     # Sirve la aplicación de Angular manejando el ruteo del lado del cliente
     location / {
         try_files $uri $uri/ /index.html;
     }
 
-    # Redirección de llamadas API hacia el contenedor del Backend
-    location /api/ {
+    # Redirección de llamadas API hacia el contenedor del Backend.
+    # El prefijo ^~ es obligatorio: sin él, la ubicación regex de assets estáticos
+    # tendría prioridad y las peticiones a archivos con esas extensiones se buscarían
+    # en el disco del frontend en lugar de proxearse al backend.
+    location ^~ /api/ {
         proxy_pass http://${BACKEND_UPSTREAM_HOST}:${BACKEND_UPSTREAM_PORT}/api/;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
@@ -30,8 +47,10 @@ server {
         proxy_set_header X-Forwarded-Proto $proxy_x_forwarded_proto;
     }
 
-    # Redirección de peticiones de archivos subidos hacia el backend
-    location /uploads/ {
+    # Redirección de peticiones de archivos subidos hacia el backend.
+    # Requiere ^~ por el mismo motivo que /api/: los avatares y certificados tienen
+    # extensiones de imagen que colisionan con la ubicación regex de assets estáticos.
+    location ^~ /uploads/ {
         proxy_pass http://${BACKEND_UPSTREAM_HOST}:${BACKEND_UPSTREAM_PORT}/uploads/;
         proxy_http_version 1.1;
         proxy_set_header Host $host;

@@ -1,0 +1,6 @@
+# Decision explicita sobre build scripts de dependencias (pnpm 11.3.0 usa el mapa `allowBuilds`).
+# unrs-resolver es un transitivo del toolchain de jest cuyo build script nativo NO necesitamos:
+# los tests corren con el fallback JS. Se marca `false` para no ejecutar codigo de build de
+# terceros y, a la vez, desbloquear los comandos de pnpm (que exigen una decision explicita).
+allowBuilds:
+  unrs-resolver: false

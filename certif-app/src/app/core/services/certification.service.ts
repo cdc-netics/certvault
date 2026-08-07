@@ -8,6 +8,7 @@ import {
   CertificationStats 
 } from '../models/certification.model';
 import { ApiResponse, PaginatedResponse, PaginationParams } from '../models/common.model';
+import { extractHttpErrorMessage } from '../utils/http-error.util';
 
 @Injectable({
   providedIn: 'root'
@@ -127,6 +128,13 @@ export class CertificationService {
       .pipe(catchError(this.handleError));
   }
 
+  downloadAllUserCertifications(userId: string): Observable<Blob> {
+    // Solicitar el archivo ZIP consolidado al backend
+    return this.http.get(`${this.API_URL}/user/${userId}/download-all`, {
+      responseType: 'blob'
+    }).pipe(catchError(this.handleError));
+  }
+
   uploadCertificateFile(certificationId: string, file: File): Observable<ApiResponse<{ url: string }>> {
     const formData = new FormData();
     formData.append('certificate', file);
@@ -181,15 +189,7 @@ export class CertificationService {
   }
 
   private handleError(error: HttpErrorResponse): Observable<never> {
-    let errorMessage = 'Ha ocurrido un error desconocido';
-    
-    if (error.error instanceof ErrorEvent) {
-      errorMessage = `Error: ${error.error.message}`;
-    } else {
-      errorMessage = error.error?.message || `Error ${error.status}: ${error.statusText}`;
-    }
-    
-    return throwError(() => new Error(errorMessage));
+    return throwError(() => new Error(extractHttpErrorMessage(error)));
   }
 
   downloadFile(url: string): Observable<Blob> {

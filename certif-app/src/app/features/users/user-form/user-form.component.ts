@@ -9,6 +9,7 @@ import { BackButtonComponent } from '../../../shared/components/back-button/back
 import { UserService, DepartmentOption, RoleOption } from '../../../core/services/user.service';
 import { AuthService } from '../../../core/services/auth.service';
 import { User, UserRole, Department, RegisterRequest } from '../../../core/models/user.model';
+import { SettingsService } from '../../../core/services/settings.service';
 
 @Component({
   selector: 'app-user-form',
@@ -22,9 +23,13 @@ export class UserFormComponent implements OnInit, OnDestroy {
   loading = false;
   isEditMode = false;
   userId: string | null = null;
+  submitErrorMessage = '';
 
   availableRoles: RoleOption[] = [];
   availableDepartments: DepartmentOption[] = [];
+  availablePositions: any[] = [];
+  showCustomDept = false;
+  showCustomPos = false;
   targetUserIsAdmin = false;
   // Bandera para indicar si el usuario actual puede editar campos clave de un administrador
   canEditAdminFields = false;
@@ -33,6 +38,7 @@ export class UserFormComponent implements OnInit, OnDestroy {
   canEditRoles = false;
   canSetLeader = false;
   canAdminChangePassword = false;
+  requirePersonalEmail = true;
 
 
   private readonly destroy$ = new Subject<void>();
@@ -44,7 +50,8 @@ export class UserFormComponent implements OnInit, OnDestroy {
     private readonly userService: UserService,
     private readonly authService: AuthService,
     private readonly route: ActivatedRoute,
-    private readonly router: Router
+    private readonly router: Router,
+    private readonly settingsService: SettingsService
   ) {}
 
   ngOnInit(): void {
@@ -53,12 +60,31 @@ export class UserFormComponent implements OnInit, OnDestroy {
     this.updatePermissions();
 
     this.initializeForm();
+
+    // Obtener políticas SMTP y ajustar validación del correo personal dinámicamente
+    this.settingsService.getActiveSmtpPolicy()
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (response) => {
+          if (response.success && response.data) {
+            this.requirePersonalEmail = response.data.requirePersonalEmail;
+          }
+          this.applyPersonalEmailPolicy();
+        },
+        error: (err) => {
+          console.error('Error al obtener politicas SMTP:', err);
+          // En caso de error, asumir que es requerido por defecto y aplicar validators
+          this.requirePersonalEmail = true;
+          this.applyPersonalEmailPolicy();
+        }
+      });
+
     this.applyFieldLocks();
     this.setPasswordValidators();
     this.userForm.get('password')?.valueChanges
       .pipe(takeUntil(this.destroy$))
       .subscribe(() => this.userForm.get('confirmPassword')?.updateValueAndValidity({ onlySelf: true }));
-    
+
     // Suscripción para revalidar el correo personal al cambiar el correo corporativo
     this.userForm.get('email')?.valueChanges
       .pipe(takeUntil(this.destroy$))
@@ -66,6 +92,7 @@ export class UserFormComponent implements OnInit, OnDestroy {
 
     this.loadRoles();
     this.loadDepartments();
+    this.loadPositions();
 
     this.route.params.pipe(takeUntil(this.destroy$)).subscribe(params => {
       if (params['id']) {
@@ -77,6 +104,33 @@ export class UserFormComponent implements OnInit, OnDestroy {
         }
       }
     });
+
+    // Escuchar cambios para mostrar campos condicionales
+    this.userForm.get('department')?.valueChanges
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(val => {
+        this.showCustomDept = val === 'OTHER';
+        const ctrl = this.userForm.get('customDepartment');
+        if (this.showCustomDept) {
+          ctrl?.setValidators([Validators.required, Validators.maxLength(100)]);
+        } else {
+          ctrl?.clearValidators();
+        }
+        ctrl?.updateValueAndValidity({ emitEvent: false });
+      });
+
+    this.userForm.get('position')?.valueChanges
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(val => {
+        this.showCustomPos = val === 'OTHER';
+        const ctrl = this.userForm.get('customPosition');
+        if (this.showCustomPos) {
+          ctrl?.setValidators([Validators.required, Validators.maxLength(100)]);
+        } else {
+          ctrl?.clearValidators();
+        }
+        ctrl?.updateValueAndValidity({ emitEvent: false });
+      });
   }
 
   ngOnDestroy(): void {
@@ -135,17 +189,20 @@ export class UserFormComponent implements OnInit, OnDestroy {
   }
 
   private initializeForm(): void {
+    // Inicializar sin Validators.required en personalEmail para evitar race condition con la policy async
     this.userForm = this.fb.group({
       username: ['', [Validators.required, Validators.minLength(3), Validators.maxLength(20)]],
       email: ['', [Validators.required, Validators.email]],
-      personalEmail: ['', [Validators.required, Validators.email, this.emailsDifferentValidator.bind(this)]],
+      personalEmail: ['', [Validators.email, this.emailsDifferentValidator.bind(this)]],
       password: [''],
       confirmPassword: [''],
       firstName: ['', [Validators.required, Validators.maxLength(50)]],
       lastName: ['', [Validators.required, Validators.maxLength(50)]],
       role: [UserRole.READER, Validators.required],
       department: ['', Validators.required],
-      position: ['', [Validators.required, Validators.maxLength(100)]],
+      customDepartment: [''],
+      position: ['', Validators.required],
+      customPosition: [''],
       phone: [''],
       isActive: [true],
       departmentLeader: [false],
@@ -169,6 +226,26 @@ export class UserFormComponent implements OnInit, OnDestroy {
     passwordControl.setValidators(validators);
     passwordControl.updateValueAndValidity({ emitEvent: false });
     this.userForm.get('confirmPassword')?.updateValueAndValidity({ emitEvent: false });
+  }
+
+  private applyPersonalEmailPolicy(): void {
+    const personalEmailCtrl = this.userForm.get('personalEmail');
+    if (!personalEmailCtrl) return;
+
+    if (this.requirePersonalEmail) {
+      personalEmailCtrl.enable({ emitEvent: false });
+      personalEmailCtrl.setValidators([
+        Validators.required,
+        Validators.email,
+        this.emailsDifferentValidator.bind(this)
+      ]);
+    } else {
+      personalEmailCtrl.clearValidators();
+      personalEmailCtrl.setErrors(null);
+      personalEmailCtrl.disable({ emitEvent: false });
+    }
+
+    personalEmailCtrl.updateValueAndValidity({ emitEvent: false });
   }
 
   private confirmPasswordValidator(control: any) {
@@ -204,6 +281,10 @@ export class UserFormComponent implements OnInit, OnDestroy {
           if (response.success && response.data) {
             const target = response.data;
             this.targetUserIsAdmin = target.role === UserRole.ADMIN;
+
+            const deptVal = target.department && typeof target.department === 'object' ? (target.department as any)._id : target.department;
+            const posVal = target.position && typeof target.position === 'object' ? (target.position as any)._id : target.position;
+
             this.userForm.patchValue({
               username: target.username,
               email: target.email,
@@ -211,12 +292,12 @@ export class UserFormComponent implements OnInit, OnDestroy {
               firstName: target.firstName,
               lastName: target.lastName,
               role: target.role,
-              department: target.department,
-              position: target.position,
+              department: deptVal,
+              position: posVal,
               phone: target.phone || '',
               isActive: target.isActive,
               departmentLeader: target.departmentLeader || false,
-              managedDepartments: target.managedDepartments || [],
+              managedDepartments: (target.managedDepartments || []).map((d: any) => d._id || d),
               permissions: target.permissions || []
             });
 
@@ -259,15 +340,18 @@ export class UserFormComponent implements OnInit, OnDestroy {
       .subscribe({
         next: (response) => {
           if (response.success && response.data) {
+            let list = [];
             if (this.currentUser?.role === UserRole.LIDER) {
+              const myDeptId = this.currentUser.department?._id ? this.currentUser.department._id.toString() : this.currentUser.department?.toString();
               const allowed = [
-                this.currentUser.department,
-                ...(this.currentUser.managedDepartments || [])
+                myDeptId,
+                ...(this.currentUser.managedDepartments || []).map((d: any) => d._id ? d._id.toString() : d.toString())
               ];
-              this.availableDepartments = response.data.filter(d => allowed.includes(d.value));
+              list = response.data.filter(d => allowed.includes(d.value));
             } else {
-              this.availableDepartments = response.data;
+              list = response.data;
             }
+            this.availableDepartments = [...list, { key: 'OTHER', value: 'OTHER', label: 'Otro (Crear al vuelo)' }];
           }
         },
         error: (error) => {
@@ -276,16 +360,54 @@ export class UserFormComponent implements OnInit, OnDestroy {
       });
   }
 
+  private loadPositions(): void {
+    this.userService.getPositions()
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (response) => {
+          if (response.success && response.data) {
+            const list = response.data.map((p: any) => ({
+              key: p._id,
+              value: p._id,
+              label: p.name
+            }));
+            this.availablePositions = [...list, { key: 'OTHER', value: 'OTHER', label: 'Otro (Crear al vuelo)' }];
+          }
+        },
+        error: (error) => {
+          console.error('Error cargando cargos:', error);
+        }
+      });
+  }
+
   onSubmit(): void {
+    this.submitErrorMessage = '';
+
     if (this.userForm.invalid) {
       this.markFormGroupTouched();
+      this.submitErrorMessage = this.buildValidationErrorMessage();
+      this.focusFirstInvalidControl();
       return;
     }
 
     this.loading = true;
-    const formData = this.userForm.value;
+    const formData = { ...this.userForm.value };
 
+    if (formData.department === 'OTHER') {
+      formData.department = formData.customDepartment;
+    }
+    if (formData.position === 'OTHER') {
+      formData.position = formData.customPosition;
+    }
+
+    delete (formData as any).customDepartment;
+    delete (formData as any).customPosition;
     delete (formData as any).confirmPassword;
+
+    // Si la política no requiere correo personal, omitir el campo del payload para no enviar cadenas vacías
+    if (!this.requirePersonalEmail && (!formData.personalEmail || !formData.personalEmail.trim())) {
+      delete (formData as any).personalEmail;
+    }
 
     if (this.isEditMode && this.userId) {
       if (!formData.password) {
@@ -303,7 +425,7 @@ export class UserFormComponent implements OnInit, OnDestroy {
           },
           error: (error) => {
             console.error('Error actualizando usuario:', error);
-            alert('Error al actualizar el usuario: ' + error.message);
+            this.submitErrorMessage = 'Error al actualizar el usuario: ' + error.message;
             this.loading = false;
           }
         });
@@ -321,11 +443,57 @@ export class UserFormComponent implements OnInit, OnDestroy {
           },
           error: (error) => {
             console.error('Error creando usuario:', error);
-            alert('Error al crear el usuario: ' + error.message);
+            this.submitErrorMessage = 'Error al crear el usuario: ' + error.message;
             this.loading = false;
           }
         });
     }
+  }
+
+  private buildValidationErrorMessage(): string {
+    const labels: Record<string, string> = {
+      firstName: 'Nombre',
+      lastName: 'Apellido',
+      username: 'Nombre de usuario',
+      email: 'Email empresa',
+      personalEmail: 'Correo personal',
+      password: 'Contrasena',
+      confirmPassword: 'Confirmar contrasena',
+      role: 'Rol',
+      department: 'Departamento',
+      customDepartment: 'Nuevo departamento',
+      position: 'Cargo/Posicion',
+      customPosition: 'Nuevo cargo',
+      phone: 'Telefono'
+    };
+
+    const invalidFields = Object.keys(this.userForm.controls)
+      .filter((key) => {
+        const control = this.userForm.get(key);
+        return !!control && control.enabled && control.invalid;
+      })
+      .map((key) => labels[key] || key);
+
+    if (invalidFields.length === 0) {
+      return 'Revisa los datos ingresados e intenta nuevamente.';
+    }
+
+    return `Revisa los campos requeridos: ${invalidFields.join(', ')}.`;
+  }
+
+  private focusFirstInvalidControl(): void {
+    const invalidControlName = Object.keys(this.userForm.controls).find((key) => {
+      const control = this.userForm.get(key);
+      return !!control && control.enabled && control.invalid;
+    });
+
+    if (!invalidControlName) {
+      return;
+    }
+
+    const selector = `[formControlName="${invalidControlName}"]`;
+    const element = document.querySelector(selector) as HTMLElement | null;
+    element?.focus();
   }
 
   private markFormGroupTouched(): void {

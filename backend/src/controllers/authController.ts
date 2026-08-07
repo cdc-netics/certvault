@@ -6,8 +6,12 @@ import { User, UserRole } from '../models/User';
 import { AuthRequest } from '../middleware/auth';
 import { saveBase64Avatar } from '../utils/avatar';
 import { sendPasswordResetEmail, sendVerificationEmail } from '../services/emailService';
+import { buildResetLink, buildVerifyLink } from '../utils/frontendUrl';
 import { AuditLog } from '../models/AuditLog';
 import { SecuritySettings } from '../models/SecuritySettings';
+import { resolveDepartment, resolvePosition } from '../utils/resolveEntities';
+import { getResolvedServerPolicy } from '../services/serverPolicyService';
+import { logger } from '../config/logger';
 
 interface RegisterData {
   username: string;
@@ -44,75 +48,13 @@ const generateRefreshToken = (id: string): string => {
   });
 };
 
-const getFrontendBaseUrl = (req?: Request): string => {
-  // Se obtiene el valor estatico configurado como respaldo
-  const envBase = process.env.FRONTEND_URL?.trim() || '';
-  // Se separan multiples URLs en caso de estar configuradas por comas en las variables de entorno
-  const urls = envBase.split(',').map(u => u.trim()).filter(Boolean);
-
-  if (req) {
-    // 1. Validacion mediante la cabecera Origin (enviada tipicamente en llamadas CORS del cliente)
-    const origin = req.headers.origin as string;
-    if (origin) {
-      const matched = urls.find(u => u.toLowerCase().startsWith(origin.toLowerCase()));
-      if (matched) {
-        return matched.replace(/\/$/, '');
-      }
-      return origin.replace(/\/$/, '');
-    }
-
-    // 2. Validacion secundaria mediante la cabecera Referer
-    const referer = req.headers.referer as string;
-    if (referer) {
-      try {
-        const refUrl = new URL(referer);
-        const originFromRef = refUrl.origin;
-        const matched = urls.find(u => u.toLowerCase().startsWith(originFromRef.toLowerCase()));
-        if (matched) {
-          return matched.replace(/\/$/, '');
-        }
-        return originFromRef.replace(/\/$/, '');
-      } catch {
-        // Se ignora el fallo del formateador de URL en caso de referers maliciosos o invalidos
-      }
-    }
-
-    // 3. Validacion terciaria usando cabeceras Host y Protocolo (incluyendo soporte para Proxies)
-    const protocol = (req.headers['x-forwarded-proto'] as string) || req.protocol || 'http';
-    const host = (req.headers['x-forwarded-host'] as string) || req.get('host');
-    if (host) {
-      const generatedUrl = `${protocol}://${host}`;
-      const matched = urls.find(u => u.toLowerCase().startsWith(generatedUrl.toLowerCase()));
-      if (matched) {
-        return matched.replace(/\/$/, '');
-      }
-      return generatedUrl.replace(/\/$/, '');
-    }
-  }
-
-  // Si no se pudo determinar dinamicamente, se opta por el primer valor definido en el entorno
-  const defaultUrl = urls[0];
-  if (defaultUrl) {
-    return defaultUrl.replace(/\/$/, '');
-  }
-
-  throw new Error('FRONTEND_URL no esta definido en las variables de entorno y no se pudo determinar desde la peticion.');
-};
-
-const buildResetLink = (token: string, email: string, req?: Request): string => {
-  const base = getFrontendBaseUrl(req);
-  return `${base}/reset-password?token=${token}&email=${encodeURIComponent(email)}`;
-};
-
-const buildVerifyLink = (token: string, email: string, req?: Request): string => {
-  const base = getFrontendBaseUrl(req);
-  return `${base}/verify-email?token=${token}&email=${encodeURIComponent(email)}`;
-};
-
 export const register = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { username, email, personalEmail, password, firstName, lastName, department, position, phone }: RegisterData =
       req.body;
+
+    const resolvedDeptId = await resolveDepartment(department);
+    const resolvedPosId = await resolvePosition(position || 'Colaborador');
 
     const normalizedEmail = normalizeEmail(email);
     const normalizedPersonalEmail = normalizeEmail(personalEmail);
@@ -140,8 +82,8 @@ export const register = async (req: AuthRequest, res: Response): Promise<void> =
       password,
       firstName,
       lastName,
-      department,
-      position: position || 'Colaborador',
+      department: resolvedDeptId,
+      position: resolvedPosId,
       phone,
       role: UserRole.READER,
       isActive: true,
@@ -164,7 +106,7 @@ export const register = async (req: AuthRequest, res: Response): Promise<void> =
     } catch (emailError) {
       // Se registra el fallo del SMTP pero se permite que el registro en BD prosiga para evitar bloquear la creacion de cuentas.
       // Adicionalmente se imprime en los logs de la consola del servidor el enlace de activacion para permitir la activacion manual por parte de administradores.
-      console.error('❌ Registro exitoso, pero fallo el envio del correo de activacion:', emailError);
+      logger.error('❌ Registro exitoso, pero fallo el envio del correo de activacion:', emailError);
       console.log(`🔗 [ACTIVACION MANUAL] Enlace de activacion para ${user.email}: ${verifyLink}`);
       emailSent = false;
     }
@@ -176,7 +118,7 @@ export const register = async (req: AuthRequest, res: Response): Promise<void> =
         : 'Registro exitoso. Sin embargo, no pudimos enviar el correo de verificación. Por favor contacta al administrador para activar tu cuenta.'
     });
   } catch (error: any) {
-    console.error('Error en registro:', error);
+    logger.error('Error en registro:', error);
     
     // Manejo de errores de validacion del esquema de Mongoose para evitar codigos 500 genericos
     if (error.name === 'ValidationError') {
@@ -264,12 +206,13 @@ export const login = async (req: AuthRequest, res: Response): Promise<void> => {
     const isPersonalEmailMissingOrEqual = !user.personalEmail || 
       user.personalEmail.toLowerCase().trim() === user.email.toLowerCase().trim();
 
-    // Si la contraseña expiro o falta el correo de respaldo, se exige su cambio obligatorio.
-    // Se establece una excepcion para el administrador de semilla para facilitar las pruebas y administracion inicial.
+    const { requirePersonalEmail } = await getResolvedServerPolicy();
+
+    // Si la contraseña expiro o falta el correo de respaldo (si es requerido), se exige su cambio obligatorio.
     if (isSeedAdmin) {
       user.mustChangePassword = false;
       user.termsAccepted = true;
-    } else if (isExpired || isPersonalEmailMissingOrEqual) {
+    } else if (isExpired || (requirePersonalEmail && isPersonalEmailMissingOrEqual)) {
       user.mustChangePassword = true;
     }
 
@@ -278,10 +221,9 @@ export const login = async (req: AuthRequest, res: Response): Promise<void> => {
 
     user.lastLogin = new Date();
     user.refreshToken = refreshToken;
-    // Se deshabilita la validacion del esquema al guardar marcas de sesion y tokens.
-    // Esto previene que usuarios con perfiles antiguos e incompletos (p. ej. sin correo personal)
-    // sufran excepciones del esquema de Mongoose al loguearse y queden bloqueados sin poder ingresar.
     await user.save({ validateBeforeSave: false });
+    // Poblar departamento y cargo para que el cliente reciba los nombres y no IDs crudos
+    await user.populate('department position');
 
     res.json({
       success: true,
@@ -306,14 +248,14 @@ export const login = async (req: AuthRequest, res: Response): Promise<void> => {
           mustChangePassword: user.mustChangePassword,
           termsAccepted: user.termsAccepted,
           termsAcceptedAt: user.termsAcceptedAt,
-          requiresPersonalEmailUpdate: isPersonalEmailMissingOrEqual && !isSeedAdmin
+          requiresPersonalEmailUpdate: requirePersonalEmail && isPersonalEmailMissingOrEqual && !isSeedAdmin
         },
         expiresIn: 7 * 24 * 60 * 60
       },
       message: 'Inicio de sesion exitoso'
     });
   } catch (error) {
-    console.error('Error en login:', error);
+    logger.error('Error en login:', error);
     res.status(500).json({
       success: false,
       error: 'No pudimos iniciar sesion. Intenta nuevamente.',
@@ -398,7 +340,7 @@ export const logout = async (req: AuthRequest, res: Response): Promise<void> => 
       message: 'Sesion cerrada exitosamente'
     });
   } catch (error) {
-    console.error('Error en logout:', error);
+    logger.error('Error en logout:', error);
     res.status(500).json({
       success: false,
       error: 'No pudimos cerrar la sesion. Intenta nuevamente.',
@@ -442,7 +384,7 @@ export const getCurrentUser = async (req: AuthRequest, res: Response): Promise<v
       }
     });
   } catch (error) {
-    console.error('Error obteniendo usuario actual:', error);
+    logger.error('Error obteniendo usuario actual:', error);
     res.status(500).json({
       success: false,
       error: 'No pudimos cargar tu perfil. Intenta nuevamente.',
@@ -487,6 +429,8 @@ export const updateProfile = async (req: AuthRequest, res: Response): Promise<vo
     }
 
     await req.user.save();
+    // Re-poblar relaciones tras guardar para que el cliente reciba la informacion legible
+    await req.user.populate('department position');
 
     res.json({
       success: true,
@@ -508,7 +452,7 @@ export const updateProfile = async (req: AuthRequest, res: Response): Promise<vo
       message: 'Perfil actualizado exitosamente'
     });
   } catch (error) {
-    console.error('Error actualizando perfil:', error);
+    logger.error('Error actualizando perfil:', error);
     res.status(500).json({
       success: false,
       error: 'No pudimos actualizar el perfil. Intenta nuevamente.',
@@ -607,7 +551,7 @@ export const changePassword = async (req: AuthRequest, res: Response): Promise<v
       message: 'Contraseña actualizada exitosamente'
     });
   } catch (error) {
-    console.error('Error cambiando contraseña:', error);
+    logger.error('Error cambiando contraseña:', error);
     res.status(500).json({
       success: false,
       error: 'No pudimos cambiar la contraseña. Intenta nuevamente.',
@@ -654,7 +598,7 @@ export const forgotPassword = async (req: AuthRequest, res: Response): Promise<v
       message: 'Si el correo esta registrado, enviamos un enlace para restablecer la contraseña.'
     });
   } catch (error) {
-    console.error('Error solicitando reset de contraseña:', error);
+    logger.error('Error solicitando reset de contraseña:', error);
     res.status(500).json({
       success: false,
       error: 'No pudimos enviar el enlace. Intenta nuevamente.',
@@ -739,7 +683,7 @@ export const resetPassword = async (req: AuthRequest, res: Response): Promise<vo
       message: 'Contraseña actualizada. Ya puedes iniciar sesion.'
     });
   } catch (error) {
-    console.error('Error restableciendo contraseña:', error);
+    logger.error('Error restableciendo contraseña:', error);
     res.status(500).json({
       success: false,
       error: 'No pudimos restablecer la contraseña. Intenta nuevamente.',
@@ -788,7 +732,7 @@ export const verifyEmail = async (req: AuthRequest, res: Response): Promise<void
       message: 'Cuenta verificada. Ya puedes iniciar sesion.'
     });
   } catch (error) {
-    console.error('Error verificando correo:', error);
+    logger.error('Error verificando correo:', error);
     res.status(500).json({
       success: false,
       error: 'No pudimos verificar el correo. Intenta nuevamente.',
@@ -830,7 +774,7 @@ export const getMyActivity = async (req: AuthRequest, res: Response): Promise<vo
       data: formattedActivity
     });
   } catch (error) {
-    console.error('Error obteniendo la actividad del usuario:', error);
+    logger.error('Error obteniendo la actividad del usuario:', error);
     res.status(500).json({
       success: false,
       error: 'Error al obtener la actividad reciente',
@@ -866,8 +810,9 @@ export const verifyResetToken = async (req: Request, res: Response): Promise<voi
       return;
     }
 
-    const requiresPersonalEmail = !user.personalEmail || 
-      user.personalEmail.toLowerCase().trim() === user.email.toLowerCase().trim();
+    const { requirePersonalEmail } = await getResolvedServerPolicy();
+    const requiresPersonalEmail = requirePersonalEmail && (!user.personalEmail || 
+      user.personalEmail.toLowerCase().trim() === user.email.toLowerCase().trim());
 
     res.json({
       success: true,
@@ -878,7 +823,7 @@ export const verifyResetToken = async (req: Request, res: Response): Promise<voi
       }
     });
   } catch (error) {
-    console.error('Error verificando token de reset:', error);
+    logger.error('Error verificando token de reset:', error);
     res.status(500).json({
       success: false,
       error: 'Error interno del servidor'
@@ -928,7 +873,7 @@ export const acceptTerms = async (req: AuthRequest, res: Response): Promise<void
       }
     });
   } catch (error) {
-    console.error('Error al aceptar términos:', error);
+    logger.error('Error al aceptar términos:', error);
     res.status(500).json({
       success: false,
       error: 'Error al procesar la aceptación de los términos y condiciones',
@@ -1121,7 +1066,7 @@ export const adLogin = async (req: Request, res: Response): Promise<void> => {
         userPosition = userLdapProfile.title || 'Colaborador';
 
       } catch (ldapError: any) {
-        console.error('❌ LDAP Auth Error:', ldapError.message);
+        logger.error('❌ LDAP Auth Error:', ldapError.message);
         
         // Simulación en entorno de desarrollo local si no hay servidor LDAP o falta la dependencia
         if (process.env.NODE_ENV !== 'production' || ldapError.message.includes('Cannot find module')) {
@@ -1171,8 +1116,17 @@ export const adLogin = async (req: Request, res: Response): Promise<void> => {
         isActive: true,
         isVerified: true,
         termsAccepted: false,
-        mustChangePassword: false
       });
+    }
+
+    if (isNewUser && user) {
+      // Re-asociar de forma inmediata cualquier certificación huérfana para el usuario recién auto-aprovisionado
+      try {
+        const { healOrphanedCertifications } = await import('../utils/userHealer');
+        await healOrphanedCertifications();
+      } catch (healError) {
+        logger.error('Error al curar certificaciones huérfanas tras aprovisionamiento JIT:', healError);
+      }
     }
 
     if (user.isActive === false) {
@@ -1180,9 +1134,11 @@ export const adLogin = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
+    const { requirePersonalEmail } = await getResolvedServerPolicy();
+
     // Identificar si falta actualizar el correo personal (debe ser diferente al corporativo)
-    const requiresPersonalEmailUpdate = isNewUser || !user.personalEmail || 
-      user.personalEmail.toLowerCase().trim() === user.email.toLowerCase().trim();
+    const requiresPersonalEmailUpdate = requirePersonalEmail && (isNewUser || !user.personalEmail || 
+      user.personalEmail.toLowerCase().trim() === user.email.toLowerCase().trim());
 
     const token = generateToken(String(user._id));
     const refreshTokenVal = generateRefreshToken(String(user._id));
@@ -1190,6 +1146,8 @@ export const adLogin = async (req: Request, res: Response): Promise<void> => {
     user.lastLogin = new Date();
     user.refreshToken = refreshTokenVal;
     await user.save({ validateBeforeSave: false });
+    // Poblar departamento y cargo para el inicio de sesion unico AD
+    await user.populate('department position');
 
     res.json({
       success: true,
@@ -1221,7 +1179,26 @@ export const adLogin = async (req: Request, res: Response): Promise<void> => {
     });
 
   } catch (error: any) {
-    console.error('Error en adLogin:', error);
+    logger.error('Error en adLogin:', error);
     res.status(500).json({ success: false, error: 'Error del sistema al procesar el inicio de sesión único.' });
+  }
+};
+
+export const getAdConfig = async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const settings = await SecuritySettings.findOne().sort({ updatedAt: -1 });
+    res.json({
+      success: true,
+      data: {
+        adLoginEnabled: settings ? settings.adLoginEnabled : false,
+        adProvider: settings ? settings.adProvider : 'azure'
+      }
+    });
+  } catch (error) {
+    logger.error('Error al obtener la configuración de AD:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Error al obtener la configuración de AD'
+    });
   }
 };

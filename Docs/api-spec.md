@@ -106,15 +106,38 @@ Este documento detalla los principales endpoints de la API de **CertVault**, des
 
 ---
 
-### Eliminar Usuario (Borrado Físico y Envío de Respaldo)
+### Eliminar Usuario (Borrado Físico y Envío Condicional de Respaldo)
 * **Ruta:** `DELETE /api/users/:id`
 * **Encabezados:** `Authorization: Bearer <Token>` (Requiere rol `admin`)
 * **Respuesta Exitosa (200 OK):**
-  Dispara el borrado físico de la base de datos y de disco. Envía de forma automática un correo electrónico de respaldo con las certificaciones adjuntas en formato PDF. Registra un log detallado en el módulo de auditoría:
+  Dispara el borrado físico de la base de datos y de disco. Si la política SMTP `sendBackupOnDelete` está habilitada, genera y envía automáticamente un correo con un ZIP conteniendo las certificaciones del usuario. Si la política está deshabilitada, el usuario se elimina sin envío de respaldo. Registra un log detallado en el módulo de auditoría:
   ```json
   {
     "success": true,
     "message": "Usuario eliminado exitosamente y copia de respaldo enviada a su correo personal."
+  }
+  ```
+
+---
+
+### Asignación Masiva de Departamento
+* **Ruta:** `PATCH /api/users/bulk-department`
+* **Encabezados:** `Authorization: Bearer <Token>` (Requiere rol `admin` o `lider`)
+* **Cuerpo de la Petición:**
+  ```json
+  {
+    "userIds": [
+      "69861ca096a46d7b664e8a10",
+      "69f90c7263456e3bfd5184c5"
+    ],
+    "departmentId": "69f124b763456e3bfd51814e"
+  }
+  ```
+* **Respuesta Exitosa (200 OK):**
+  ```json
+  {
+    "success": true,
+    "message": "Departamento actualizado masivamente para los usuarios seleccionados correctamente."
   }
   ```
 
@@ -146,6 +169,82 @@ Este documento detalla los principales endpoints de la API de **CertVault**, des
       "updatedAt": "2026-05-26T23:33:00.000Z"
     },
     "message": "Configuracion de seguridad actualizada exitosamente"
+  }
+  ```
+
+---
+
+### Gestión de Respaldos Locales (Backups en Servidor)
+Todos estos endpoints requieren privilegios de rol `admin`:
+
+* **Listar Respaldos Locales:**
+  * **Ruta:** `GET /api/settings/backup/local`
+  * **Respuesta Exitosa (200 OK):**
+    ```json
+    {
+      "success": true,
+      "data": [
+        {
+          "filename": "backup-20260625-171500.zip",
+          "sizeBytes": 1054320,
+          "createdAt": "2026-06-25T21:15:00.000Z"
+        }
+      ]
+    }
+    ```
+
+* **Crear Respaldo Manual Local:**
+  * **Ruta:** `POST /api/settings/backup/local`
+  * **Respuesta Exitosa (200 OK):**
+    ```json
+    {
+      "success": true,
+      "data": {
+        "filename": "backup-20260625-171800.zip"
+      },
+      "message": "Respaldo local generado exitosamente"
+    }
+    ```
+
+* **Descargar Respaldo Físico:**
+  * **Ruta:** `GET /api/settings/backup/local/download/:filename`
+  * **Respuesta (200 OK):** Retorna la descarga directa del archivo ZIP comprimido (Base de datos + archivos adjuntos) protegiendo el host de Path Traversal.
+
+* **Eliminar Respaldo Físico:**
+  * **Ruta:** `DELETE /api/settings/backup/local/:filename`
+  * **Respuesta Exitosa (200 OK):**
+    ```json
+    {
+      "success": true,
+      "message": "Respaldo local eliminado exitosamente"
+    }
+    ```
+
+---
+
+### Políticas SMTP (Directivas Globales del Sistema)
+* **Obtener Políticas Activas:** `GET /api/settings/smtp-policy`
+* **Encabezados:** `Authorization: Bearer <Token>`
+* **Descripción:** Retorna las directivas activas del perfil SMTP global. Utilizado por el frontend para determinar dinámicamente si el correo personal es obligatorio y si se envían respaldos al eliminar usuarios.
+* **Respuesta Exitosa (200 OK):**
+  ```json
+  {
+    "success": true,
+    "data": {
+      "sendBackupOnDelete": true,
+      "requirePersonalEmail": false
+    }
+  }
+  ```
+* **Respuesta sin Configuración (200 OK):**
+  Si no existe un perfil SMTP activo, retorna valores por defecto:
+  ```json
+  {
+    "success": true,
+    "data": {
+      "sendBackupOnDelete": true,
+      "requirePersonalEmail": true
+    }
   }
   ```
 

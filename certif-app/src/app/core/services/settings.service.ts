@@ -1,9 +1,10 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http';
-import { Observable, of, throwError } from 'rxjs';
+import { Observable, of, throwError, BehaviorSubject } from 'rxjs';
 import { catchError, tap } from 'rxjs/operators';
 import { ApiResponse } from '../models/common.model';
 import { SmtpProfile, SmtpProfilePayload } from '../models/smtp-profile.model';
+import { extractHttpErrorMessage } from '../utils/http-error.util';
 
 export interface AuditLogsQuery {
   page?: number;
@@ -40,6 +41,10 @@ export interface SecuritySettingsData {
   ldapBaseDN?: string;
   ldapBindDN?: string;
   ldapBindPassword?: string;
+  // Propiedades de auto-backup
+  autoBackupEnabled: boolean;
+  autoBackupIntervalDays: number;
+  lastAutoBackupAt?: string | Date;
 }
 
 export interface PublicApiClient {
@@ -59,6 +64,11 @@ export interface PublicApiClient {
   downloadEndpointPattern: string;
 }
 
+export interface ServerPolicy {
+  sendBackupOnDelete: boolean;
+  requirePersonalEmail: boolean;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -67,10 +77,74 @@ export class SettingsService {
   private readonly cacheTtlMs = 30000;
   private readonly cache = new Map<string, { expiresAt: number; response: ApiResponse<unknown> }>();
 
+  private readonly brandingSubject = new BehaviorSubject<BrandingSettings | null>(null);
+  public readonly branding$ = this.brandingSubject.asObservable();
+
   constructor(private readonly http: HttpClient) {}
+
+  // Aplicar colores y configuraciones de branding dinámicamente en el DOM y navegador
+  applyBranding(settings: BrandingSettings): void {
+    this.brandingSubject.next(settings);
+
+    if (settings.primaryColor) {
+      document.documentElement.style.setProperty('--primary-color', settings.primaryColor);
+      // Generar y aplicar un color de hover/active un poco más oscuro (-15% de brillo)
+      document.documentElement.style.setProperty('--primary-dark', this.adjustColorBrightness(settings.primaryColor, -15));
+    }
+    if (settings.secondaryColor) {
+      document.documentElement.style.setProperty('--secondary-color', settings.secondaryColor);
+    }
+    if (settings.appName) {
+      document.title = `${settings.appName} - Sistema de Certificaciones`;
+    }
+  }
+
+  // Cargar el branding de la base de datos y aplicarlo dinámicamente
+  loadAndApplyBranding(): Observable<ApiResponse<BrandingSettings>> {
+    return this.getBranding().pipe(
+      tap((response) => {
+        if (response.success && response.data) {
+          this.applyBranding(response.data);
+        }
+      })
+    );
+  }
+
+  // Utilidad para cambiar el brillo de un color en formato HEX
+  private adjustColorBrightness(hex: string, percent: number): string {
+    let R = parseInt(hex.substring(1, 3), 16);
+    let G = parseInt(hex.substring(3, 5), 16);
+    let B = parseInt(hex.substring(5, 7), 16);
+
+    R = Math.max(0, Math.min(255, R + (R * percent) / 100));
+    G = Math.max(0, Math.min(255, G + (G * percent) / 100));
+    B = Math.max(0, Math.min(255, B + (B * percent) / 100));
+
+    const rHex = Math.round(R).toString(16).padStart(2, '0');
+    const gHex = Math.round(G).toString(16).padStart(2, '0');
+    const bHex = Math.round(B).toString(16).padStart(2, '0');
+
+    return `#${rHex}${gHex}${bHex}`;
+  }
 
   getSmtpProfiles(): Observable<ApiResponse<SmtpProfile[]>> {
     return this.cachedGet<SmtpProfile[]>('smtp-profiles', `${this.API_URL}/smtp-profiles`);
+  }
+
+  // Obtener la política global del servidor asociada a flujos de correo/usuarios
+  getServerPolicy(): Observable<ApiResponse<ServerPolicy>> {
+    return this.http.get<ApiResponse<ServerPolicy>>(`${this.API_URL}/smtp-policy`)
+      .pipe(catchError(this.handleError));
+  }
+
+  updateServerPolicy(payload: Partial<ServerPolicy>): Observable<ApiResponse<ServerPolicy>> {
+    return this.http.put<ApiResponse<ServerPolicy>>(`${this.API_URL}/smtp-policy`, payload)
+      .pipe(catchError(this.handleError));
+  }
+
+  // Compatibilidad temporal con componentes existentes
+  getActiveSmtpPolicy(): Observable<ApiResponse<{ requirePersonalEmail: boolean }>> {
+    return this.getServerPolicy() as Observable<ApiResponse<{ requirePersonalEmail: boolean }>>;
   }
 
   createSmtpProfile(payload: SmtpProfilePayload): Observable<ApiResponse<SmtpProfile>> {
@@ -205,9 +279,19 @@ export class SettingsService {
     return this.cachedGet<any>(`reports-overview:${params.toString()}`, `${this.API_URL}/reports/overview`, params);
   }
 
-  exportReport(): Observable<Blob> {
-    return this.http.get(`${this.API_URL}/reports/export`, { responseType: 'blob' })
-      .pipe(catchError(this.handleError));
+  exportReport(filters?: Record<string, string>): Observable<Blob> {
+    let params = new HttpParams();
+    if (filters) {
+      for (const [key, value] of Object.entries(filters)) {
+        if (value !== undefined && value !== null && value !== '') {
+          params = params.set(key, value);
+        }
+      }
+    }
+    return this.http.get(`${this.API_URL}/reports/export`, {
+      params,
+      responseType: 'blob'
+    }).pipe(catchError(this.handleError));
   }
 
   // Obtener la configuración actual de seguridad de contraseñas
@@ -227,9 +311,32 @@ export class SettingsService {
       .pipe(catchError(this.handleError));
   }
 
+  // Obtener lista de backups locales en el disco del servidor
+  getLocalBackups(): Observable<ApiResponse<any[]>> {
+    return this.http.get<ApiResponse<any[]>>(`${this.API_URL}/backup/local`)
+      .pipe(catchError(this.handleError));
+  }
+
+  // Generar de forma manual un backup en el servidor local
+  createManualLocalBackup(): Observable<ApiResponse<any>> {
+    return this.http.post<ApiResponse<any>>(`${this.API_URL}/backup/local`, {})
+      .pipe(catchError(this.handleError));
+  }
+
+  // Descargar archivo de backup local específico
+  downloadLocalBackup(filename: string): Observable<Blob> {
+    return this.http.get(`${this.API_URL}/backup/local/download/${filename}`, { responseType: 'blob' })
+      .pipe(catchError(this.handleError));
+  }
+
+  // Eliminar archivo de backup local del disco
+  deleteLocalBackup(filename: string): Observable<ApiResponse<void>> {
+    return this.http.delete<ApiResponse<void>>(`${this.API_URL}/backup/local/${filename}`)
+      .pipe(catchError(this.handleError));
+  }
+
   private handleError(error: HttpErrorResponse): Observable<never> {
-    const message = error.error?.message || error.error?.error || 'Error procesando configuracion';
-    return throwError(() => new Error(message));
+    return throwError(() => new Error(extractHttpErrorMessage(error)));
   }
 
   private cachedGet<T>(key: string, url: string, params?: HttpParams): Observable<ApiResponse<T>> {
