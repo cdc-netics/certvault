@@ -11,6 +11,8 @@ Este documento registra los problemas, vulnerabilidades, mejoras y tareas técni
 | **ISS-020** | Panel de Reportes: Selector dinámico de departamentos activos      | Frontend           | Media     | To Do  |
 | **ISS-021** | Descarga de Reportes: Corrección de filtros de fecha en exportación| Backend            | Alta      | To Do  |
 | **ISS-022** | Listado de Certificaciones: Filtro por usuario y orden prioritario  | Backend / Frontend | Media     | To Do  |
+| **ISS-024** | Revisión del inicio de sesión con SSO (Azure AD / LDAP)            | Backend / Frontend | Alta      | To Do  |
+| **ISS-025** | Enlace de restablecimiento de contraseña no funcional              | Backend / Frontend | Alta      | To Do  |
 
 ## Issues Completados (Done)
 
@@ -202,5 +204,41 @@ Este documento registra los problemas, vulnerabilidades, mejoras y tareas técni
 - **Propuesta de Implementación**:
   - **Backend (Orden predeterminado)**: Modificar la consulta principal de certificaciones en [certificationsController.ts](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/backend/src/controllers/certificationsController.ts) para cambiar el orden predeterminado a la fecha de vencimiento más próxima a la fecha actual (`expirationDate: 1`), priorizando las que requieren renovación urgente en las revisiones.
   - **Frontend (Filtro de Usuario)**: Agregar un combobox dinámico en el formulario de filtros de [certifications-list.component.ts](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/certif-app/src/app/features/certifications/certifications-list/certifications-list.component.ts) para seleccionar a un usuario por su nombre. Este listado se poblará dinámicamente mediante el servicio de usuarios (disponible para roles con privilegios adecuados). Por defecto, el filtro se mantendrá vacío (mostrando todos los colaboradores).
+
+---
+
+### [ISS-024] Revisión del inicio de sesión con SSO (Azure AD / LDAP)
+
+- **Código Afectado (Backend)**: [authController.ts](file:///c:/Workspace/certvault/backend/src/controllers/authController.ts) (función `adLogin`, líneas ~890-1020).
+- **Código Afectado (Frontend)**: [login.component.ts](file:///c:/Workspace/certvault/certif-app/src/app/features/auth/login/login.component.ts) (`loginWithAzure`, líneas ~233-252).
+- **Hallazgos de la revisión preliminar**:
+  - **El `idToken` de Azure AD no se valida criptográficamente**: `adLogin` usa `jwt.decode(idToken)`, que únicamente deserializa el payload sin verificar la firma contra las claves públicas (JWKS) de Microsoft Entra ID. La única comprobación es que el claim `tid` coincida con el tenant configurado, dato que viaja dentro del mismo token no verificado. En la práctica, cualquiera que conozca el endpoint puede autenticarse como cualquier correo corporativo enviando un JWT fabricado.
+  - **El flujo SSO del frontend es una simulación**: `loginWithAzure()` no ejecuta un redirect OAuth2/OIDC real; solicita el correo mediante `prompt()` y construye un token ficticio (`mock-jwt-azure-sso-token-for-...`). No existe integración con MSAL ni obtención real de tokens.
+  - **Fallback de LDAP degradable a modo simulado**: ante cualquier error de conexión LDAP, el `catch` entra en modo simulación si `NODE_ENV !== 'production'`, aceptando credenciales sin contactar al Directorio Activo. Depender de una variable de entorno como único freno es frágil.
+  - **Aprovisionamiento JIT sobre identidad no verificada**: al crearse el usuario automáticamente (ISS-005) a partir de los claims del token, un token falsificado no solo permite el acceso, sino que crea cuentas persistentes en la base de datos.
+- **Propuesta de Implementación**:
+  - **Backend**: Reemplazar `jwt.decode` por `jwt.verify` con validación de firma vía JWKS remoto (`jwks-rsa`) contra `https://login.microsoftonline.com/{tenantId}/discovery/v2.0/keys`, validando además `iss`, `aud` (client ID de la aplicación registrada), `exp` y `nbf`. Rechazar el token ante cualquier fallo, sin rutas alternativas.
+  - **Backend (LDAP)**: Eliminar el modo simulado del `catch` o aislarlo tras un flag explícito de configuración (`ldapSimulationEnabled`) que nunca se active por omisión, devolviendo `401` en cualquier otro caso.
+  - **Frontend**: Sustituir la simulación por el flujo OIDC real usando `@azure/msal-angular` (Authorization Code + PKCE), enviando al backend el `idToken` genuino emitido por Entra ID.
+  - **Testing**: Suite de regresión que verifique el rechazo de tokens con firma inválida, tenant distinto, expirados y de audiencia incorrecta.
+
+---
+
+### [ISS-025] Enlace de restablecimiento de contraseña no funcional
+
+- **Código Afectado (Backend)**: [authController.ts](file:///c:/Workspace/certvault/backend/src/controllers/authController.ts) (`forgotPassword`, `resetPassword`, `verifyResetToken`), [frontendUrl.ts](file:///c:/Workspace/certvault/backend/src/utils/frontendUrl.ts) (`buildResetLink`, `getFrontendBaseUrl`).
+- **Código Afectado (Frontend)**: [reset-password.component.ts](file:///c:/Workspace/certvault/certif-app/src/app/features/auth/reset-password/reset-password.component.ts).
+- **Síntoma**: Al solicitar el olvido de contraseña, el correo se envía correctamente, pero el enlace recibido no permite completar el restablecimiento.
+- **Hipótesis a verificar (ordenadas por probabilidad)**:
+  1. **URL base mal resuelta**: `getFrontendBaseUrl(req)` prioriza las cabeceras `Origin` / `Referer` / `Host` por sobre `FRONTEND_URL`. Detrás del proxy inverso, la petición puede resolver a una URL interna (IP y puerto del contenedor) que el cliente de correo no puede alcanzar. Corresponde capturar el enlace real generado en producción y contrastarlo con las URLs configuradas.
+  2. **Ventana de expiración demasiado corta**: `RESET_PASSWORD_EXPIRE_MINUTES` toma 10 minutos por omisión. Sumado a la latencia de entrega del correo, el token puede expirar antes de que el usuario abra el mensaje, produciendo el mensaje genérico "enlace inválido o ya expiró" que es indistinguible de un enlace roto.
+  3. **Bloqueo por correo personal**: `resetPassword` exige un `personalEmail` distinto del corporativo cuando el usuario no lo tiene configurado (ISS-008). Si el formulario no expone ese campo en algún escenario, el flujo se corta con un `400` pese a que el token es válido.
+  4. **Reescritura del enlace por el cliente de correo**: los query params `token` y `email` pueden ser alterados por mecanismos de "safe links" del gestor de correo corporativo, invalidando el token.
+- **Propuesta de Implementación**:
+  - **Diagnóstico**: Registrar en el log de auditoría el enlace generado (con el token ofuscado) y el motivo exacto del rechazo en `verifyResetToken`, de modo de distinguir token inexistente, token expirado y falta de correo personal.
+  - **Backend**: Invertir la precedencia en `getFrontendBaseUrl` para los enlaces enviados por correo: usar siempre la URL pública configurada (`FRONTEND_URL` / `PUBLIC_API_BASE_URL`) y recurrir a las cabeceras solo como último recurso. Un enlace de correo se abre fuera del contexto de la petición que lo originó, por lo que no debe depender de ella.
+  - **Backend**: Elevar la expiración por omisión a un valor operativamente razonable (30-60 minutos) manteniéndola configurable.
+  - **Frontend**: Diferenciar los mensajes de error en la vista de restablecimiento (expirado / inválido / requiere correo personal) y ofrecer la acción de solicitar un nuevo enlace cuando haya expirado.
+  - **Testing**: Extender `frontendUrl.spec.ts` con casos donde las cabeceras de la petición apuntan a un host interno distinto de `FRONTEND_URL`, verificando que el enlace de correo use la URL pública.
 
 
