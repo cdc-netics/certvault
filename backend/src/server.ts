@@ -126,6 +126,17 @@ app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev', {
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Toda respuesta de la API depende de la identidad del solicitante: dos usuarios con
+// distinto rol reciben cuerpos distintos para la misma URL. Sin estas cabeceras, cualquier
+// caché intermedia (proxy inverso, CDN) podría reutilizar la respuesta de un usuario para
+// otro, y el navegador podría servir datos obsoletos tras un cambio de permisos.
+app.use('/api', (_req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('Vary', 'Authorization');
+  next();
+});
+
 app.use(auditRequest);
 
 // Servir solo avatares publicos. Los certificados se entregan por endpoint autenticado.
