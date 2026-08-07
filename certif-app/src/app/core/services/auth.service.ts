@@ -286,8 +286,12 @@ export class AuthService {
     this.logout();
   }
 
-  // Obtiene si está habilitado el login por AD corporativo y su tipo
-  getAdConfig(): Observable<ApiResponse<{ adLoginEnabled: boolean; adProvider: string }>> {
+  getAdConfig(): Observable<ApiResponse<{
+    adLoginEnabled: boolean;
+    adProvider: string;
+    azureClientId: string | null;
+    azureTenantId: string | null;
+  }>> {
     return this.http.get<ApiResponse<any>>(`${this.API_URL}/ad-config`).pipe(
       catchError(this.handleError)
     );
