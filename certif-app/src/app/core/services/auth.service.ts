@@ -6,6 +6,14 @@ import { User, LoginRequest, LoginResponse, RegisterRequest, UserRole } from '..
 import { ApiResponse } from '../models/common.model';
 import { toApiError } from '../utils/http-error.util';
 
+/** Configuración pública de inicio de sesión corporativo expuesta por `/ad-config`. */
+export interface AdConfig {
+  adLoginEnabled: boolean;
+  adProvider: string;
+  azureTenantId: string | null;
+  azureClientId: string | null;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -286,9 +294,10 @@ export class AuthService {
     this.logout();
   }
 
-  // Obtiene si está habilitado el login por AD corporativo y su tipo
-  getAdConfig(): Observable<ApiResponse<{ adLoginEnabled: boolean; adProvider: string }>> {
-    return this.http.get<ApiResponse<any>>(`${this.API_URL}/ad-config`).pipe(
+  // Obtiene si está habilitado el login por AD corporativo, su tipo y —para Azure— los
+  // identificadores públicos del App Registration que el flujo PKCE del navegador necesita.
+  getAdConfig(): Observable<ApiResponse<AdConfig>> {
+    return this.http.get<ApiResponse<AdConfig>>(`${this.API_URL}/ad-config`).pipe(
       catchError(this.handleError)
     );
   }
