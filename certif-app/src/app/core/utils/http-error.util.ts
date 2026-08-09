@@ -1,6 +1,21 @@
 import { HttpErrorResponse } from '@angular/common/http';
 
 /**
+ * Error de aplicacion que conserva el codigo `reason` emitido por el backend, de modo que
+ * la vista pueda reaccionar al motivo concreto y no solo mostrar el mensaje generico.
+ */
+export interface ApiError extends Error {
+  reason?: string;
+}
+
+/** Construye un ApiError a partir de la respuesta HTTP, preservando el motivo del rechazo. */
+export function toApiError(error: HttpErrorResponse): ApiError {
+  const apiError: ApiError = new Error(extractHttpErrorMessage(error));
+  apiError.reason = error.error?.reason;
+  return apiError;
+}
+
+/**
  * Extrae un mensaje de error legible para el usuario a partir de un HttpErrorResponse.
  * Centraliza la logica que antes estaba duplicada en cada servicio HTTP.
  */

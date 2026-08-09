@@ -4,7 +4,7 @@ import { Observable, BehaviorSubject, throwError, of } from 'rxjs';
 import { catchError, map, tap } from 'rxjs/operators';
 import { User, LoginRequest, LoginResponse, RegisterRequest, UserRole } from '../models/user.model';
 import { ApiResponse } from '../models/common.model';
-import { extractHttpErrorMessage } from '../utils/http-error.util';
+import { toApiError } from '../utils/http-error.util';
 
 @Injectable({
   providedIn: 'root'
@@ -179,7 +179,7 @@ export class AuthService {
   }
 
   private handleError(error: HttpErrorResponse): Observable<never> {
-    return throwError(() => new Error(extractHttpErrorMessage(error)));
+    return throwError(() => toApiError(error));
   }
 
   // Actualizar perfil de usuario
