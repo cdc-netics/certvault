@@ -23,6 +23,7 @@ import {
   getDepartments,
   getProviders
 } from '../controllers/certificationsController';
+import { canonicalExtensionForMimeType, isConsistentCertificateUpload } from '../utils/certificateFile';
 
 const router = Router();
 
@@ -37,24 +38,28 @@ fs.mkdirSync(uploadsDir, { recursive: true });
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, uploadsDir),
   filename: (_req, file, cb) => {
-    const uniqueName = `${Date.now()}-${Math.round(Math.random() * 1e6)}${path.extname(
-      file.originalname
-    )}`;
-    cb(null, uniqueName);
+    // La extensión se deriva del tipo admitido y no del nombre original: es el cliente quien
+    // elige ese nombre, y de él depende el Content-Type con que luego se sirve el archivo.
+    const extension = canonicalExtensionForMimeType(file.mimetype);
+    if (!extension) {
+      return cb(new Error('Tipo de archivo no permitido'), '');
+    }
+    cb(null, `${Date.now()}-${Math.round(Math.random() * 1e6)}${extension}`);
   }
 });
 
-const ALLOWED_CERTIFICATE_MIME_TYPES = ['application/pdf', 'image/jpeg', 'image/png'];
 const MAX_CERTIFICATE_FILE_SIZE = Number(process.env.MAX_CERTIFICATE_FILE_SIZE || '5242880');
 
 const upload = multer({
   storage,
   limits: { fileSize: MAX_CERTIFICATE_FILE_SIZE },
   fileFilter: (_req, file, cb) => {
-    if (ALLOWED_CERTIFICATE_MIME_TYPES.includes(file.mimetype)) {
-      return cb(null, true);
+    // El tipo MIME viaja en la cabecera del multipart y lo controla quien sube el archivo,
+    // por lo que se exige ademas que la extension declarada sea coherente con ese tipo.
+    if (!isConsistentCertificateUpload(file.mimetype, file.originalname)) {
+      return cb(new Error('Tipo de archivo no permitido'));
     }
-    return cb(new Error('Tipo de archivo no permitido'));
+    return cb(null, true);
   }
 });
 

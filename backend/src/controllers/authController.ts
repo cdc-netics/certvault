@@ -1,11 +1,13 @@
 import crypto from 'crypto';
 import { Response, Request } from 'express';
 import jwt from 'jsonwebtoken';
-import { User, UserRole } from '../models/User';
+import { IUser, User, UserRole } from '../models/User';
 import { AuthRequest } from '../middleware/auth';
 import { saveBase64Avatar } from '../utils/avatar';
 import { sendPasswordResetEmail, sendVerificationEmail } from '../services/emailService';
 import { buildResetLink, buildVerifyLink } from '../utils/frontendUrl';
+import { AzureIdTokenClaims, verifyAzureIdToken } from '../utils/azureToken';
+import { escapeLdapFilterValue, isLdapSimulationEnabled } from '../utils/ldap';
 import { AuditLog } from '../models/AuditLog';
 import { SecuritySettings } from '../models/SecuritySettings';
 import { resolveDepartment, resolvePosition } from '../utils/resolveEntities';
@@ -29,7 +31,9 @@ interface LoginData {
   password: string;
 }
 
-const RESET_TOKEN_EXP_MINUTES = Number(process.env.RESET_PASSWORD_EXPIRE_MINUTES || 10);
+// Una ventana de 10 minutos expiraba antes de que el correo llegara a la bandeja del
+// destinatario (ISS-025). 60 minutos mantiene el token acotado sin romper el flujo real.
+const RESET_TOKEN_EXP_MINUTES = Number(process.env.RESET_PASSWORD_EXPIRE_MINUTES || 60);
 const VERIFY_TOKEN_EXP_MINUTES = Number(process.env.VERIFY_EMAIL_EXPIRE_MINUTES || 60);
 const APP_NAME = process.env.APP_NAME || 'CertiVault';
 
@@ -559,6 +563,53 @@ export const changePassword = async (req: AuthRequest, res: Response): Promise<v
   }
 };
 
+/**
+ * Motivo por el que un enlace de restablecimiento no es utilizable. Se expone al cliente
+ * para que pueda distinguir un enlace vencido (recuperable solicitando otro) de uno
+ * inválido, en lugar del mensaje único que impedía diagnosticar la falla (ISS-025).
+ */
+type ResetTokenRejection = 'TOKEN_INVALID' | 'TOKEN_EXPIRED';
+
+const RESET_REJECTION_MESSAGES: Record<ResetTokenRejection, string> = {
+  TOKEN_INVALID: 'El enlace de restablecimiento no es válido. Solicita uno nuevo.',
+  TOKEN_EXPIRED: 'El enlace de restablecimiento expiró. Solicita uno nuevo.'
+};
+
+type ResetTokenLookup = { user: IUser } | { reason: ResetTokenRejection };
+
+const isRejected = (lookup: ResetTokenLookup): lookup is { reason: ResetTokenRejection } =>
+  'reason' in lookup;
+
+/**
+ * Busca al dueño de un token de restablecimiento separando la validez del token de su
+ * vigencia: la expiración se evalúa en memoria y no dentro de la consulta, que es lo que
+ * permite responder con el motivo exacto del rechazo.
+ */
+const findUserByResetToken = async (
+  token: string,
+  email?: string,
+  options: { withPassword?: boolean } = {}
+): Promise<ResetTokenLookup> => {
+  const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+  const query = User.findOne({
+    passwordResetToken: hashedToken,
+    ...(email ? { email: normalizeEmail(email) } : {})
+  });
+
+  const user = options.withPassword ? await query.select('+password') : await query;
+
+  if (!user) {
+    return { reason: 'TOKEN_INVALID' };
+  }
+
+  const expiresAt = user.passwordResetExpires?.getTime();
+  if (!expiresAt || expiresAt <= Date.now()) {
+    return { reason: 'TOKEN_EXPIRED' };
+  }
+
+  return { user };
+};
+
 export const forgotPassword = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { email } = req.body as { email: string };
@@ -584,6 +635,13 @@ export const forgotPassword = async (req: AuthRequest, res: Response): Promise<v
 
       // Se construye el enlace de restablecimiento pasando el objeto req para calcular la URL de forma dinamica
       const resetLink = buildResetLink(token, user.email, req);
+
+      // Se registra solo el origen del enlace, nunca el token: permite detectar en produccion
+      // si la base resuelta es la URL publica o una direccion interna inalcanzable (ISS-025).
+      logger.info(
+        `Enlace de restablecimiento generado para ${user.email} con base ${new URL(resetLink).origin} (vigencia ${RESET_TOKEN_EXP_MINUTES} min)`
+      );
+
       await sendPasswordResetEmail({
         to: user.email,
         name: user.firstName || user.username,
@@ -628,30 +686,33 @@ export const resetPassword = async (req: AuthRequest, res: Response): Promise<vo
       return;
     }
 
-    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
-    const user = await User.findOne({
-      passwordResetToken: hashedToken,
-      passwordResetExpires: { $gt: new Date() },
-      ...(email ? { email: normalizeEmail(email) } : {})
-    }).select('+password');
+    const lookup = await findUserByResetToken(token, email, { withPassword: true });
 
-    if (!user) {
+    if (isRejected(lookup)) {
+      const message = RESET_REJECTION_MESSAGES[lookup.reason];
       res.status(400).json({
         success: false,
-        error: 'El enlace de restablecimiento es invalido o ya expiro',
-        message: 'El enlace de restablecimiento es invalido o ya expiro'
+        reason: lookup.reason,
+        error: message,
+        message
       });
       return;
     }
 
-    // Verificar si al usuario le falta configurar el correo personal o si es igual al corporativo
-    const isPersonalEmailMissingOrEqual = !user.personalEmail || 
+    const { user } = lookup;
+
+    // El criterio debe ser identico al de verifyResetToken: si aqui se exigiera el correo
+    // personal con la politica desactivada, el formulario nunca mostraria el campo y el
+    // envio moriria con un 400 pese a tener un token valido (ISS-025).
+    const { requirePersonalEmail } = await getResolvedServerPolicy();
+    const isPersonalEmailMissingOrEqual = !user.personalEmail ||
       user.personalEmail.toLowerCase().trim() === user.email.toLowerCase().trim();
 
-    if (isPersonalEmailMissingOrEqual) {
+    if (requirePersonalEmail && isPersonalEmailMissingOrEqual) {
       if (!personalEmail || !personalEmail.trim()) {
         res.status(400).json({
           success: false,
+          reason: 'PERSONAL_EMAIL_REQUIRED',
           error: 'Debe ingresar un correo personal válido diferente al corporativo para restablecer la contraseña.',
           message: 'Debe ingresar un correo personal válido diferente al corporativo para restablecer la contraseña.'
         });
@@ -794,21 +855,19 @@ export const verifyResetToken = async (req: Request, res: Response): Promise<voi
       return;
     }
 
-    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
-    const user = await User.findOne({
-      passwordResetToken: hashedToken,
-      passwordResetExpires: { $gt: new Date() },
-      ...(email ? { email: normalizeEmail(email) } : {})
-    });
+    const lookup = await findUserByResetToken(token, email);
 
-    if (!user) {
+    if (isRejected(lookup)) {
+      logger.warn(`Verificación de enlace de restablecimiento rechazada: ${lookup.reason}`);
       res.status(400).json({
         success: false,
-        error: 'El enlace de restablecimiento es inválido o ya expiró'
+        reason: lookup.reason,
+        error: RESET_REJECTION_MESSAGES[lookup.reason]
       });
       return;
     }
 
+    const { user } = lookup;
     const { requirePersonalEmail } = await getResolvedServerPolicy();
     const requiresPersonalEmail = requirePersonalEmail && (!user.personalEmail || 
       user.personalEmail.toLowerCase().trim() === user.email.toLowerCase().trim());
@@ -904,25 +963,35 @@ export const adLogin = async (req: Request, res: Response): Promise<void> => {
         return;
       }
 
-      // Decodificar el JWT emitido por Microsoft Entra ID
-      const decoded = jwt.decode(idToken) as any;
-      if (!decoded) {
-        res.status(400).json({ success: false, error: 'Token de Azure AD inválido.' });
+      // Sin Tenant y Client ID configurados no hay contra qué verificar la firma ni la
+      // audiencia del token, y aceptar el token igualmente reabriría el bypass (ISS-024).
+      if (!settings.azureTenantId || !settings.azureClientId) {
+        logger.error('Intento de login Azure AD con la integración incompleta (falta Tenant ID o Client ID).');
+        res.status(500).json({
+          success: false,
+          error: 'La integración con Azure AD está incompleta. Contacta al administrador.'
+        });
         return;
       }
 
-      // Validar que el token corresponda al Tenant ID de la organización
-      if (settings.azureTenantId && decoded.tid !== settings.azureTenantId) {
-        res.status(401).json({ success: false, error: 'El token de Azure AD no corresponde al Tenant configurado.' });
+      let claims: AzureIdTokenClaims;
+      try {
+        claims = await verifyAzureIdToken(idToken, {
+          tenantId: settings.azureTenantId,
+          clientId: settings.azureClientId
+        });
+      } catch (verificationError: any) {
+        logger.warn(`Token de Azure AD rechazado: ${verificationError.message}`);
+        res.status(401).json({ success: false, error: 'El token de Azure AD no es válido.' });
         return;
       }
 
-      userEmail = (decoded.email || decoded.preferred_username || decoded.upn || '').toLowerCase().trim();
-      userFirstName = decoded.given_name || decoded.name || 'Colaborador';
-      userLastName = decoded.family_name || '';
-      userDepartment = decoded.department || 'Sin Departamento';
-      userPosition = decoded.jobTitle || 'Colaborador';
-      
+      userEmail = (claims.email || claims.preferred_username || claims.upn || '').toLowerCase().trim();
+      userFirstName = claims.given_name || claims.name || 'Colaborador';
+      userLastName = claims.family_name || '';
+      userDepartment = claims.department || 'Sin Departamento';
+      userPosition = claims.jobTitle || 'Colaborador';
+
       if (!userEmail) {
         res.status(400).json({ success: false, error: 'No se pudo extraer el correo electrónico del token de Azure AD.' });
         return;
@@ -948,8 +1017,11 @@ export const adLogin = async (req: Request, res: Response): Promise<void> => {
           ldapClient.bind(settings.ldapBindDN || '', bindPasswordDecrypted, (err: any) => {
             if (err) return reject(new Error(`Fallo de conexión Bind admin: ${err.message}`));
 
+            // El correo llega sin autenticar desde el formulario: se escapa segun RFC 4515
+            // para que no pueda alterar la estructura del filtro de busqueda (ISS-024).
+            const escapedEmail = escapeLdapFilterValue(normalizedEmail);
             const searchOpts = {
-              filter: `(|(mail=${normalizedEmail})(userPrincipalName=${normalizedEmail}))`,
+              filter: `(|(mail=${escapedEmail})(userPrincipalName=${escapedEmail}))`,
               scope: 'sub' as const
             };
 
@@ -999,22 +1071,23 @@ export const adLogin = async (req: Request, res: Response): Promise<void> => {
 
       } catch (ldapError: any) {
         logger.error('❌ LDAP Auth Error:', ldapError.message);
-        
-        // Simulación en entorno de desarrollo local si no hay servidor LDAP o falta la dependencia
-        if (process.env.NODE_ENV !== 'production' || ldapError.message.includes('Cannot find module')) {
-          console.warn('⚠️ Ejecutando login LDAP en modo Simulado (Desarrollo).');
-          if (password === 'error') {
-            res.status(401).json({ success: false, error: 'Credenciales inválidas en el Directorio Activo LDAP (Simulación).' });
-            return;
-          }
-          userFirstName = normalizedEmail.split('@')[0];
-          userLastName = 'AD User';
-          userDepartment = 'Ciberseguridad';
-          userPosition = 'Especialista';
-        } else {
-          res.status(401).json({ success: false, error: `Autenticación de AD fallida: ${ldapError.message}` });
+
+        // El modo simulado acepta credenciales sin contactar al Directorio Activo, por lo que
+        // exige una activacion explicita y nunca se habilita solo por NODE_ENV (ISS-024).
+        if (!isLdapSimulationEnabled()) {
+          res.status(401).json({ success: false, error: 'No pudimos validar tus credenciales corporativas.' });
           return;
         }
+
+        logger.warn('⚠️ Ejecutando login LDAP en modo Simulado: LDAP_SIMULATION_ENABLED está activo.');
+        if (password === 'error') {
+          res.status(401).json({ success: false, error: 'Credenciales inválidas en el Directorio Activo LDAP (Simulación).' });
+          return;
+        }
+        userFirstName = normalizedEmail.split('@')[0];
+        userLastName = 'AD User';
+        userDepartment = 'Ciberseguridad';
+        userPosition = 'Especialista';
       }
     }
 
@@ -1123,7 +1196,12 @@ export const getAdConfig = async (_req: Request, res: Response): Promise<void> =
       success: true,
       data: {
         adLoginEnabled: settings ? settings.adLoginEnabled : false,
-        adProvider: settings ? settings.adProvider : 'azure'
+        adProvider: settings ? settings.adProvider : 'azure',
+        // Tenant y Client ID son identificadores publicos del App Registration: el flujo
+        // Authorization Code + PKCE del navegador los necesita para iniciar la autenticacion.
+        // El secreto del cliente nunca se expone, y tampoco hace falta en un SPA.
+        azureTenantId: settings?.azureTenantId || null,
+        azureClientId: settings?.azureClientId || null
       }
     });
   } catch (error) {
