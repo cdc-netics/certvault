@@ -61,6 +61,7 @@ const verifyEmailValidation = [
   body('email').optional().isEmail().withMessage('Email invalido').normalizeEmail()
 ];
 
+router.get('/ad-config', getAdConfig);
 router.post('/register', registerValidation, validateRequest, register);
 router.post('/login', loginValidation, validateRequest, login);
 router.post('/ad-login', adLogin);
