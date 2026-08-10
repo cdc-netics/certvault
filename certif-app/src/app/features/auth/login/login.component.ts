@@ -171,14 +171,19 @@ export class LoginComponent implements OnInit {
   isLoading = false;
   errorMessage = '';
 
+  // Configuración de Active Directory
   adLoginEnabled = false;
   adProvider: 'ldap' | 'azure' = 'azure';
   useAdLdap = false;
   azureTenantId = '';
   azureClientId = '';
 
-  private azureClientId: string | null = null;
-  private azureTenantId: string | null = null;
+  // Propiedades de branding dinámico
+  loginLogo = '/resources/NETICS-Isotipo.png';
+  appName = 'CertiVault';
+  primaryColor = '#00C3B4';
+  secondaryColor = '#008f86';
+  private readonly destroy$ = new Subject<void>();
 
   constructor(
     private readonly fb: FormBuilder,
@@ -194,6 +199,24 @@ export class LoginComponent implements OnInit {
   }
 
   ngOnInit(): void {
+    // Suscribirse a los cambios del branding dinámico
+    this.settingsService.branding$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((branding) => {
+        if (branding) {
+          this.loginLogo = branding.loginLogo || '/resources/NETICS-Isotipo.png';
+          this.appName = branding.appName || 'CertiVault';
+          this.primaryColor = branding.primaryColor || '#00C3B4';
+          this.secondaryColor = branding.secondaryColor || '#008f86';
+        }
+      });
+
+    // Cargar y aplicar configuración de branding
+    this.settingsService.loadAndApplyBranding().subscribe({
+      error: (err) => console.error('Error al cargar la configuración de branding en Login:', err)
+    });
+
+    // Carga inicial de la configuración de AD/SSO para renderizar las opciones de login
     this.authService.getAdConfig().subscribe({
       next: (response) => {
         if (response.success && response.data) {
@@ -223,28 +246,9 @@ export class LoginComponent implements OnInit {
       this.errorMessage = 'El inicio de sesión con Microsoft no está configurado. Contacta al administrador.';
       return;
     }
-  }
 
-  private loginWithAzureMsal(clientId: string, tenantId: string): void {
-    this.msalService.initialize({ clientId, tenantId })
-      .then(() => this.msalService.loginPopup())
-      .then((result) => {
-        return this.authService.adLogin({ idToken: result.idToken }).toPromise();
-      })
-      .then((response) => {
-        if (response?.success) {
-          this.router.navigate(['/dashboard']);
-        }
-      })
-      .catch((error) => {
-        if (error?.errorCode === 'user_cancelled') {
-          this.errorMessage = '';
-        } else {
-          this.errorMessage = error?.message || 'Error al autenticar con Microsoft. Intente nuevamente.';
-        }
-        this.isLoading = false;
-      });
-  }
+    this.isLoading = true;
+    this.errorMessage = '';
 
     try {
       const idToken = await this.azureSsoService.acquireIdToken({

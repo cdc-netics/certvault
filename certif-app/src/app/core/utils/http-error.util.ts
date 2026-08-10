@@ -1,4 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
+import { Observable, from, switchMap, throwError } from 'rxjs';
 
 /**
  * Error de aplicacion que conserva el codigo `reason` emitido por el backend, de modo que
@@ -13,6 +14,40 @@ export function toApiError(error: HttpErrorResponse): ApiError {
   const apiError: ApiError = new Error(extractHttpErrorMessage(error));
   apiError.reason = error.error?.reason;
   return apiError;
+}
+
+/**
+ * Manejador de errores para las peticiones con `responseType: 'blob'`.
+ *
+ * Ese tipo de respuesta se aplica tambien a los errores, de modo que el cuerpo JSON del
+ * backend llega como `Blob` y el extractor no encuentra ni el mensaje ni el `reason`: la
+ * vista mostraba el texto generico del status en lugar del motivo real (ISS-027). Aqui se
+ * lee el blob como texto, se interpreta como JSON y se reconstruye el ApiError.
+ */
+export function handleBlobError(error: HttpErrorResponse): Observable<never> {
+  if (!(error.error instanceof Blob)) {
+    return throwError(() => toApiError(error));
+  }
+
+  return from(error.error.text()).pipe(
+    switchMap((text) => {
+      let parsed: { message?: string; error?: string; reason?: string } | null = null;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        // El cuerpo no era JSON: se conserva el mensaje generico del extractor.
+      }
+
+      const rebuilt = new HttpErrorResponse({
+        status: error.status,
+        statusText: error.statusText,
+        url: error.url ?? undefined,
+        error: parsed ?? null
+      });
+
+      return throwError(() => toApiError(rebuilt));
+    })
+  );
 }
 
 /**

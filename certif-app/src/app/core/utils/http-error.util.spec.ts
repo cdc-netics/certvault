@@ -1,5 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { extractHttpErrorMessage, toApiError } from './http-error.util';
+import { ApiError, extractHttpErrorMessage, handleBlobError, toApiError } from './http-error.util';
 
 const httpError = (status: number, body: unknown, statusText = 'Error'): HttpErrorResponse =>
   new HttpErrorResponse({ status, statusText, error: body });
@@ -62,10 +62,47 @@ describe('toApiError', () => {
   });
 
   it('no recupera el mensaje cuando el cuerpo del error llega como Blob', () => {
-    // Las descargas usan responseType blob y el error también llega como Blob (ISS-027):
-    // el mensaje del backend queda inaccesible y solo se obtiene el texto genérico.
+    // toApiError es sincrónico y no puede leer el Blob; para eso existe handleBlobError.
     const error = httpError(404, new Blob([JSON.stringify({ message: 'No hay archivos' })]));
 
     expect(toApiError(error).message).not.toBe('No hay archivos');
+  });
+});
+
+describe('handleBlobError', () => {
+  const expectError = (error: HttpErrorResponse): Promise<ApiError> =>
+    new Promise((resolve, reject) => {
+      handleBlobError(error).subscribe({
+        next: () => reject(new Error('No debería emitir un valor')),
+        error: (err: ApiError) => resolve(err)
+      });
+    });
+
+  it('recupera el mensaje del backend desde un cuerpo Blob (regresión ISS-027)', async () => {
+    const body = new Blob([JSON.stringify({ error: 'No se encontraron archivos de certificaciones' })]);
+
+    const apiError = await expectError(httpError(404, body));
+
+    expect(apiError.message).toBe('No se encontraron archivos de certificaciones');
+  });
+
+  it('conserva el reason cuando el backend lo declara', async () => {
+    const body = new Blob([JSON.stringify({ message: 'El enlace expiró.', reason: 'TOKEN_EXPIRED' })]);
+
+    const apiError = await expectError(httpError(400, body));
+
+    expect(apiError.reason).toBe('TOKEN_EXPIRED');
+  });
+
+  it('recurre al mensaje genérico si el cuerpo no es JSON', async () => {
+    const apiError = await expectError(httpError(500, new Blob(['<html>error</html>'])));
+
+    expect(apiError.message).toBe('Tuvimos un problema temporal. Intenta de nuevo en unos minutos.');
+  });
+
+  it('funciona igual cuando el error no viene como Blob', async () => {
+    const apiError = await expectError(httpError(403, { error: 'Sin permisos' }));
+
+    expect(apiError.message).toBe('Sin permisos');
   });
 });

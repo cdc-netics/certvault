@@ -4,7 +4,7 @@ import { Observable, of, throwError, BehaviorSubject } from 'rxjs';
 import { catchError, tap } from 'rxjs/operators';
 import { ApiResponse } from '../models/common.model';
 import { SmtpProfile, SmtpProfilePayload } from '../models/smtp-profile.model';
-import { extractHttpErrorMessage } from '../utils/http-error.util';
+import { extractHttpErrorMessage, handleBlobError } from '../utils/http-error.util';
 
 export interface AuditLogsQuery {
   page?: number;
@@ -193,7 +193,7 @@ export class SettingsService {
 
   exportBackup(type: 'config' | 'full' = 'full'): Observable<Blob> {
     return this.http.get(`${this.API_URL}/backup/export?type=${type}`, { responseType: 'blob' })
-      .pipe(catchError(this.handleError));
+      .pipe(catchError(handleBlobError));
   }
 
   importBackup(file: File): Observable<ApiResponse<any>> {
@@ -271,12 +271,15 @@ export class SettingsService {
     }).pipe(catchError(this.handleError));
   }
 
+  // Un reporte se consulta a demanda: cachearlo hacía que el botón "Generar" no enviara la
+  // petición dentro de la ventana de caché y la vista quedara igual, sin señal alguna.
   getReportsOverview(query: Record<string, string>): Observable<ApiResponse<any>> {
     let params = new HttpParams();
     for (const [key, value] of Object.entries(query)) {
       if (value) params = params.set(key, value);
     }
-    return this.cachedGet<any>(`reports-overview:${params.toString()}`, `${this.API_URL}/reports/overview`, params);
+    return this.http.get<ApiResponse<any>>(`${this.API_URL}/reports/overview`, { params })
+      .pipe(catchError(this.handleError));
   }
 
   exportReport(filters?: Record<string, string>): Observable<Blob> {
@@ -291,7 +294,7 @@ export class SettingsService {
     return this.http.get(`${this.API_URL}/reports/export`, {
       params,
       responseType: 'blob'
-    }).pipe(catchError(this.handleError));
+    }).pipe(catchError(handleBlobError));
   }
 
   // Obtener la configuración actual de seguridad de contraseñas
@@ -326,7 +329,7 @@ export class SettingsService {
   // Descargar archivo de backup local específico
   downloadLocalBackup(filename: string): Observable<Blob> {
     return this.http.get(`${this.API_URL}/backup/local/download/${filename}`, { responseType: 'blob' })
-      .pipe(catchError(this.handleError));
+      .pipe(catchError(handleBlobError));
   }
 
   // Eliminar archivo de backup local del disco

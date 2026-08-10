@@ -8,7 +8,7 @@ import {
   CertificationStats 
 } from '../models/certification.model';
 import { ApiResponse, PaginatedResponse, PaginationParams } from '../models/common.model';
-import { extractHttpErrorMessage } from '../utils/http-error.util';
+import { extractHttpErrorMessage, handleBlobError } from '../utils/http-error.util';
 
 @Injectable({
   providedIn: 'root'
@@ -132,7 +132,7 @@ export class CertificationService {
     // Solicitar el archivo ZIP consolidado al backend
     return this.http.get(`${this.API_URL}/user/${userId}/download-all`, {
       responseType: 'blob'
-    }).pipe(catchError(this.handleError));
+    }).pipe(catchError(handleBlobError));
   }
 
   uploadCertificateFile(certificationId: string, file: File): Observable<ApiResponse<{ url: string }>> {
@@ -163,7 +163,7 @@ export class CertificationService {
     return this.http.get(`${this.API_URL}/export`, {
       params,
       responseType: 'blob'
-    }).pipe(catchError(this.handleError));
+    }).pipe(catchError(handleBlobError));
   }
 
   searchCertifications(searchTerm: string): Observable<ApiResponse<Certification[]>> {
@@ -193,7 +193,7 @@ export class CertificationService {
   }
 
   downloadFile(url: string): Observable<Blob> {
-    return this.http.get(url, { responseType: 'blob' }).pipe(catchError(this.handleError));
+    return this.http.get(url, { responseType: 'blob' }).pipe(catchError(handleBlobError));
   }
 
   getCertificationFile(id: string, download = false): Observable<Blob> {
@@ -201,6 +201,6 @@ export class CertificationService {
     return this.http.get(`${this.API_URL}/${id}/file`, {
       params,
       responseType: 'blob'
-    }).pipe(catchError(this.handleError));
+    }).pipe(catchError(handleBlobError));
   }
 }
