@@ -4,6 +4,7 @@ import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angula
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { Subject, takeUntil } from 'rxjs';
 import { AuthService } from '../../../core/services/auth.service';
+import { ApiError } from '../../../core/utils/http-error.util';
 
 @Component({
   selector: 'app-reset-password',
@@ -30,7 +31,12 @@ import { AuthService } from '../../../core/services/auth.service';
                 </div>
                 <div class="alert alert-warning soft-alert d-flex gap-2" *ngIf="errorMessage">
                   <div class="alert-icon">!</div>
-                  <div>{{ errorMessage }}</div>
+                  <div>
+                    <div>{{ errorMessage }}</div>
+                    <a *ngIf="canRequestNewLink" routerLink="/forgot-password" class="d-inline-block mt-2 fw-semibold text-decoration-none text-primary">
+                      Solicitar un enlace nuevo →
+                    </a>
+                  </div>
                 </div>
 
                 <!-- Indicador visual mientras se valida el enlace de recuperación -->
@@ -98,7 +104,8 @@ import { AuthService } from '../../../core/services/auth.service';
                 </form>
 
                 <div class="mt-4 small text-muted">
-                  Este enlace caduca tras unos minutos por seguridad. Si vence, solicita uno nuevo desde el inicio de sesion.
+                  Por seguridad este enlace tiene vigencia limitada. Si vence, puedes solicitar uno nuevo desde
+                  <a routerLink="/forgot-password" class="text-decoration-none">recuperar contraseña</a>.
                 </div>
               </div>
             </div>
@@ -128,6 +135,8 @@ export class ResetPasswordComponent implements OnInit, OnDestroy {
   requiresPersonalEmail = false;
   successMessage = '';
   errorMessage = '';
+  /** Un enlace vencido o invalido se resuelve pidiendo otro; el resto de errores no. */
+  canRequestNewLink = false;
   private readonly destroy$ = new Subject<void>();
 
   constructor(
@@ -151,9 +160,8 @@ export class ResetPasswordComponent implements OnInit, OnDestroy {
       this.email = params.get('email') || '';
 
       if (!this.token) {
-        this.errorMessage = 'El enlace no es valido o falta el token.';
+        this.showLinkError('El enlace no es válido o le falta el token.');
         this.isVerifyingToken = false;
-        this.isValidToken = false;
         return;
       }
 
@@ -180,14 +188,12 @@ export class ResetPasswordComponent implements OnInit, OnDestroy {
                 );
               }
             } else {
-              this.isValidToken = false;
-              this.errorMessage = 'El enlace de restablecimiento es inválido o ya expiró.';
+              this.showLinkError('El enlace de restablecimiento no es válido. Solicita uno nuevo.');
             }
           },
-          error: (error) => {
+          error: (error: ApiError) => {
             this.isVerifyingToken = false;
-            this.isValidToken = false;
-            this.errorMessage = error.message || 'El enlace de restablecimiento es inválido o ya expiró.';
+            this.showLinkError(error.message || 'El enlace de restablecimiento no es válido. Solicita uno nuevo.');
           }
         });
     });
@@ -232,11 +238,31 @@ export class ResetPasswordComponent implements OnInit, OnDestroy {
           }
           this.isLoading = false;
         },
-        error: (error) => {
-          this.errorMessage = error.message || 'No pudimos actualizar la contraseña.';
+        error: (error: ApiError) => {
           this.isLoading = false;
+          const message = error.message || 'No pudimos actualizar la contraseña.';
+
+          // Un token vencido durante el llenado del formulario deja de ser un error de campo:
+          // el enlace ya no sirve, asi que se oculta el formulario y se ofrece pedir otro.
+          if (this.isUnusableLinkReason(error.reason)) {
+            this.showLinkError(message);
+            return;
+          }
+
+          this.errorMessage = message;
         }
       });
+  }
+
+  /** Deja la vista en el estado "enlace inutilizable": sin formulario y con la salida a pedir otro. */
+  private showLinkError(message: string): void {
+    this.errorMessage = message;
+    this.isValidToken = false;
+    this.canRequestNewLink = true;
+  }
+
+  private isUnusableLinkReason(reason?: string): boolean {
+    return reason === 'TOKEN_EXPIRED' || reason === 'TOKEN_INVALID';
   }
 
   // Validador personalizado para asegurar que el correo personal no coincida con el corporativo.

@@ -5,7 +5,8 @@ import { Router, RouterModule } from '@angular/router';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { AuthService } from '../../../core/services/auth.service';
-import { MsalBrowserService } from '../../../core/services/msal-browser.service';
+import { SettingsService } from '../../../core/services/settings.service';
+import { AzureSsoCancelledError, AzureSsoService } from '../../../core/services/azure-sso.service';
 
 @Component({
   selector: 'app-login',
@@ -104,7 +105,7 @@ import { MsalBrowserService } from '../../../core/services/msal-browser.service'
                   </button>
 
                   <!-- Botón de SSO con Azure AD (Microsoft) -->
-                  <div *ngIf="adLoginEnabled && adProvider === 'azure'" class="mb-3">
+                  <div *ngIf="adLoginEnabled && adProvider === 'azure' && isAzureSsoConfigured()" class="mb-3">
                     <div class="position-relative d-flex align-items-center justify-content-center my-3">
                       <hr class="w-100 text-muted">
                       <span class="position-absolute bg-white px-2 text-muted small">o ingresar con</span>
@@ -173,6 +174,8 @@ export class LoginComponent implements OnInit {
   adLoginEnabled = false;
   adProvider: 'ldap' | 'azure' = 'azure';
   useAdLdap = false;
+  azureTenantId = '';
+  azureClientId = '';
 
   private azureClientId: string | null = null;
   private azureTenantId: string | null = null;
@@ -180,8 +183,9 @@ export class LoginComponent implements OnInit {
   constructor(
     private readonly fb: FormBuilder,
     private readonly authService: AuthService,
-    private readonly msalService: MsalBrowserService,
-    private readonly router: Router
+    private readonly router: Router,
+    private readonly settingsService: SettingsService,
+    private readonly azureSsoService: AzureSsoService
   ) {
     this.loginForm = this.fb.group({
       email: ['', [Validators.required, Validators.email]],
@@ -195,8 +199,8 @@ export class LoginComponent implements OnInit {
         if (response.success && response.data) {
           this.adLoginEnabled = response.data.adLoginEnabled;
           this.adProvider = response.data.adProvider as 'ldap' | 'azure';
-          this.azureClientId = response.data.azureClientId;
-          this.azureTenantId = response.data.azureTenantId;
+          this.azureTenantId = response.data.azureTenantId || '';
+          this.azureClientId = response.data.azureClientId || '';
         }
       },
       error: (err) => {
@@ -209,14 +213,15 @@ export class LoginComponent implements OnInit {
     this.useAdLdap = !this.useAdLdap;
   }
 
-  loginWithAzure(): void {
-    this.isLoading = true;
-    this.errorMessage = '';
-
-    if (this.azureClientId && this.azureTenantId) {
-      this.loginWithAzureMsal(this.azureClientId, this.azureTenantId);
-    } else {
-      this.loginWithAzureSimulation();
+  /**
+   * Inicia sesión contra Microsoft Entra ID y entrega al backend el id_token emitido por
+   * Microsoft. El backend verifica su firma, por lo que este flujo no otorga confianza por
+   * sí mismo: solo transporta la credencial.
+   */
+  async loginWithAzure(): Promise<void> {
+    if (!this.isAzureSsoConfigured()) {
+      this.errorMessage = 'El inicio de sesión con Microsoft no está configurado. Contacta al administrador.';
+      return;
     }
   }
 
@@ -241,32 +246,39 @@ export class LoginComponent implements OnInit {
       });
   }
 
-  private loginWithAzureSimulation(): void {
-    const mockEmail = prompt('Modo desarrollo — ingrese su correo corporativo:');
-    if (!mockEmail?.trim()) {
+    try {
+      const idToken = await this.azureSsoService.acquireIdToken({
+        tenantId: this.azureTenantId,
+        clientId: this.azureClientId
+      });
+
+      this.authService.adLogin({ idToken }).subscribe({
+        next: (response) => {
+          if (response.success) {
+            this.router.navigate(['/dashboard']);
+          }
+        },
+        error: (error) => {
+          this.errorMessage = error.message || 'Error en autenticación corporativa con Azure AD';
+          this.isLoading = false;
+        },
+        complete: () => {
+          this.isLoading = false;
+        }
+      });
+    } catch (error) {
       this.isLoading = false;
-      return;
+      if (error instanceof AzureSsoCancelledError) {
+        return;
+      }
+      this.errorMessage = 'No pudimos completar el inicio de sesión con Microsoft. Intenta nuevamente.';
+      console.error('Error en el flujo SSO de Microsoft:', error);
     }
+  }
 
-    const emailTrimmed = mockEmail.trim().toLowerCase();
-    const tokenObj = {
-      email: emailTrimmed,
-      given_name: emailTrimmed.split('@')[0],
-      family_name: 'AD User',
-      department: 'Ciberseguridad',
-      jobTitle: 'Especialista'
-    };
-
-    this.authService.adLogin({ idToken: btoa(JSON.stringify(tokenObj)) }).subscribe({
-      next: (response) => {
-        if (response.success) this.router.navigate(['/dashboard']);
-      },
-      error: (error) => {
-        this.errorMessage = error.message || 'Error en autenticación corporativa';
-        this.isLoading = false;
-      },
-      complete: () => { this.isLoading = false; }
-    });
+  /** El botón solo tiene sentido si el App Registration está declarado en el panel de seguridad. */
+  isAzureSsoConfigured(): boolean {
+    return Boolean(this.azureTenantId && this.azureClientId);
   }
 
   onSubmit(): void {

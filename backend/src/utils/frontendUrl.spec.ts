@@ -67,10 +67,29 @@ describe('getFrontendBaseUrl', () => {
       expect(getFrontendBaseUrl(req)).toBe('https://certvault.netics.corp');
     });
 
-    it('usa el Origin cuando no coincide con ninguna URL configurada', () => {
+    it('ignora un Origin ajeno a la configuración y usa la URL declarada (regresión ISS-025)', () => {
       const req = fakeRequest({ headers: { origin: 'https://otra.interna.corp' } });
 
-      expect(getFrontendBaseUrl(req)).toBe('https://otra.interna.corp');
+      expect(getFrontendBaseUrl(req)).toBe('http://10.0.0.5:8080');
+    });
+
+    it('ignora el Host interno del proxy y usa la URL declarada (regresión ISS-025)', () => {
+      const req = fakeRequest({
+        headers: { 'x-forwarded-proto': 'http', 'x-forwarded-host': '172.18.0.4:4200' }
+      });
+
+      expect(getFrontendBaseUrl(req)).toBe('http://10.0.0.5:8080');
+    });
+
+    it('toma solo el primer valor de las cabeceras X-Forwarded encadenadas', () => {
+      const req = fakeRequest({
+        headers: {
+          'x-forwarded-proto': 'https, http',
+          'x-forwarded-host': 'certvault.netics.corp, 172.18.0.4'
+        }
+      });
+
+      expect(getFrontendBaseUrl(req)).toBe('https://certvault.netics.corp');
     });
 
     it('cae al Referer cuando no hay Origin', () => {
@@ -93,6 +112,22 @@ describe('getFrontendBaseUrl', () => {
       });
 
       expect(getFrontendBaseUrl(req)).toBe('https://certvault.netics.corp');
+    });
+  });
+
+  describe('sin URLs configuradas (desarrollo local)', () => {
+    beforeEach(() => {
+      delete process.env.FRONTEND_URL;
+    });
+
+    it('acepta el origen de la petición como último recurso', () => {
+      const req = fakeRequest({ headers: { origin: 'http://localhost:4200' } });
+
+      expect(getFrontendBaseUrl(req)).toBe('http://localhost:4200');
+    });
+
+    it('lanza error cuando la petición tampoco declara un host', () => {
+      expect(() => getFrontendBaseUrl(fakeRequest({}))).toThrow(/FRONTEND_URL/);
     });
   });
 });
@@ -136,5 +171,17 @@ describe('buildResetLink', () => {
     const link = buildResetLink('rtok', 'user@empresa.cl');
 
     expect(link).toBe('http://10.0.0.5:8080/reset-password?token=rtok&email=user%40empresa.cl');
+  });
+
+  it('no usa el host interno del contenedor aunque la petición lo declare (regresión ISS-025)', () => {
+    process.env.FRONTEND_URL = 'https://certvault.netics.corp';
+    const req = fakeRequest({
+      headers: { 'x-forwarded-proto': 'http', 'x-forwarded-host': '172.18.0.4:4200' }
+    });
+
+    const link = buildResetLink('rtok', 'user@empresa.cl');
+
+    expect(buildResetLink('rtok', 'user@empresa.cl', req)).toBe(link);
+    expect(link).toBe('https://certvault.netics.corp/reset-password?token=rtok&email=user%40empresa.cl');
   });
 });

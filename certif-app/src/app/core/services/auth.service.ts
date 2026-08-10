@@ -4,7 +4,15 @@ import { Observable, BehaviorSubject, throwError, of } from 'rxjs';
 import { catchError, map, tap } from 'rxjs/operators';
 import { User, LoginRequest, LoginResponse, RegisterRequest, UserRole } from '../models/user.model';
 import { ApiResponse } from '../models/common.model';
-import { extractHttpErrorMessage } from '../utils/http-error.util';
+import { toApiError } from '../utils/http-error.util';
+
+/** Configuración pública de inicio de sesión corporativo expuesta por `/ad-config`. */
+export interface AdConfig {
+  adLoginEnabled: boolean;
+  adProvider: string;
+  azureTenantId: string | null;
+  azureClientId: string | null;
+}
 
 @Injectable({
   providedIn: 'root'
@@ -179,7 +187,7 @@ export class AuthService {
   }
 
   private handleError(error: HttpErrorResponse): Observable<never> {
-    return throwError(() => new Error(extractHttpErrorMessage(error)));
+    return throwError(() => toApiError(error));
   }
 
   // Actualizar perfil de usuario
@@ -286,13 +294,10 @@ export class AuthService {
     this.logout();
   }
 
-  getAdConfig(): Observable<ApiResponse<{
-    adLoginEnabled: boolean;
-    adProvider: string;
-    azureClientId: string | null;
-    azureTenantId: string | null;
-  }>> {
-    return this.http.get<ApiResponse<any>>(`${this.API_URL}/ad-config`).pipe(
+  // Obtiene si está habilitado el login por AD corporativo, su tipo y —para Azure— los
+  // identificadores públicos del App Registration que el flujo PKCE del navegador necesita.
+  getAdConfig(): Observable<ApiResponse<AdConfig>> {
+    return this.http.get<ApiResponse<AdConfig>>(`${this.API_URL}/ad-config`).pipe(
       catchError(this.handleError)
     );
   }

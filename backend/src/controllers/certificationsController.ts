@@ -12,6 +12,62 @@ import { AuthRequest } from '../middleware/auth';
 import { User, UserRole } from '../models/User';
 import { Department } from '../models/Department';
 import { logger } from '../config/logger';
+import { resolveCertificateContentType, toSafeDownloadName } from '../utils/certificateFile';
+
+/**
+ * Entrega un archivo de certificado con el tipo de contenido derivado de la tabla de tipos
+ * admitidos y no de la extensión almacenada, e impide que el navegador reinterprete la
+ * respuesta. Un archivo cuya extensión no corresponda a un tipo admitido se rechaza: entró
+ * antes de que la subida validara la coherencia entre tipo MIME y extensión.
+ */
+const sendCertificateFile = (
+  res: Response,
+  options: { filePath: string; fileName: string; preferredName?: string; asAttachment: boolean }
+): void => {
+  const contentType = resolveCertificateContentType(options.fileName);
+  if (!contentType) {
+    logger.warn(`Archivo de certificado con extensión no admitida: ${options.fileName}`);
+    res.status(415).json({ success: false, error: 'El formato del archivo no está admitido' });
+    return;
+  }
+
+  const extension = path.extname(options.fileName).toLowerCase();
+  const downloadName = toSafeDownloadName(options.preferredName || 'certificado', extension);
+  const disposition = options.asAttachment ? 'attachment' : 'inline';
+
+  res.setHeader('Content-Type', contentType);
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Content-Disposition', `${disposition}; filename="${downloadName}"`);
+  res.sendFile(options.filePath, { headers: { 'Content-Type': contentType } });
+};
+
+/**
+ * Criterio único de escritura sobre una certificación: propietario o creador, administrador,
+ * o líder del área a la que pertenece. Se comparte entre la edición de datos y el reemplazo
+ * del archivo, que antes carecía de toda comprobación.
+ */
+const canModifyCertification = (certification: ICertification, user: any): boolean => {
+  if (!user) {
+    return false;
+  }
+
+  const userId = user._id?.toString();
+  const isOwner =
+    certification.employeeId?.toString() === userId ||
+    certification.createdBy?.toString() === userId;
+
+  if (isOwner || user.role === UserRole.ADMIN) {
+    return true;
+  }
+
+  const certificationDept = certification.department?.toString();
+  return (
+    user.role === UserRole.LIDER &&
+    !!certificationDept &&
+    (certificationDept === user.department?.toString() ||
+      (user.managedDepartments || []).some((d: any) => d.toString() === certificationDept))
+  );
+};
 
 const canAccessCertification = (certification: ICertification, user: any): boolean => {
   // Se permite el acceso de lectura y descarga de archivos a cualquier usuario autenticado en la plataforma.
@@ -534,11 +590,12 @@ export const getCertificationFile = async (req: AuthRequest, res: Response): Pro
       return;
     }
 
-    const downloadName = `${certification.certificateNumber || certification.title || 'certificado'}${path.extname(fileName)}`;
-    const disposition = req.query.download === '1' ? 'attachment' : 'inline';
-
-    res.setHeader('Content-Disposition', `${disposition}; filename="${downloadName.replace(/"/g, '')}"`);
-    res.sendFile(filePath);
+    sendCertificateFile(res, {
+      filePath,
+      fileName,
+      preferredName: certification.certificateNumber || certification.title,
+      asAttachment: req.query.download === '1'
+    });
   } catch (error) {
     logger.error('Error getting certification file:', error);
     res.status(500).json({
@@ -584,10 +641,12 @@ export const getPublicCertificationFile = async (req: Request, res: Response): P
       return;
     }
 
-    const downloadName = `${certification.certificateNumber || certification.title || 'certificado'}${path.extname(fileName)}`;
-    const disposition = req.query.download === '1' ? 'attachment' : 'inline';
-    res.setHeader('Content-Disposition', `${disposition}; filename="${downloadName.replace(/"/g, '')}"`);
-    res.sendFile(filePath);
+    sendCertificateFile(res, {
+      filePath,
+      fileName,
+      preferredName: certification.certificateNumber || certification.title,
+      asAttachment: req.query.download === '1'
+    });
   } catch (error) {
     logger.error('Error getting public certification file:', error);
     res.status(500).json({ success: false, error: 'Error al obtener el archivo de certificacion' });
@@ -612,11 +671,6 @@ export const updateCertification = async (req: AuthRequest, res: Response): Prom
       certification.createdBy?.toString() === req.user?._id?.toString();
 
     const isAdmin = req.user?.role === UserRole.ADMIN;
-    const isLeaderOfSameDept =
-      req.user?.role === UserRole.LIDER &&
-      certification.department &&
-      (certification.department.toString() === req.user.department?.toString() ||
-        (req.user.managedDepartments || []).some((d: any) => d.toString() === certification.department?.toString()));
 
     // ISS-015: Las certificaciones organizacionales de Compliance pueden ser editadas por cualquier líder
     const isComplianceOrg = 
@@ -647,7 +701,7 @@ export const updateCertification = async (req: AuthRequest, res: Response): Prom
     }
 
     // Validar privilegios de edición: solo el dueño, administradores, líderes de su área o líderes sobre compliance org
-    if (!isOwner && !isAdmin && !isLeaderOfSameDept && !canLeaderEditCompliance) {
+    if (!canModifyCertification(certification, req.user) && !canLeaderEditCompliance) {
       res.status(403).json({
         success: false,
         error: 'No tienes privilegios para actualizar esta certificación'
@@ -929,11 +983,14 @@ export const downloadAllUserCertifications = async (req: AuthRequest, res: Respo
 
     // Obtener datos del empleado para nombrar el archivo comprimido
     const targetUser = await User.findById(userId);
-    const userSuffix = targetUser ? `${targetUser.firstName}_${targetUser.lastName}`.replace(/\s+/g, '_') : userId;
+    const userSuffix = targetUser ? `${targetUser.firstName} ${targetUser.lastName}` : userId;
+    // Un nombre con tilde o con caracteres fuera de latin1 rompía la cabecera al descargar.
+    const zipName = toSafeDownloadName(`certificaciones ${userSuffix}`, '.zip');
 
     const zipBuffer = zip.toBuffer();
-    res.setHeader('Content-Disposition', `attachment; filename="certificaciones_${userSuffix}.zip"`);
+    res.setHeader('Content-Disposition', `attachment; filename="${zipName}"`);
     res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
     res.send(zipBuffer);
   } catch (error) {
     logger.error('Error al empaquetar certificaciones en ZIP:', error);
@@ -951,12 +1008,46 @@ export const uploadCertificate = async (req: AuthRequest, res: Response): Promis
       return;
     }
 
+    // El archivo ya está en disco cuando llega aquí, así que un rechazo debe eliminarlo
+    // para no dejar residuos subidos por quien no tenía permiso.
+    const discardUploadedFile = (): void => {
+      fs.promises.unlink(req.file!.path).catch((unlinkError) => {
+        logger.warn(`No se pudo eliminar el archivo descartado ${req.file?.filename}: ${unlinkError.message}`);
+      });
+    };
+
+    const certification = await Certification.findById(req.params.id);
+    if (!certification) {
+      discardUploadedFile();
+      res.status(404).json({ success: false, error: 'Certificación no encontrada' });
+      return;
+    }
+
+    // Sin esta comprobación, cualquier usuario autenticado podía reemplazar el archivo de
+    // cualquier certificación conociendo su ID.
+    if (!canModifyCertification(certification, req.user)) {
+      discardUploadedFile();
+      res.status(403).json({
+        success: false,
+        error: 'No tienes privilegios para modificar el archivo de esta certificación'
+      });
+      return;
+    }
+
+    const previousUrl = certification.certificateUrl || '';
     const fileUrl = `/uploads/certificates/${req.file.filename}`;
 
     await Certification.findByIdAndUpdate(req.params.id, { certificateUrl: fileUrl });
 
+    // Se descarta el archivo sustituido para que no queden huérfanos acumulándose en disco.
+    if (previousUrl.startsWith('/uploads/certificates/')) {
+      const previousPath = path.resolve(__dirname, '../../uploads/certificates', path.basename(previousUrl));
+      fs.promises.unlink(previousPath).catch(() => undefined);
+    }
+
     res.json({ success: true, data: { url: fileUrl } });
   } catch (error) {
+    logger.error('Error al subir el archivo de certificación:', error);
     res.status(500).json({
       success: false,
       error: 'Error al subir el archivo'
