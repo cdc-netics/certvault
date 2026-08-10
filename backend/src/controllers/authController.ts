@@ -940,57 +940,6 @@ export const acceptTerms = async (req: AuthRequest, res: Response): Promise<void
   }
 };
 
-export const getAdConfig = async (_req: Request, res: Response): Promise<void> => {
-  try {
-    const settings = await SecuritySettings.findOne().sort({ updatedAt: -1 });
-    res.json({
-      success: true,
-      data: {
-        adLoginEnabled: settings?.adLoginEnabled ?? false,
-        adProvider: settings?.adProvider ?? 'azure',
-        azureClientId: settings?.azureClientId ?? null,
-        azureTenantId: settings?.azureTenantId ?? null,
-      }
-    });
-  } catch (error) {
-    console.error('Error obteniendo configuración AD:', error);
-    res.status(500).json({ success: false, error: 'Error al obtener la configuración de acceso corporativo.' });
-  }
-};
-
-const verifyAzureToken = (idToken: string, tenantId: string, clientId: string): Promise<any> => {
-  const client = jwksClient({
-    jwksUri: `https://login.microsoftonline.com/${tenantId}/discovery/v2.0/keys`,
-    cache: true,
-    rateLimit: true
-  });
-
-  return new Promise((resolve, reject) => {
-    const getKey = (header: JwtHeader, callback: (err: Error | null, key?: string) => void) => {
-      client.getSigningKey(header.kid!, (err, key) => {
-        if (err) return callback(err as Error);
-        callback(null, key!.getPublicKey());
-      });
-    };
-
-    jwt.verify(
-      idToken,
-      getKey as any,
-      {
-        audience: clientId,
-        issuer: [
-          `https://login.microsoftonline.com/${tenantId}/v2.0`,
-          `https://sts.windows.net/${tenantId}/`
-        ]
-      },
-      (err, decoded) => {
-        if (err) return reject(err);
-        resolve(decoded);
-      }
-    );
-  });
-};
-
 export const adLogin = async (req: Request, res: Response): Promise<void> => {
   try {
     const { email, password, idToken } = req.body;
