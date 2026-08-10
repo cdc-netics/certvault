@@ -6,15 +6,15 @@ Este documento registra los problemas, vulnerabilidades, mejoras y tareas técni
 
 | ID          | Título                                                             | Componente         | Prioridad | Estado |
 | ----------- | ------------------------------------------------------------------ | ------------------ | --------- | ------ |
-| **ISS-027** | Errores del backend ilegibles en las descargas de tipo blob        | Frontend           | Baja      | To Do  |
+| **ISS-019** | Corrección en motor de Branding: Renderizado y estilos dinámicos   | Frontend           | Alta      | To Do  |
+| **ISS-021** | Descarga de Reportes: Corrección de filtros de fecha en exportación| Backend            | Alta      | To Do  |
+| **ISS-020** | Panel de Reportes: Selector dinámico de departamentos activos      | Frontend           | Media     | To Do  |
 | **ISS-030** | Criterio de acceso divergente entre descarga individual y en lote  | Backend            | Media     | To Do  |
 | **ISS-031** | Ausencia de Content-Security-Policy en el origen del frontend      | Infraestructura    | Media     | To Do  |
+| **ISS-026** | Selector de colaboradores truncado a 100 registros en los filtros  | Frontend           | Baja      | To Do  |
+| **ISS-027** | Errores del backend ilegibles en las descargas de tipo blob        | Frontend           | Baja      | To Do  |
 | **ISS-032** | Certificaciones organizacionales no descargables por la API pública| Backend            | Baja      | To Do  |
 | **ISS-033** | Validación incoherente de `certificateUrl` y asignación masiva     | Backend            | Baja      | To Do  |
-| **ISS-019** | Corrección en motor de Branding: Renderizado y estilos dinámicos   | Frontend           | Alta      | To Do  |
-| **ISS-020** | Panel de Reportes: Selector dinámico de departamentos activos      | Frontend           | Media     | To Do  |
-| **ISS-021** | Descarga de Reportes: Corrección de filtros de fecha en exportación| Backend            | Alta      | To Do  |
-| **ISS-026** | Selector de colaboradores truncado a 100 registros en los filtros  | Frontend           | Baja      | To Do  |
 
 ## Issues Completados (Done)
 
@@ -178,10 +178,18 @@ Este documento registra los problemas, vulnerabilidades, mejoras y tareas técni
 ### [ISS-019] Corrección en motor de Branding: Renderizado y estilos dinámicos
 
 - **Código Afectado (Frontend)**: [app.ts](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/certif-app/src/app/app.ts), [app.component.html](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/certif-app/src/app/app.component.html), [login.component.ts](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/certif-app/src/app/features/auth/login/login.component.ts)
+- **Estado tras la revisión del 09/08/2026**: La infraestructura está construida y funciona; lo que falta es que el branding alcance a la interfaz.
+  - **Ya implementado**: `applyBranding` en [settings.service.ts](file:///c:/Workspace/certvault/certif-app/src/app/core/services/settings.service.ts) inyecta `--primary-color`, deriva `--primary-dark` al -15 % de brillo y ajusta `document.title`. `app.ts` lo carga al inicializar, los logos de sidebar y login ya son reactivos, y `styles.scss` consume las variables en botones, sidebar y las utilidades `.text-primary`, `.bg-primary` y `.border-primary`.
+- **Defectos pendientes**:
+  - **19 colores fijos que ignoran el sistema de variables**: diez ocurrencias de `#00C3B4` y nueve de `#008f86` distribuidas en siete archivos. El degradado `linear-gradient(135deg, #00C3B4 0%, #008f86 100%)` está repetido literalmente en las cinco pantallas de autenticación (login, register, forgot-password, reset-password, verify-email) y en `profile.component.css` y `users-list.component.css`. Al configurar un color corporativo cambian los botones y el sidebar, pero el fondo del login y del perfil conservan el turquesa original: el resultado es una aplicación a dos paletas, visualmente peor que no ofrecer branding.
+  - **Tres valores por defecto que se contradicen**: `styles.scss` declara `--primary-color: #2563eb` (azul), los componentes fijan `#00C3B4` (turquesa) y el formulario de branding propone `#0d6efd` (azul de Bootstrap). Ninguno coincide con otro, de modo que antes de resolverse la carga asíncrona conviven dos paletas, y un administrador que abra el panel sin haber guardado nunca ve propuesto un tercer color distinto del que está viendo en pantalla.
+  - **`--secondary-color` no se usa en ninguna parte**: la variable se define e inyecta, pero no existe una sola referencia `var(--secondary-color)` en el proyecto. El campo "color secundario" del panel de administración hoy no produce ningún efecto visible.
+  - **Parpadeo de paleta**: el branding se aplica tras una llamada HTTP posterior al arranque, por lo que la interfaz se pinta con los valores por omisión antes de recibir los corporativos.
 - **Propuesta de Implementación**:
-  - **Carga Global**: Al inicializar la aplicación en [app.ts](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/certif-app/src/app/app.ts), invocar el servicio de branding para obtener la configuración guardada del backend. Almacenar el resultado en un Signal o BehaviorSubject para propagarlo a los componentes interesados.
-  - **Estilos Dinámicos**: Si existen configuraciones de color (`primaryColor` y `secondaryColor`), inyectarlas dinámicamente a través de `document.documentElement.style.setProperty('--primary-color', color)` para sobrescribir los valores fijos de CSS. Cambiar el título del sitio `document.title` al nombre de aplicación configurado.
-  - **Logos**: En [app.component.html](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/certif-app/src/app/app.component.html) (sidebar) y en [login.component.ts](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/certif-app/src/app/features/auth/login/login.component.ts), reemplazar las imágenes hardcodeadas estáticas por etiquetas `<img>` reactivas que se carguen utilizando los campos `sidebarLogo` y `loginLogo` en Base64 o URL.
+  - **Unificar la fuente de verdad**: sustituir los 19 colores fijos por `var(--primary-color)` y `var(--secondary-color)`, y dejar `styles.scss` como único lugar donde se declara el valor por omisión, alineado con el color real del producto. Ajustar en consecuencia el valor inicial del formulario de branding.
+  - **Dar uso al color secundario**: el degradado de las pantallas de autenticación es literalmente una transición de primario a secundario, por lo que es el consumidor natural de la variable.
+  - **Eliminar el parpadeo**: aplicar los colores antes del primer render, ya sea resolviendo el branding en un `APP_INITIALIZER` o sirviendo los valores junto al `index.html`.
+  - **Robustez**: `adjustColorBrightness` asume el formato `#rrggbb` estricto y devolvería `#NaNNaNNaN` ante cualquier otro; hoy no se manifiesta porque el panel usa `<input type="color">`, pero conviene validar la entrada.
 
 ---
 

@@ -112,13 +112,50 @@ Con cualquiera de los dos proveedores, el primer inicio de sesión de un colabor
 
 ---
 
+## 📎 Formatos de Archivo Admitidos
+
+El tipo de archivo se valida contra una lista blanca y la extensión con la que se almacena se deriva de esa lista, nunca del nombre ni del tipo que declara el cliente.
+
+| Uso | Formatos | Tamaño máximo | Variable |
+|-----|----------|---------------|----------|
+| Certificados | PDF, JPEG, PNG | 5 MB | `MAX_CERTIFICATE_FILE_SIZE` |
+| Avatares | PNG, JPEG, WEBP, GIF | 2 MB | `MAX_AVATAR_FILE_SIZE` |
+
+> [!NOTE]
+> **SVG está excluido de forma deliberada.** Es el único formato de imagen que admite scripts embebidos, y los avatares se sirven como archivos estáticos.
+
+> [!WARNING]
+> **Al actualizar una instalación existente**, los archivos subidos antes de esta validación conservan su extensión original. Los certificados con una extensión fuera de la lista responden `415` en lugar de entregarse, pero **los avatares se siguen sirviendo como estáticos**. Revisa el directorio de avatares antes de dar por completo el despliegue:
+> ```bash
+> docker compose exec backend ls uploads/avatars | grep -viE '\.(png|jpg|jpeg|webp|gif)$'
+> ```
+> Cualquier archivo que aparezca en ese listado debe eliminarse y el avatar volverse a cargar.
+
+---
+
+## ✅ Verificación y Pruebas
+
+Ambos proyectos incluyen suites de pruebas unitarias que deben pasar antes de desplegar:
+
+```bash
+# Backend — Jest
+cd backend && pnpm test
+
+# Frontend — Karma sobre Chrome headless
+cd certif-app && pnpm test -- --watch=false --browsers=ChromeHeadless
+```
+
+La cobertura se concentra en la lógica sensible: verificación de tokens de Entra ID, resolución de las URLs de los correos, cifrado simétrico de secretos, saneamiento de nombres de archivo y validación de formatos de subida.
+
+---
+
 ## 📁 Estructura General del Repositorio
 
 ```
 certvault/
 ├── Docs/               # Manuales y documentación técnica detallada
 ├── backend/            # REST API y lógica de negocios (NodeJS + TypeScript)
-├── certif-app/         # Aplicación Frontend web SPA (Angular 17+)
+├── certif-app/         # Aplicación Frontend web SPA (Angular 21)
 ├── docker-compose.yml  # Orquestador de contenedores (Mongo, Backend, Frontend)
 ├── CHANGELOG.md        # Bitácora de control de versiones y actualizaciones
 └── README.md           # Guía de inicio rápido
