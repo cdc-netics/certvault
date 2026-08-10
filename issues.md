@@ -7,6 +7,10 @@ Este documento registra los problemas, vulnerabilidades, mejoras y tareas técni
 | ID          | Título                                                             | Componente         | Prioridad | Estado |
 | ----------- | ------------------------------------------------------------------ | ------------------ | --------- | ------ |
 | **ISS-027** | Errores del backend ilegibles en las descargas de tipo blob        | Frontend           | Baja      | To Do  |
+| **ISS-030** | Criterio de acceso divergente entre descarga individual y en lote  | Backend            | Media     | To Do  |
+| **ISS-031** | Ausencia de Content-Security-Policy en el origen del frontend      | Infraestructura    | Media     | To Do  |
+| **ISS-032** | Certificaciones organizacionales no descargables por la API pública| Backend            | Baja      | To Do  |
+| **ISS-033** | Validación incoherente de `certificateUrl` y asignación masiva     | Backend            | Baja      | To Do  |
 | **ISS-019** | Corrección en motor de Branding: Renderizado y estilos dinámicos   | Frontend           | Alta      | To Do  |
 | **ISS-020** | Panel de Reportes: Selector dinámico de departamentos activos      | Frontend           | Media     | To Do  |
 | **ISS-021** | Descarga de Reportes: Corrección de filtros de fecha en exportación| Backend            | Alta      | To Do  |
@@ -35,6 +39,8 @@ Este documento registra los problemas, vulnerabilidades, mejoras y tareas técni
 | **ISS-016** | Flexibilidad en Departamentos: Creación inicial sin Líder de Área  | Backend / Frontend | 25/06/2026      | Permitida desvinculación a nulo de líderes, eliminando la asociación en managedDepartments y degradándolo automáticamente si no gestiona otras áreas. |
 | **ISS-017** | Panel y ejecución de respaldos completos automáticos y rotativos   | Backend / Frontend | 25/06/2026      | Programado cron de respaldo diario comprimido en backend/backups/ con rotación física de hasta 10 archivos. Creada interfaz visual de configuración y control de backups locales. |
 | **ISS-023** | Roles no-Admin reciben 403 al abrir certificaciones organizacionales | Backend            | 29/07/2026      | Corregido `getCertificationFile` en `certificationsController.ts`: la validación de acceso a certificaciones organizacionales solo eximía al rol `ADMIN`, dejando fuera a `LIDER` y `READER` pese a que ambos ya tienen lectura global habilitada en el listado (`getCertifications`, ISS-014). Se unificó el criterio de acceso global en ambos endpoints. |
+| **ISS-028** | XSS almacenado mediante archivo de certificado servido en línea      | Backend            | 09/08/2026      | El filtro de subida confiaba en el `Content-Type` declarado por el cliente y conservaba la extensión del nombre original, de modo que un HTML declarado como PDF se almacenaba como `.html` y `res.sendFile` lo entregaba como `text/html` en línea. El frontend lo abre como `blob:`, que hereda el origen de la aplicación, y el token de sesión vive en `localStorage`. Se agregó `utils/certificateFile.ts` como fuente única de tipos admitidos: la subida exige coherencia entre tipo MIME y extensión, el archivo se guarda con la extensión canónica del tipo, y la descarga fija el `Content-Type` desde esa tabla junto con `X-Content-Type-Options: nosniff`, rechazando con `415` cualquier archivo heredado con extensión no admitida. |
+| **ISS-029** | Reemplazo del archivo de cualquier certificación sin autorización    | Backend            | 09/08/2026      | `uploadCertificate` ejecutaba `findByIdAndUpdate` sin comprobación alguna de propiedad ni de rol, por lo que cualquier usuario autenticado —incluido `READER`— podía sustituir el archivo de cualquier certificación conociendo su ID. Se extrajo `canModifyCertification` (propietario o creador, `ADMIN`, o `LIDER` del área) como criterio único compartido con `updateCertification`, se descarta del disco el archivo recién subido cuando la petición se rechaza, y se elimina el archivo sustituido para no acumular huérfanos. |
 | **ISS-018** | Descarga consolidada en ZIP de certificaciones desde el Perfil       | Backend / Frontend | 09/08/2026      | Verificado como ya implementado durante la revisión del 09/08/2026: `downloadAllUserCertifications` empaqueta con `adm-zip` las certificaciones con archivo asociado, nombrando cada entrada por número de certificado o título y resolviendo colisiones con índice incremental. La autorización contempla propietario, `ADMIN` y `LIDER` con `canManageDepartment`, y el armado del ZIP descarta rutas que escapen de `uploads/certificates`. El perfil expone el botón "Descargar ZIP" con estado de carga. Se levantó ISS-027 por la ilegibilidad de los errores en la descarga. |
 | **ISS-022** | Listado de Certificaciones: Filtro por usuario y orden prioritario   | Backend / Frontend | 09/08/2026      | Verificado como ya implementado durante la revisión del 09/08/2026: `getCertifications` admite el filtro `employeeId` con validación de ObjectId y ordena por omisión por `expirationDate: 1` con `createdAt: -1` como criterio secundario; el listado del frontend expone el combobox "Colaborador" poblado dinámicamente y restringido por `canViewUsers()`. Se levantó ISS-026 por el truncamiento del selector a 100 registros. |
 | **ISS-024** | Bypass de autenticación en el inicio de sesión con SSO               | Backend / Frontend | 09/08/2026      | El `id_token` de Azure AD se procesaba con `jwt.decode`, sin verificar la firma: bastaba un JWT fabricado con el correo de un administrador para autenticarse y aprovisionar la cuenta vía JIT. Se implementó `verifyAzureIdToken` (firma RS256 contra el JWKS del tenant, más `iss`, `aud`, `exp`/`nbf` y `tid`), se reemplazó la simulación `prompt()` del frontend por el flujo real Authorization Code + PKCE con MSAL, se acotó el modo simulado de LDAP a una activación explícita y se escapó el filtro de búsqueda LDAP (RFC 4515). |
@@ -260,6 +266,71 @@ Este documento registra los problemas, vulnerabilidades, mejoras y tareas técni
   - **Frontend**: Reemplazar los `catchError(this.handleError)` de las siete descargas por ese manejador, de modo que la corrección sea única y no se repita en cada servicio.
   - **Backend**: Codificar el nombre del ZIP en la cabecera con `filename*=UTF-8''` (RFC 6266), manteniendo un `filename` ASCII como respaldo para clientes antiguos.
   - **Backend (opcional)**: Evaluar el envío del ZIP por streaming si el volumen de certificaciones por colaborador crece, evitando materializar el buffer completo.
+- **Nota**: La observación sobre el nombre del ZIP quedó resuelta en ISS-028/ISS-029 mediante `toSafeDownloadName`, que translitera tildes y descarta los caracteres que la cabecera no admite. Persiste como mejora el uso de `filename*=UTF-8''` para conservar el nombre original en lugar de transliterarlo.
+
+---
+
+### [ISS-028] XSS almacenado mediante archivo de certificado servido en línea
+
+- **Código Afectado (Backend)**: [certifications.ts](file:///c:/Workspace/certvault/backend/src/routes/certifications.ts) (configuración de Multer), [certificationsController.ts](file:///c:/Workspace/certvault/backend/src/controllers/certificationsController.ts) (`getCertificationFile`, `getPublicCertificationFile`), [certificateFile.ts](file:///c:/Workspace/certvault/backend/src/utils/certificateFile.ts).
+- **Causa Raíz**: La cadena de explotación recorría toda la funcionalidad de archivos.
+  1. El `fileFilter` de Multer aceptaba el archivo según `file.mimetype`, valor que viaja en la cabecera del multipart y que controla por completo quien sube el archivo.
+  2. El nombre en disco conservaba `path.extname(file.originalname)`, de modo que un `payload.html` declarado como `application/pdf` se almacenaba con extensión `.html`.
+  3. `res.sendFile` deducía el `Content-Type` de esa extensión y respondía `text/html`, con disposición `inline` por omisión.
+  4. El frontend descarga el archivo como `Blob` y lo abre con `window.open(objectUrl)`; un `blob:` hereda el origen del documento que lo creó, así que el HTML se ejecutaba en el origen de la aplicación. El `'noopener'` no protege: solo bloquea `window.opener`, no el acceso al origen.
+  5. No existe CSP en ese origen (ver [ISS-031]) y el token de sesión se guarda en `localStorage`, por lo que el script podía exfiltrarlo.
+  - Bastaba una cuenta común para plantar el archivo; la ejecución ocurría con la sesión de quien lo abriera para revisarlo, incluido un administrador.
+- **Resolución**: Se creó `utils/certificateFile.ts` como fuente única de verdad de los tipos admitidos (`application/pdf`, `image/jpeg`, `image/png`) con sus extensiones canónicas.
+  - **Subida**: `isConsistentCertificateUpload` exige que la extensión declarada corresponda al tipo MIME, y el nombre en disco se compone con `canonicalExtensionForMimeType`, de manera que la extensión ya no proviene del cliente.
+  - **Descarga**: `sendCertificateFile` fija el `Content-Type` resolviéndolo desde la tabla y añade `X-Content-Type-Options: nosniff`. Un archivo cuya extensión no corresponda a un tipo admitido —los ingresados antes de esta validación— se rechaza con `415` en lugar de servirse.
+  - **Nombre de descarga**: `toSafeDownloadName` translitera tildes y descarta los caracteres que `Content-Disposition` no admite, lo que además corrige el `500` permanente que producía un título con raya, comillas tipográficas o emoji al lanzar `ERR_INVALID_CHAR` en `setHeader`.
+  - **Testing**: `certificateFile.spec.ts` cubre el HTML disfrazado de PDF, otras extensiones ejecutables, la resolución del tipo de contenido y el saneamiento del nombre (14 casos).
+- **Pendiente**: Los archivos subidos antes de la corrección conservan su extensión original. Corresponde auditar `uploads/certificates` en busca de extensiones fuera de la lista admitida; a partir de ahora esos archivos responden `415` en lugar de ejecutarse, pero siguen en disco.
+
+---
+
+### [ISS-029] Reemplazo del archivo de cualquier certificación sin autorización
+
+- **Código Afectado (Backend)**: [certificationsController.ts](file:///c:/Workspace/certvault/backend/src/controllers/certificationsController.ts) (`uploadCertificate`, `updateCertification`).
+- **Causa Raíz**: `uploadCertificate` recibía el `id` por la ruta y ejecutaba directamente `Certification.findByIdAndUpdate(req.params.id, { certificateUrl })` sin verificar propiedad ni rol. La ruta solo atraviesa `authenticate`, de modo que cualquier usuario autenticado —incluido `READER`, que sí tiene vedada la edición de datos en `updateCertification`— podía sustituir el archivo de cualquier certificación conociendo su identificador. Encadenado con ISS-028, permitía plantar el archivo malicioso en una certificación ajena con mayor probabilidad de ser abierta.
+- **Resolución**:
+  - Se extrajo `canModifyCertification` como criterio único de escritura (propietario o creador, `ADMIN`, o `LIDER` del departamento de la certificación) y se aplicó tanto en `uploadCertificate` como en `updateCertification`, que duplicaba la misma lógica en línea. La excepción de ISS-015 para compliance organizacional se conserva como condición adicional.
+  - El archivo ya está escrito en disco cuando la petición llega al controlador, por lo que un rechazo por permisos o por certificación inexistente lo elimina en lugar de dejar residuos.
+  - El archivo sustituido se elimina tras una actualización exitosa, corrigiendo la acumulación de huérfanos.
+
+---
+
+### [ISS-030] Criterio de acceso divergente entre descarga individual y en lote
+
+- **Código Afectado (Backend)**: [certificationsController.ts](file:///c:/Workspace/certvault/backend/src/controllers/certificationsController.ts) (`canAccessCertification`, `downloadAllUserCertifications`).
+- **Síntoma**: `canAccessCertification` devuelve `!!user`, por lo que la descarga individual de un archivo está abierta a cualquier usuario autenticado. En cambio `downloadAllUserCertifications` restringe la descarga en lote al propietario, `ADMIN` o `LIDER` con `canManageDepartment`. El mismo conjunto de documentos está protegido cuando se solicita completo y disponible cuando se solicita de a uno: un `READER` puede recuperar el diploma de cualquier colaborador iterando identificadores.
+- **Consideración**: El comportamiento está documentado como deliberado en el propio código ("se permite el acceso de lectura y descarga de archivos a cualquier usuario autenticado"), de modo que no se modificó sin una decisión explícita. Los certificados son documentos personales —títulos, diplomas—, por lo que conviene definir si la apertura es intencional.
+- **Propuesta de Implementación**: Unificar ambos criterios en una sola función de autorización de lectura de archivos. Si el acceso amplio es el deseado, relajar `downloadAllUserCertifications` para que sea coherente; si no lo es, aplicar en `getCertificationFile` el mismo criterio de propietario, `ADMIN` y `LIDER` del área, contemplando el acceso global de lectura ya concedido por ISS-014 para las certificaciones organizacionales.
+
+---
+
+### [ISS-031] Ausencia de Content-Security-Policy en el origen del frontend
+
+- **Código Afectado (Infraestructura)**: [nginx.conf.template](file:///c:/Workspace/certvault/certif-app/nginx.conf.template).
+- **Síntoma**: El servidor del frontend solo emite cabeceras de caché. `helmet` aplica su CSP a las respuestas del backend, pero no cubre el documento que sirve nginx ni los documentos `blob:` que la aplicación crea, los cuales heredan la política del origen que los generó. Detectado al analizar ISS-028: la ausencia de CSP era el último eslabón que permitía la ejecución del script.
+- **Propuesta de Implementación**: Definir una CSP en el bloque `server` de nginx, comenzando por `default-src 'self'` y acotando `script-src` a `'self'`. Requiere verificar previamente si la aplicación depende de estilos o scripts en línea —Angular inyecta estilos de componente en línea, por lo que probablemente sea necesario `style-src 'self' 'unsafe-inline'`—, y desplegar primero en modo `Content-Security-Policy-Report-Only` para detectar rupturas antes de aplicarla.
+
+---
+
+### [ISS-032] Certificaciones organizacionales no descargables por la API pública
+
+- **Código Afectado (Backend)**: [certificationsController.ts](file:///c:/Workspace/certvault/backend/src/controllers/certificationsController.ts) (`getPublicCertificationFile`).
+- **Síntoma**: El endpoint externo verifica que el propietario de la certificación exista y esté activo antes de entregar el archivo. Las certificaciones organizacionales no tienen `employeeId` —el modelo lo exige solo para las individuales—, por lo que la consulta devuelve `null` y el endpoint responde `404 Archivo no disponible`. Ninguna certificación organizacional puede descargarse por la API pública, y el mensaje no distingue esa situación de un archivo realmente ausente.
+- **Propuesta de Implementación**: Decidir si la API pública debe exponer las certificaciones organizacionales. De ser así, omitir la validación de propietario cuando `isOrganizational` sea verdadero; en caso contrario, responder con un mensaje explícito que indique que el tipo de certificación no se expone por este canal.
+
+---
+
+### [ISS-033] Validación incoherente de `certificateUrl` y asignación masiva
+
+- **Código Afectado (Backend)**: [Certification.ts](file:///c:/Workspace/certvault/backend/src/models/Certification.ts) (validación de `certificateUrl`), [certificationsController.ts](file:///c:/Workspace/certvault/backend/src/controllers/certificationsController.ts) (`updateCertification`).
+- **Síntoma**: El modelo valida `certificateUrl` contra `/^https?:\/\/.+/`, pero el sistema almacena rutas internas del tipo `/uploads/certificates/…`, que nunca satisfacen esa expresión. La subida funciona porque `findByIdAndUpdate` no ejecuta validadores por omisión, mientras que `updateCertification` sí usa `runValidators: true` sobre `{ ...req.body }`: si un cliente incluyera `certificateUrl` en el `PUT`, recibiría "URL inválida" por un valor generado por la propia aplicación. La validación no protege nada y sí puede rechazar datos legítimos.
+- **Observación asociada**: `updates = { ...req.body }` traslada al documento cualquier campo que envíe el cliente. Los campos sensibles (`isOrganizational`, rol de edición) están cubiertos por comprobaciones previas, y las rutas de descarga verifican el prefijo `/uploads/certificates/`, por lo que no hay impacto sobre la entrega de archivos; pero permite fijar valores arbitrarios en campos no contemplados.
+- **Propuesta de Implementación**: Ajustar la validación del modelo para admitir la ruta interna que el sistema genera, o retirarla y validar en el controlador. Sustituir la propagación completa de `req.body` por una lista explícita de campos actualizables.
 
 ---
 
