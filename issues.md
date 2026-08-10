@@ -10,7 +10,7 @@ Este documento registra los problemas, vulnerabilidades, mejoras y tareas técni
 | **ISS-019** | Corrección en motor de Branding: Renderizado y estilos dinámicos   | Frontend           | Alta      | To Do  |
 | **ISS-020** | Panel de Reportes: Selector dinámico de departamentos activos      | Frontend           | Media     | To Do  |
 | **ISS-021** | Descarga de Reportes: Corrección de filtros de fecha en exportación| Backend            | Alta      | To Do  |
-| **ISS-022** | Listado de Certificaciones: Filtro por usuario y orden prioritario  | Backend / Frontend | Media     | To Do  |
+| **ISS-026** | Selector de colaboradores truncado a 100 registros en los filtros  | Frontend           | Baja      | To Do  |
 
 ## Issues Completados (Done)
 
@@ -35,6 +35,7 @@ Este documento registra los problemas, vulnerabilidades, mejoras y tareas técni
 | **ISS-016** | Flexibilidad en Departamentos: Creación inicial sin Líder de Área  | Backend / Frontend | 25/06/2026      | Permitida desvinculación a nulo de líderes, eliminando la asociación en managedDepartments y degradándolo automáticamente si no gestiona otras áreas. |
 | **ISS-017** | Panel y ejecución de respaldos completos automáticos y rotativos   | Backend / Frontend | 25/06/2026      | Programado cron de respaldo diario comprimido en backend/backups/ con rotación física de hasta 10 archivos. Creada interfaz visual de configuración y control de backups locales. |
 | **ISS-023** | Roles no-Admin reciben 403 al abrir certificaciones organizacionales | Backend            | 29/07/2026      | Corregido `getCertificationFile` en `certificationsController.ts`: la validación de acceso a certificaciones organizacionales solo eximía al rol `ADMIN`, dejando fuera a `LIDER` y `READER` pese a que ambos ya tienen lectura global habilitada en el listado (`getCertifications`, ISS-014). Se unificó el criterio de acceso global en ambos endpoints. |
+| **ISS-022** | Listado de Certificaciones: Filtro por usuario y orden prioritario   | Backend / Frontend | 09/08/2026      | Verificado como ya implementado durante la revisión del 09/08/2026: `getCertifications` admite el filtro `employeeId` con validación de ObjectId y ordena por omisión por `expirationDate: 1` con `createdAt: -1` como criterio secundario; el listado del frontend expone el combobox "Colaborador" poblado dinámicamente y restringido por `canViewUsers()`. Se levantó ISS-026 por el truncamiento del selector a 100 registros. |
 | **ISS-024** | Bypass de autenticación en el inicio de sesión con SSO               | Backend / Frontend | 09/08/2026      | El `id_token` de Azure AD se procesaba con `jwt.decode`, sin verificar la firma: bastaba un JWT fabricado con el correo de un administrador para autenticarse y aprovisionar la cuenta vía JIT. Se implementó `verifyAzureIdToken` (firma RS256 contra el JWKS del tenant, más `iss`, `aud`, `exp`/`nbf` y `tid`), se reemplazó la simulación `prompt()` del frontend por el flujo real Authorization Code + PKCE con MSAL, se acotó el modo simulado de LDAP a una activación explícita y se escapó el filtro de búsqueda LDAP (RFC 4515). |
 | **ISS-025** | Enlace de restablecimiento de contraseña no funcional               | Backend / Frontend | 09/08/2026      | Corregidas dos causas concurrentes: `getFrontendBaseUrl` construía el enlace con el host interno del contenedor cuando las cabeceras de la petición no coincidían con `FRONTEND_URL`, y `resetPassword` exigía el correo personal ignorando la política `requirePersonalEmail` que sí respeta `verifyResetToken`, dejando el formulario sin ese campo y el envío en `400`. Además se elevó la vigencia por omisión a 60 minutos, se diferenciaron los motivos de rechazo (`TOKEN_EXPIRED` / `TOKEN_INVALID`) y se agregó traza del origen del enlace generado. |
 
@@ -201,9 +202,11 @@ Este documento registra los problemas, vulnerabilidades, mejoras y tareas técni
 
 - **Código Afectado (Backend)**: [certificationsController.ts](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/backend/src/controllers/certificationsController.ts) (función `getCertifications`).
 - **Código Afectado (Frontend)**: [certifications-list.component.ts](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/certif-app/src/app/features/certifications/certifications-list/certifications-list.component.ts)
-- **Propuesta de Implementación**:
-  - **Backend (Orden predeterminado)**: Modificar la consulta principal de certificaciones en [certificationsController.ts](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/backend/src/controllers/certificationsController.ts) para cambiar el orden predeterminado a la fecha de vencimiento más próxima a la fecha actual (`expirationDate: 1`), priorizando las que requieren renovación urgente en las revisiones.
-  - **Frontend (Filtro de Usuario)**: Agregar un combobox dinámico en el formulario de filtros de [certifications-list.component.ts](file:///c:/Users/despinoza/OneDrive%20-%20synet%20spa/Hola/Proyectos/certvault/certif-app/src/app/features/certifications/certifications-list/certifications-list.component.ts) para seleccionar a un usuario por su nombre. Este listado se poblará dinámicamente mediante el servicio de usuarios (disponible para roles con privilegios adecuados). Por defecto, el filtro se mantendrá vacío (mostrando todos los colaboradores).
+- **Resolución**: Verificado como ya implementado durante la revisión del 09/08/2026; el issue permanecía abierto por falta de actualización del documento.
+  - **Backend (Orden predeterminado)**: `getCertifications` construye el orden con `sortBy` por omisión en `expirationDate` y dirección ascendente, sumando `createdAt: -1` como criterio secundario. Las certificaciones más próximas a vencer encabezan el listado. El frontend no envía `sortBy`, por lo que este orden aplica efectivamente.
+  - **Backend (Filtro de Usuario)**: `getCertifications` acepta el query param `employeeId`, valida que sea un ObjectId y responde `400` ante un valor mal formado antes de tocar la base de datos.
+  - **Frontend (Filtro de Usuario)**: El formulario de filtros expone el combobox "Colaborador", poblado desde `UserService.getUsers` con los usuarios activos ordenados alfabéticamente, vacío por omisión ("Todos los colaboradores") y visible solo para roles con `canViewUsers()`.
+- **Deuda detectada**: La carga del selector solicita un máximo de 100 colaboradores sin paginar ni buscar, por lo que en organizaciones más grandes el filtro omite silenciosamente al resto. Se registró como [ISS-026].
 
 ---
 
@@ -222,6 +225,21 @@ Este documento registra los problemas, vulnerabilidades, mejoras y tareas técni
   - **Frontend (`azure-sso.service.ts`)**: Flujo real Authorization Code + PKCE con `@azure/msal-browser`. Se instancia MSAL de forma diferida en lugar de usar `@azure/msal-angular` porque el Tenant y el Client ID son configuración de base de datos que llega en tiempo de ejecución, mientras que el módulo de Angular los exige durante el bootstrap. La cancelación del popup se distingue de un error real y el botón de SSO solo se renderiza si el App Registration está declarado.
   - **Testing**: `ldap.spec.ts` cubre el escape del filtro —incluida la carga `*)(objectClass=*`— y las tres combinaciones del flag de simulación (24 casos en total entre ambas suites, en verde).
 - **Requisito de despliegue**: el inicio de sesión con Microsoft exige un App Registration en Entra ID con plataforma **SPA** y el origen de CertVault como Redirect URI, y que el Tenant ID y el Client ID estén cargados en el panel de seguridad. Sin esa configuración el botón no se muestra y el endpoint rechaza cualquier token.
+
+---
+
+### [ISS-026] Selector de colaboradores truncado a 100 registros en los filtros
+
+- **Código Afectado (Frontend)**: [certifications-list.component.ts](file:///c:/Workspace/certvault/certif-app/src/app/features/certifications/certifications-list/certifications-list.component.ts) (carga de `usersOptions`).
+- **Síntoma**: El combobox "Colaborador" del listado de certificaciones (ISS-022) se puebla con `getUsers({ limit: 100, isActive: true })`. El endpoint de usuarios pagina sin tope superior, de modo que devuelve exactamente los primeros 100 registros: en una organización con más colaboradores activos, el resto no aparece en el selector y sus certificaciones dejan de ser filtrables por dueño. La omisión es silenciosa —no hay aviso ni indicador de truncamiento— y el comentario del código describe la llamada como "la lista completa de colaboradores", lo que oculta la limitación a quien lea el código.
+- **Observaciones asociadas** (menores, del mismo bloque):
+  - La interfaz `CertificationFilter` no declara `employeeId`. El filtro funciona porque `buildFilters()` castea el valor del formulario y el cast no elimina la propiedad, pero el tipo no refleja el contrato real del endpoint.
+  - El selector solo lista usuarios activos, mientras que el listado sí muestra certificaciones de colaboradores desactivados (agrupadas como "no disponibles"). Esas certificaciones se ven pero no se pueden filtrar por su dueño.
+- **Propuesta de Implementación**:
+  - **Frontend**: Reemplazar la carga fija por un combobox con búsqueda server-side que consulte `UserService.getUsers({ search })` con *debounce* a medida que se escribe, manteniendo una precarga inicial acotada para el uso habitual. Así el tamaño del directorio deja de condicionar el filtro.
+  - **Frontend (alternativa mínima)**: Si se prefiere no introducir búsqueda asíncrona, paginar la carga hasta agotar el total que informa el endpoint y, en su defecto, advertir explícitamente cuando la lista esté truncada. Lo que no debe permanecer es la omisión silenciosa.
+  - **Tipado**: Declarar `employeeId?: string` en `CertificationFilter` y eliminar la dependencia del cast.
+  - **Consistencia**: Definir si el selector debe incluir colaboradores desactivados para alinearlo con lo que el listado efectivamente muestra.
 
 ---
 
