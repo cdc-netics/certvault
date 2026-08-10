@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import mongoose from 'mongoose';
 import { AuditAction, AuditLog } from '../models/AuditLog';
 import { BrandingSettings } from '../models/BrandingSettings';
 import { Certification } from '../models/Certification';
@@ -30,6 +31,33 @@ const getDateRange = (req: Request) => {
   if (from && !Number.isNaN(from.getTime())) range.$gte = from;
   if (to && !Number.isNaN(to.getTime())) range.$lte = to;
   return Object.keys(range).length > 0 ? range : undefined;
+};
+
+/**
+ * Filtro de certificaciones compartido por el resumen de reportes y su exportación.
+ *
+ * `department` es una referencia `ObjectId` en el esquema. `countDocuments` y `find` castean
+ * el string recibido de forma automática, pero `$match` dentro de un `aggregate` no lo hace:
+ * al filtrar por área, los totales salían correctos y los desgloses vacíos. El casteo debe
+ * ocurrir aquí, una sola vez, para que ambas consultas reciban el mismo tipo.
+ */
+const buildReportFilter = (req: Request): { filter: Record<string, unknown> } | { error: string } => {
+  const filter: Record<string, unknown> = {};
+
+  if (req.query.department) {
+    const department = (req.query.department as string).trim();
+    if (!mongoose.Types.ObjectId.isValid(department)) {
+      return { error: 'El departamento indicado no es válido' };
+    }
+    filter.department = new mongoose.Types.ObjectId(department);
+  }
+
+  if (req.query.status) filter.status = req.query.status;
+
+  const issueDate = getDateRange(req);
+  if (issueDate) filter.issueDate = issueDate;
+
+  return { filter };
 };
 
 const getBrandingDocument = async () => {
@@ -465,11 +493,12 @@ export const testPublicApiClient = async (req: AuthRequest, res: Response): Prom
 
 export const getReportsOverview = async (req: Request, res: Response): Promise<void> => {
   try {
-    const certificationFilter: Record<string, unknown> = {};
-    if (req.query.department) certificationFilter.department = req.query.department;
-    if (req.query.status) certificationFilter.status = req.query.status;
-    const issueDate = getDateRange(req);
-    if (issueDate) certificationFilter.issueDate = issueDate;
+    const built = buildReportFilter(req);
+    if ('error' in built) {
+      res.status(400).json({ success: false, error: built.error });
+      return;
+    }
+    const certificationFilter = built.filter;
 
     const now = new Date();
     const soon = new Date();
@@ -507,11 +536,12 @@ export const getReportsOverview = async (req: Request, res: Response): Promise<v
 
 export const exportReport = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const certificationFilter: Record<string, unknown> = {};
-    if (req.query.department) certificationFilter.department = req.query.department;
-    if (req.query.status) certificationFilter.status = req.query.status;
-    const issueDate = getDateRange(req);
-    if (issueDate) certificationFilter.issueDate = issueDate;
+    const built = buildReportFilter(req);
+    if ('error' in built) {
+      res.status(400).json({ success: false, error: built.error });
+      return;
+    }
+    const certificationFilter = built.filter;
 
     const rows = await Certification.find(certificationFilter)
       .populate('department')
@@ -551,6 +581,8 @@ export const exportReport = async (req: AuthRequest, res: Response): Promise<voi
     res.setHeader('Content-Disposition', `attachment; filename="certificaciones-reporte-${Date.now()}.csv"`);
     res.status(200).send(csv);
   } catch (error) {
+    // El catch era silencioso: un fallo aqui solo se veia como un error generico en la UI.
+    logger.error('Error al exportar reporte CSV:', error);
     res.status(500).json({ success: false, error: 'Error al exportar reporte' });
   }
 };

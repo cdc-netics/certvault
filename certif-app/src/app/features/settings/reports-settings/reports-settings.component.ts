@@ -47,9 +47,14 @@ interface ReportFilters {
         <input class="form-control form-control-sm" type="date" [(ngModel)]="filters.to">
       </div>
       <div class="col-md-2 d-flex align-items-end gap-1" style="height: 55px;">
-        <button class="btn btn-primary btn-sm flex-fill fw-semibold h-100" style="max-height: 31px;" (click)="loadReport()">Generar</button>
-        <button class="btn btn-outline-success btn-sm fw-semibold h-100" style="max-height: 31px;" title="Exportar CSV" (click)="exportCsv()">
-          <i class="fas fa-download"></i>
+        <button class="btn btn-primary btn-sm flex-fill fw-semibold h-100" style="max-height: 31px;"
+                (click)="loadReport()" [disabled]="isLoading || isExporting">
+          <span *ngIf="isLoading" class="spinner-border spinner-border-sm me-1" role="status"></span>
+          {{ isLoading ? 'Generando...' : 'Generar' }}
+        </button>
+        <button class="btn btn-outline-success btn-sm fw-semibold h-100" style="max-height: 31px;"
+                title="Exportar CSV" (click)="exportCsv()" [disabled]="isLoading || isExporting">
+          <i class="fas" [ngClass]="isExporting ? 'fa-spinner fa-spin' : 'fa-download'"></i>
         </button>
       </div>
     </div>
@@ -88,6 +93,8 @@ interface ReportFilters {
 export class ReportsSettingsComponent implements OnInit {
   report: any = {};
   errorMessage = '';
+  isLoading = false;
+  isExporting = false;
   filters: ReportFilters = { department: '', status: '', from: '', to: '' };
   departments: any[] = []; // Listado de departamentos activos para el select
 
@@ -136,16 +143,31 @@ export class ReportsSettingsComponent implements OnInit {
 
   loadReport(): void {
     this.errorMessage = '';
+    this.isLoading = true;
     this.settingsService.getReportsOverview({ ...this.filters }).subscribe({
-      next: (response) => this.report = response.data || {},
-      error: (error) => this.errorMessage = error.message
+      next: (response) => {
+        this.report = response.data || {};
+        this.isLoading = false;
+      },
+      error: (error) => {
+        this.errorMessage = error.message;
+        this.isLoading = false;
+      }
     });
   }
 
   exportCsv(): void {
+    this.errorMessage = '';
+    this.isExporting = true;
     this.settingsService.exportReport({ ...this.filters }).subscribe({
-      next: (blob) => this.downloadBlob(blob, `certificaciones-reporte-${Date.now()}.csv`),
-      error: (error) => this.errorMessage = error.message
+      next: (blob) => {
+        this.downloadBlob(blob, `certificaciones-reporte-${Date.now()}.csv`);
+        this.isExporting = false;
+      },
+      error: (error) => {
+        this.errorMessage = error.message;
+        this.isExporting = false;
+      }
     });
   }
 
