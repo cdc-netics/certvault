@@ -19,6 +19,11 @@ import {
 } from '../controllers/authController';
 import { authenticate } from '../middleware/auth';
 import { validateRequest } from '../middleware/validation';
+import {
+  passwordRecoveryAccountLimiter,
+  passwordRecoveryIpLimiter,
+  resetTokenAttemptLimiter
+} from '../middleware/passwordRecoveryRateLimit';
 
 const router = Router();
 
@@ -67,9 +72,24 @@ router.post('/login', loginValidation, validateRequest, login);
 router.post('/ad-login', adLogin);
 router.get('/ad-config', getAdConfig);
 router.post('/refresh', refreshToken);
-router.post('/forgot-password', forgotPasswordValidation, validateRequest, forgotPassword);
-router.post('/reset-password', resetPasswordValidation, validateRequest, resetPassword);
-router.post('/verify-reset-token', verifyResetToken);
+// El limite por IP se aplica antes de validar para frenar tambien las inundaciones con
+// cuerpos malformados; el limite por cuenta va despues para que la clave use el correo ya
+// normalizado por la cadena de validacion.
+router.post(
+  '/forgot-password',
+  passwordRecoveryIpLimiter,
+  forgotPasswordValidation,
+  validateRequest,
+  passwordRecoveryAccountLimiter,
+  forgotPassword
+);
+
+// Estos dos endpoints solo consumen presupuesto cuando fallan, de modo que un enlace legitimo
+// se puede verificar y usar sin penalizacion. No se limitan por cuenta a proposito: hacerlo
+// permitiria que un tercero agotara el cupo de la victima y le impidiera completar su propio
+// restablecimiento.
+router.post('/reset-password', resetTokenAttemptLimiter, resetPasswordValidation, validateRequest, resetPassword);
+router.post('/verify-reset-token', resetTokenAttemptLimiter, verifyResetToken);
 router.post('/verify-email', verifyEmailValidation, validateRequest, verifyEmail);
 
 router.post('/logout', authenticate, logout);

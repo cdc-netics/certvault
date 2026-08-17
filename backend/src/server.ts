@@ -5,10 +5,10 @@ import helmet from 'helmet';
 import compression from 'compression';
 import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
-import dotenv from 'dotenv';
 import path from 'path';
-import fs from 'fs';
-// import rateLimit from 'express-rate-limit';
+
+// Debe preceder a cualquier import que lea process.env a nivel de modulo.
+import './config/loadEnv';
 
 // Importar configuracion de base de datos y seed
 import { database } from './config/database';
@@ -28,41 +28,12 @@ import positionRoutes from './routes/positions';
 // Importar middleware
 import { errorHandler } from './middleware/errorHandler';
 import { notFound } from './middleware/notFound';
+import { readPositiveInt } from './utils/envVars';
 import { auditRequest, recordAuditLog } from './services/auditService';
 import { AuditAction } from './models/AuditLog';
 
 // Importar servicio de cron para expiraciones y auditoría
 import { startCronServices } from './services/cronService';
-
-// Cargar variables de entorno desde la raiz del repositorio.
-const explicitEnvPath = process.env.ENV_FILE;
-const envCandidates = [
-  explicitEnvPath,
-  path.resolve(__dirname, '../../.env')
-].filter((candidate): candidate is string => Boolean(candidate));
-
-const discoveredEnvPath = envCandidates.find(candidate => fs.existsSync(candidate));
-if (discoveredEnvPath) {
-  dotenv.config({ path: discoveredEnvPath });
-}
-
-// Expandir variables de entorno de forma iterativa para soportar interpolación compleja (ej. ${PORT})
-// Se realizan múltiples pasadas (máximo 3) para garantizar que las dependencias anidadas se resuelvan correctamente.
-for (let pass = 0; pass < 3; pass++) {
-  let changed = false;
-  for (const key in process.env) {
-    const val = process.env[key];
-    if (val && typeof val === 'string' && val.includes('${')) {
-      const newVal = val.replace(/\${(\w+)}/g, (_, name) => process.env[name] || '');
-      if (newVal !== val) {
-        process.env[key] = newVal;
-        changed = true;
-      }
-    }
-  }
-  if (!changed) break;
-}
-
 
 const app = express();
 app.disable('x-powered-by');
@@ -109,20 +80,22 @@ app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev', {
 }));
 
 
-// Rate limiting DESACTIVADO para desarrollo
-// const limiter = rateLimit({
-//   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000', 10), // 15 minutos
-//   max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100', 10),
-//   standardHeaders: true,
-//   legacyHeaders: false,
-//   handler: (_req, res) => {
-//     res.status(429).json({
-//       success: false,
-//       error: 'Demasiadas solicitudes desde esta IP, intenta de nuevo mas tarde.'
-//     });
-//   }
-// });
-// app.use(limiter);
+// Limite global de trafico. Es deliberadamente amplio porque debe dar cabida a la navegacion
+// normal del SPA, por lo que no protege por si solo a los endpoints sensibles: la recuperacion
+// de contrasena tiene su propio presupuesto, mucho mas estricto, en routes/auth.ts.
+const limiter = rateLimit({
+  windowMs: readPositiveInt('RATE_LIMIT_WINDOW_MS', 15 * 60 * 1000),
+  limit: readPositiveInt('RATE_LIMIT_MAX_REQUESTS', 100),
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (_req, res) => {
+    res.status(429).json({
+      success: false,
+      error: 'Demasiadas solicitudes desde esta IP, intenta de nuevo mas tarde.'
+    });
+  }
+});
+app.use(limiter);
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
